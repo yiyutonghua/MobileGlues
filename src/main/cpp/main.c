@@ -23,7 +23,7 @@ void proc_init() {
         __android_log_print(ANDROID_LOG_FATAL, RENDERERNAME,
                             "Cannot load system libEGL.so!");
 
-    g_target_egl_func.eglGetProcAddress = dlsym(handle, "eglGetProcAddress");
+    g_target_egl_func.eglGetProcAddress = _mglues_dlsym(handle, "eglGetProcAddress");
 
     init_target_egl();
     init_target_gles();
@@ -78,18 +78,18 @@ EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY glXGetProcAddress (c
     if (proc) return proc;
     else
         __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "UnImplemented function: %s(%s) @ prehook", __FUNCTION__, procname);
+                            "Unimplemented function: %s(%s) @ prehook", __FUNCTION__, procname);
 
     //proc = eglGetProcAddress(procname);
     if (proc) return proc;
     else
         __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "UnImplemented function: %s(%s) @ system", __FUNCTION__, procname);
+                            "Unimplemented function: %s(%s) @ system", __FUNCTION__, procname);
 
     proc = posthook(procname);
     if (!proc)
         __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "UnImplemented function: %s(%s) @ posthook", __FUNCTION__, procname);
+                            "Unimplemented function: %s(%s) @ posthook", __FUNCTION__, procname);
     return proc;
 }
 
@@ -102,7 +102,7 @@ GL_APICALL const GLubyte *GL_APIENTRY glGetString (GLenum name) {
     switch (name) {
         case GL_VENDOR: return "GL_VENDOR";
         case GL_RENDERER:
-            return "GL_VENDOR";
+            return "GL_RENDERER";
         default:
             return "default";
     }
