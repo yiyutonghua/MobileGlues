@@ -128,11 +128,20 @@ GLAPI void GLAPIENTRY glPopClientAttrib( void ) { __android_log_print(ANDROID_LO
 GLAPI GLint GLAPIENTRY glRenderMode( GLenum mode ) { __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
                         "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); return 0; }
 
-//GLAPI GLenum GLAPIENTRY glGetError( void ) { __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-//                        "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); }
+GLAPI GLenum GLAPIENTRY glGetError( void ) { __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+                        "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); return GL_NO_ERROR; }
 
-//GLAPI const GLubyte * GLAPIENTRY glGetString( GLenum name ) { __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-//                        "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); }
+GLAPI const GLubyte * GLAPIENTRY glGetString( GLenum name ) {
+    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+                        "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);
+    switch (name) {
+        case GL_VENDOR:
+            return "Swung0x48";
+        case GL_RENDERER:
+            return "4.6 MobileGlues";
+    }
+    return "";
+}
 
 GLAPI void GLAPIENTRY glFinish( void ) { __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
                         "Unimplemented function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); }

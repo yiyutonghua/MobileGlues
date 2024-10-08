@@ -30,6 +30,8 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         init.cpp
         main.c
         gl.c
+        egl.cpp
+        gles3.h
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ./includes)
@@ -41,4 +43,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
         android
         log
-        EGL)
+#        EGL
+)

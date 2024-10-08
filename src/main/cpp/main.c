@@ -24,7 +24,7 @@ void proc_init() {
         __android_log_print(ANDROID_LOG_FATAL, RENDERERNAME,
                             "Cannot load system libEGL.so!");
 
-    g_target_egl_func.eglGetProcAddress = _mglues_dlsym(handle, "eglGetProcAddress");
+    g_egl_func.eglGetProcAddress = _mglues_dlsym(handle, "eglGetProcAddress");
 
     init_target_egl();
     init_target_gles();
@@ -36,283 +36,301 @@ void init_target_egl() {
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
                         "Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
 
-    g_target_egl_func.eglCreateContext =
-            (EGLCREATECONTEXTPROCP)g_target_egl_func.eglGetProcAddress("eglCreateContext");
-    g_target_egl_func.eglDestroyContext =
-            (EGLDESTROYCONTEXTPROCP) g_target_egl_func.eglGetProcAddress("eglDestroyContext");
-    g_target_egl_func.eglMakeCurrent =
-            (EGLMAKECURRENTPROCP) g_target_egl_func.eglGetProcAddress("eglMakeCurrent");
+    g_egl_func.eglCreateContext =
+            (EGLCREATECONTEXTPROCP)g_egl_func.eglGetProcAddress("eglCreateContext");
+    g_egl_func.eglDestroyContext =
+            (EGLDESTROYCONTEXTPROCP) g_egl_func.eglGetProcAddress("eglDestroyContext");
+    g_egl_func.eglMakeCurrent =
+            (EGLMAKECURRENTPROCP) g_egl_func.eglGetProcAddress("eglMakeCurrent");
 
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglCreateContext @ 0x%lx", g_target_egl_func.eglCreateContext);
+                        "Got target eglCreateContext @ 0x%lx", g_egl_func.eglCreateContext);
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglDestroyContext @ 0x%lx", g_target_egl_func.eglDestroyContext);
+                        "Got target eglDestroyContext @ 0x%lx", g_egl_func.eglDestroyContext);
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglMakeCurrent @ 0x%lx", g_target_egl_func.eglMakeCurrent);
+                        "Got target eglMakeCurrent @ 0x%lx", g_egl_func.eglMakeCurrent);
 }
 
 void init_target_gles() {
-
+    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+                        "Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
 }
 
-#define UNIMPL_PH(name) if (strcmp(procname, #name) == 0)  \
+#define MAP_FUNC(name) if (strcmp(procname, #name) == 0)  \
     return (__eglMustCastToProperFunctionPointerType) name;
 
+#define MAP_FUNC_MGLUES(name) if (strcmp(procname, #name) == 0)  \
+    return (__eglMustCastToProperFunctionPointerType) mglues_##name;
+
+
 __eglMustCastToProperFunctionPointerType prehook(const char *procname) {
-//    if (strcmp(procname, "glGetString") == 0)
-//        return (__eglMustCastToProperFunctionPointerType) glGetString;
-//    if (strcmp(procname, "glGetIntegerv") == 0)
-//        return (__eglMustCastToProperFunctionPointerType) glGetIntegerv;
-    UNIMPL_PH(glAccum);
-    UNIMPL_PH(glAreTexturesResident);
-    UNIMPL_PH(glAreTexturesResident);
-    UNIMPL_PH(glArrayElement);
-    UNIMPL_PH(glBegin);
-    UNIMPL_PH(glBitmap);
-    UNIMPL_PH(glCallList);
-    UNIMPL_PH(glCallLists);
-    UNIMPL_PH(glClearAccum);
-    UNIMPL_PH(glClearIndex);
-    UNIMPL_PH(glClipPlane);
-    UNIMPL_PH(glColor3b);
-    UNIMPL_PH(glColor3s);
-    UNIMPL_PH(glColor3i);
-    UNIMPL_PH(glColor3f);
-    UNIMPL_PH(glColor3d);
-    UNIMPL_PH(glColor3ub);
-    UNIMPL_PH(glColor3us);
-    UNIMPL_PH(glColor3ui);
-    UNIMPL_PH(glColor3bv);
-    UNIMPL_PH(glColor3sv);
-    UNIMPL_PH(glColor3iv);
-    UNIMPL_PH(glColor3fv);
-    UNIMPL_PH(glColor3dv);
-    UNIMPL_PH(glColor3ubv);
-    UNIMPL_PH(glColor3usv);
-    UNIMPL_PH(glColor3uiv);
-    UNIMPL_PH(glColor4b);
-    UNIMPL_PH(glColor4s);
-    UNIMPL_PH(glColor4i);
-    UNIMPL_PH(glColor4d);
-    UNIMPL_PH(glColor4us);
-    UNIMPL_PH(glColor4ui);
-    UNIMPL_PH(glColor4bv);
-    UNIMPL_PH(glColor4sv);
-    UNIMPL_PH(glColor4iv);
-    UNIMPL_PH(glColor4fv);
-    UNIMPL_PH(glColor4dv);
-    UNIMPL_PH(glColor4ubv);
-    UNIMPL_PH(glColor4usv);
-    UNIMPL_PH(glColor4uiv);
-    UNIMPL_PH(glColorMaterial);
-    UNIMPL_PH(glCopyPixels);
-    UNIMPL_PH(glDeleteLists);
-    UNIMPL_PH(glDrawPixels);
-    UNIMPL_PH(glEdgeFlag);
-    UNIMPL_PH(glEdgeFlagv);
-    UNIMPL_PH(glEdgeFlagPointer);
-    UNIMPL_PH(glEnd);
-    UNIMPL_PH(glEvalCoord1f);
-    UNIMPL_PH(glEvalCoord1fv);
-    UNIMPL_PH(glEvalCoord1d);
-    UNIMPL_PH(glEvalCoord1dv);
-    UNIMPL_PH(glEvalCoord2f);
-    UNIMPL_PH(glEvalCoord2fv);
-    UNIMPL_PH(glEvalCoord2d);
-    UNIMPL_PH(glEvalCoord2dv);
-    UNIMPL_PH(glEvalMesh1);
-    UNIMPL_PH(glEvalMesh2);
-    UNIMPL_PH(glEvalPoint1);
-    UNIMPL_PH(glEvalPoint2);
-    UNIMPL_PH(glFeedbackBuffer);
-    UNIMPL_PH(glFogi);
-    UNIMPL_PH(glFogiv);
-    UNIMPL_PH(glGenLists);
-    UNIMPL_PH(glGetClipPlane);
-    UNIMPL_PH(glGetLightiv);
-    UNIMPL_PH(glGetMapiv);
-    UNIMPL_PH(glGetMapfv);
-    UNIMPL_PH(glGetMapdv);
-    UNIMPL_PH(glGetMaterialiv);
-    UNIMPL_PH(glGetPixelMapfv);
-    UNIMPL_PH(glGetPixelMapusv);
-    UNIMPL_PH(glGetPixelMapuiv);
-    UNIMPL_PH(glGetPolygonStipple);
-    UNIMPL_PH(glGetTexGeniv);
-    UNIMPL_PH(glGetTexGenfv);
-    UNIMPL_PH(glGetTexGendv);
-    UNIMPL_PH(glIndexi);
-    UNIMPL_PH(glIndexub);
-    UNIMPL_PH(glIndexs);
-    UNIMPL_PH(glIndexf);
-    UNIMPL_PH(glIndexd);
-    UNIMPL_PH(glIndexiv);
-    UNIMPL_PH(glIndexubv);
-    UNIMPL_PH(glIndexsv);
-    UNIMPL_PH(glIndexfv);
-    UNIMPL_PH(glIndexdv);
-    UNIMPL_PH(glIndexMask);
-    UNIMPL_PH(glIndexPointer);
-    UNIMPL_PH(glInitNames);
-    UNIMPL_PH(glInterleavedArrays);
-    UNIMPL_PH(glIsList);
-    UNIMPL_PH(glLightModeli);
-    UNIMPL_PH(glLightModeliv);
-    UNIMPL_PH(glLighti);
-    UNIMPL_PH(glLightiv);
-    UNIMPL_PH(glLineStipple);
-    UNIMPL_PH(glListBase);
-    UNIMPL_PH(glLoadMatrixd);
-    UNIMPL_PH(glLoadName);
-    UNIMPL_PH(glMap1f);
-    UNIMPL_PH(glMap1d);
-    UNIMPL_PH(glMap2f);
-    UNIMPL_PH(glMap2d);
-    UNIMPL_PH(glMapGrid1f);
-    UNIMPL_PH(glMapGrid1d);
-    UNIMPL_PH(glMapGrid2f);
-    UNIMPL_PH(glMapGrid2d);
-    UNIMPL_PH(glMateriali);
-    UNIMPL_PH(glMaterialiv);
-    UNIMPL_PH(glMultMatrixd);
-    UNIMPL_PH(glFrustum);
-    UNIMPL_PH(glNewList);
-    UNIMPL_PH(glEndList);
-    UNIMPL_PH(glNormal3b);
-    UNIMPL_PH(glNormal3s);
-    UNIMPL_PH(glNormal3i);
-    UNIMPL_PH(glNormal3d);
-    UNIMPL_PH(glNormal3fv);
-    UNIMPL_PH(glNormal3bv);
-    UNIMPL_PH(glNormal3sv);
-    UNIMPL_PH(glNormal3iv);
-    UNIMPL_PH(glNormal3dv);
-    UNIMPL_PH(glOrtho);
-    UNIMPL_PH(glPassThrough);
-    UNIMPL_PH(glPixelMapfv);
-    UNIMPL_PH(glPixelMapusv);
-    UNIMPL_PH(glPixelMapuiv);
-    UNIMPL_PH(glPixelTransferi);
-    UNIMPL_PH(glPixelTransferf);
-    UNIMPL_PH(glPixelZoom);
-    UNIMPL_PH(glPolygonStipple);
-    UNIMPL_PH(glPushAttrib);
-    UNIMPL_PH(glPushClientAttrib);
-    UNIMPL_PH(glPopAttrib);
-    UNIMPL_PH(glPopClientAttrib);
-    UNIMPL_PH(glPopName);
-    UNIMPL_PH(glPrioritizeTextures);
-    UNIMPL_PH(glPushName);
-    UNIMPL_PH(glRasterPos2i);
-    UNIMPL_PH(glRasterPos2s);
-    UNIMPL_PH(glRasterPos2f);
-    UNIMPL_PH(glRasterPos2d);
-    UNIMPL_PH(glRasterPos2iv);
-    UNIMPL_PH(glRasterPos2sv);
-    UNIMPL_PH(glRasterPos2fv);
-    UNIMPL_PH(glRasterPos2dv);
-    UNIMPL_PH(glRasterPos3i);
-    UNIMPL_PH(glRasterPos3s);
-    UNIMPL_PH(glRasterPos3f);
-    UNIMPL_PH(glRasterPos3d);
-    UNIMPL_PH(glRasterPos3iv);
-    UNIMPL_PH(glRasterPos3sv);
-    UNIMPL_PH(glRasterPos3fv);
-    UNIMPL_PH(glRasterPos3dv);
-    UNIMPL_PH(glRasterPos4i);
-    UNIMPL_PH(glRasterPos4s);
-    UNIMPL_PH(glRasterPos4f);
-    UNIMPL_PH(glRasterPos4d);
-    UNIMPL_PH(glRasterPos4iv);
-    UNIMPL_PH(glRasterPos4sv);
-    UNIMPL_PH(glRasterPos4fv);
-    UNIMPL_PH(glRasterPos4dv);
-    UNIMPL_PH(glRecti);
-    UNIMPL_PH(glRects);
-    UNIMPL_PH(glRectf);
-    UNIMPL_PH(glRectd);
-    UNIMPL_PH(glRectiv);
-    UNIMPL_PH(glRectsv);
-    UNIMPL_PH(glRectfv);
-    UNIMPL_PH(glRectdv);
-    UNIMPL_PH(glRenderMode);
-    UNIMPL_PH(glRotated);
-    UNIMPL_PH(glScaled);
-    UNIMPL_PH(glSelectBuffer);
-    UNIMPL_PH(glTexCoord1f);
-    UNIMPL_PH(glTexCoord1s);
-    UNIMPL_PH(glTexCoord1i);
-    UNIMPL_PH(glTexCoord1d);
-    UNIMPL_PH(glTexCoord1fv);
-    UNIMPL_PH(glTexCoord1sv);
-    UNIMPL_PH(glTexCoord1iv);
-    UNIMPL_PH(glTexCoord1dv);
-    UNIMPL_PH(glTexCoord2f);
-    UNIMPL_PH(glTexCoord2s);
-    UNIMPL_PH(glTexCoord2i);
-    UNIMPL_PH(glTexCoord2d);
-    UNIMPL_PH(glTexCoord2fv);
-    UNIMPL_PH(glTexCoord2sv);
-    UNIMPL_PH(glTexCoord2iv);
-    UNIMPL_PH(glTexCoord2dv);
-    UNIMPL_PH(glTexCoord3f);
-    UNIMPL_PH(glTexCoord3s);
-    UNIMPL_PH(glTexCoord3i);
-    UNIMPL_PH(glTexCoord3d);
-    UNIMPL_PH(glTexCoord3fv);
-    UNIMPL_PH(glTexCoord3sv);
-    UNIMPL_PH(glTexCoord3iv);
-    UNIMPL_PH(glTexCoord3dv);
-    UNIMPL_PH(glTexCoord4f);
-    UNIMPL_PH(glTexCoord4s);
-    UNIMPL_PH(glTexCoord4i);
-    UNIMPL_PH(glTexCoord4d);
-    UNIMPL_PH(glTexCoord4fv);
-    UNIMPL_PH(glTexCoord4sv);
-    UNIMPL_PH(glTexCoord4iv);
-    UNIMPL_PH(glTexCoord4dv);
-    UNIMPL_PH(glTexGeni);
-    UNIMPL_PH(glTexGeniv);
-    UNIMPL_PH(glTexGenf);
-    UNIMPL_PH(glTexGenfv);
-    UNIMPL_PH(glTexGend);
-    UNIMPL_PH(glTexGendv);
-    UNIMPL_PH(glTranslated);
-    UNIMPL_PH(glVertex2f);
-    UNIMPL_PH(glVertex2s);
-    UNIMPL_PH(glVertex2i);
-    UNIMPL_PH(glVertex2d);
-    UNIMPL_PH(glVertex2fv);
-    UNIMPL_PH(glVertex2sv);
-    UNIMPL_PH(glVertex2iv);
-    UNIMPL_PH(glVertex2dv);
-    UNIMPL_PH(glVertex3f);
-    UNIMPL_PH(glVertex3s);
-    UNIMPL_PH(glVertex3i);
-    UNIMPL_PH(glVertex3d);
-    UNIMPL_PH(glVertex3fv);
-    UNIMPL_PH(glVertex3sv);
-    UNIMPL_PH(glVertex3iv);
-    UNIMPL_PH(glVertex3dv);
-    UNIMPL_PH(glVertex4f);
-    UNIMPL_PH(glVertex4s);
-    UNIMPL_PH(glVertex4i);
-    UNIMPL_PH(glVertex4d);
-    UNIMPL_PH(glVertex4fv);
-    UNIMPL_PH(glVertex4sv);
-    UNIMPL_PH(glVertex4iv);
-    UNIMPL_PH(glVertex4dv);
-    UNIMPL_PH(glClearDepth);
-    UNIMPL_PH(glDepthRange);
-    UNIMPL_PH(glDrawBuffer);
-    UNIMPL_PH(glGetDoublev);
-    UNIMPL_PH(glGetTexImage);
-    UNIMPL_PH(glPixelStoref);
-    UNIMPL_PH(glPolygonMode);
-    UNIMPL_PH(glTexImage1D);
-    UNIMPL_PH(glCopyTexImage1D);
-    UNIMPL_PH(glCopyTexSubImage1D);
-    UNIMPL_PH(glTexSubImage1D);
+    if (!g_initialized)
+        proc_init();
+    if (!strncmp(procname, "egl", 3)) {
+//        MAP_FUNC_MGLUES(eglCreateContext);
+//        MAP_FUNC_MGLUES(eglDestroyContext);
+//        MAP_FUNC_MGLUES(eglMakeCurrent);
+        if (strcmp(procname, "eglCreateContext") == 0)
+            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglCreateContext;
+        if (strcmp(procname, "eglDestroyContext") == 0)
+            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglDestroyContext;
+        if (strcmp(procname, "eglMakeCurrent") == 0)
+            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglMakeCurrent;
+    }
+
+    // OpenGL 1.1
+    MAP_FUNC(glAccum);
+    MAP_FUNC(glAreTexturesResident);
+    MAP_FUNC(glAreTexturesResident);
+    MAP_FUNC(glArrayElement);
+    MAP_FUNC(glBegin);
+    MAP_FUNC(glBitmap);
+    MAP_FUNC(glCallList);
+    MAP_FUNC(glCallLists);
+    MAP_FUNC(glClearAccum);
+    MAP_FUNC(glClearIndex);
+    MAP_FUNC(glClipPlane);
+    MAP_FUNC(glColor3b);
+    MAP_FUNC(glColor3s);
+    MAP_FUNC(glColor3i);
+    MAP_FUNC(glColor3f);
+    MAP_FUNC(glColor3d);
+    MAP_FUNC(glColor3ub);
+    MAP_FUNC(glColor3us);
+    MAP_FUNC(glColor3ui);
+    MAP_FUNC(glColor3bv);
+    MAP_FUNC(glColor3sv);
+    MAP_FUNC(glColor3iv);
+    MAP_FUNC(glColor3fv);
+    MAP_FUNC(glColor3dv);
+    MAP_FUNC(glColor3ubv);
+    MAP_FUNC(glColor3usv);
+    MAP_FUNC(glColor3uiv);
+    MAP_FUNC(glColor4b);
+    MAP_FUNC(glColor4s);
+    MAP_FUNC(glColor4i);
+    MAP_FUNC(glColor4d);
+    MAP_FUNC(glColor4us);
+    MAP_FUNC(glColor4ui);
+    MAP_FUNC(glColor4bv);
+    MAP_FUNC(glColor4sv);
+    MAP_FUNC(glColor4iv);
+    MAP_FUNC(glColor4fv);
+    MAP_FUNC(glColor4dv);
+    MAP_FUNC(glColor4ubv);
+    MAP_FUNC(glColor4usv);
+    MAP_FUNC(glColor4uiv);
+    MAP_FUNC(glColorMaterial);
+    MAP_FUNC(glCopyPixels);
+    MAP_FUNC(glDeleteLists);
+    MAP_FUNC(glDrawPixels);
+    MAP_FUNC(glEdgeFlag);
+    MAP_FUNC(glEdgeFlagv);
+    MAP_FUNC(glEdgeFlagPointer);
+    MAP_FUNC(glEnd);
+    MAP_FUNC(glEvalCoord1f);
+    MAP_FUNC(glEvalCoord1fv);
+    MAP_FUNC(glEvalCoord1d);
+    MAP_FUNC(glEvalCoord1dv);
+    MAP_FUNC(glEvalCoord2f);
+    MAP_FUNC(glEvalCoord2fv);
+    MAP_FUNC(glEvalCoord2d);
+    MAP_FUNC(glEvalCoord2dv);
+    MAP_FUNC(glEvalMesh1);
+    MAP_FUNC(glEvalMesh2);
+    MAP_FUNC(glEvalPoint1);
+    MAP_FUNC(glEvalPoint2);
+    MAP_FUNC(glFeedbackBuffer);
+    MAP_FUNC(glFogi);
+    MAP_FUNC(glFogiv);
+    MAP_FUNC(glGenLists);
+    MAP_FUNC(glGetClipPlane);
+    MAP_FUNC(glGetLightiv);
+    MAP_FUNC(glGetMapiv);
+    MAP_FUNC(glGetMapfv);
+    MAP_FUNC(glGetMapdv);
+    MAP_FUNC(glGetMaterialiv);
+    MAP_FUNC(glGetPixelMapfv);
+    MAP_FUNC(glGetPixelMapusv);
+    MAP_FUNC(glGetPixelMapuiv);
+    MAP_FUNC(glGetPolygonStipple);
+    MAP_FUNC(glGetTexGeniv);
+    MAP_FUNC(glGetTexGenfv);
+    MAP_FUNC(glGetTexGendv);
+    MAP_FUNC(glIndexi);
+    MAP_FUNC(glIndexub);
+    MAP_FUNC(glIndexs);
+    MAP_FUNC(glIndexf);
+    MAP_FUNC(glIndexd);
+    MAP_FUNC(glIndexiv);
+    MAP_FUNC(glIndexubv);
+    MAP_FUNC(glIndexsv);
+    MAP_FUNC(glIndexfv);
+    MAP_FUNC(glIndexdv);
+    MAP_FUNC(glIndexMask);
+    MAP_FUNC(glIndexPointer);
+    MAP_FUNC(glInitNames);
+    MAP_FUNC(glInterleavedArrays);
+    MAP_FUNC(glIsList);
+    MAP_FUNC(glLightModeli);
+    MAP_FUNC(glLightModeliv);
+    MAP_FUNC(glLighti);
+    MAP_FUNC(glLightiv);
+    MAP_FUNC(glLineStipple);
+    MAP_FUNC(glListBase);
+    MAP_FUNC(glLoadMatrixd);
+    MAP_FUNC(glLoadName);
+    MAP_FUNC(glMap1f);
+    MAP_FUNC(glMap1d);
+    MAP_FUNC(glMap2f);
+    MAP_FUNC(glMap2d);
+    MAP_FUNC(glMapGrid1f);
+    MAP_FUNC(glMapGrid1d);
+    MAP_FUNC(glMapGrid2f);
+    MAP_FUNC(glMapGrid2d);
+    MAP_FUNC(glMateriali);
+    MAP_FUNC(glMaterialiv);
+    MAP_FUNC(glMultMatrixd);
+    MAP_FUNC(glFrustum);
+    MAP_FUNC(glNewList);
+    MAP_FUNC(glEndList);
+    MAP_FUNC(glNormal3b);
+    MAP_FUNC(glNormal3s);
+    MAP_FUNC(glNormal3i);
+    MAP_FUNC(glNormal3d);
+    MAP_FUNC(glNormal3fv);
+    MAP_FUNC(glNormal3bv);
+    MAP_FUNC(glNormal3sv);
+    MAP_FUNC(glNormal3iv);
+    MAP_FUNC(glNormal3dv);
+    MAP_FUNC(glOrtho);
+    MAP_FUNC(glPassThrough);
+    MAP_FUNC(glPixelMapfv);
+    MAP_FUNC(glPixelMapusv);
+    MAP_FUNC(glPixelMapuiv);
+    MAP_FUNC(glPixelTransferi);
+    MAP_FUNC(glPixelTransferf);
+    MAP_FUNC(glPixelZoom);
+    MAP_FUNC(glPolygonStipple);
+    MAP_FUNC(glPushAttrib);
+    MAP_FUNC(glPushClientAttrib);
+    MAP_FUNC(glPopAttrib);
+    MAP_FUNC(glPopClientAttrib);
+    MAP_FUNC(glPopName);
+    MAP_FUNC(glPrioritizeTextures);
+    MAP_FUNC(glPushName);
+    MAP_FUNC(glRasterPos2i);
+    MAP_FUNC(glRasterPos2s);
+    MAP_FUNC(glRasterPos2f);
+    MAP_FUNC(glRasterPos2d);
+    MAP_FUNC(glRasterPos2iv);
+    MAP_FUNC(glRasterPos2sv);
+    MAP_FUNC(glRasterPos2fv);
+    MAP_FUNC(glRasterPos2dv);
+    MAP_FUNC(glRasterPos3i);
+    MAP_FUNC(glRasterPos3s);
+    MAP_FUNC(glRasterPos3f);
+    MAP_FUNC(glRasterPos3d);
+    MAP_FUNC(glRasterPos3iv);
+    MAP_FUNC(glRasterPos3sv);
+    MAP_FUNC(glRasterPos3fv);
+    MAP_FUNC(glRasterPos3dv);
+    MAP_FUNC(glRasterPos4i);
+    MAP_FUNC(glRasterPos4s);
+    MAP_FUNC(glRasterPos4f);
+    MAP_FUNC(glRasterPos4d);
+    MAP_FUNC(glRasterPos4iv);
+    MAP_FUNC(glRasterPos4sv);
+    MAP_FUNC(glRasterPos4fv);
+    MAP_FUNC(glRasterPos4dv);
+    MAP_FUNC(glRecti);
+    MAP_FUNC(glRects);
+    MAP_FUNC(glRectf);
+    MAP_FUNC(glRectd);
+    MAP_FUNC(glRectiv);
+    MAP_FUNC(glRectsv);
+    MAP_FUNC(glRectfv);
+    MAP_FUNC(glRectdv);
+    MAP_FUNC(glRenderMode);
+    MAP_FUNC(glRotated);
+    MAP_FUNC(glScaled);
+    MAP_FUNC(glSelectBuffer);
+    MAP_FUNC(glTexCoord1f);
+    MAP_FUNC(glTexCoord1s);
+    MAP_FUNC(glTexCoord1i);
+    MAP_FUNC(glTexCoord1d);
+    MAP_FUNC(glTexCoord1fv);
+    MAP_FUNC(glTexCoord1sv);
+    MAP_FUNC(glTexCoord1iv);
+    MAP_FUNC(glTexCoord1dv);
+    MAP_FUNC(glTexCoord2f);
+    MAP_FUNC(glTexCoord2s);
+    MAP_FUNC(glTexCoord2i);
+    MAP_FUNC(glTexCoord2d);
+    MAP_FUNC(glTexCoord2fv);
+    MAP_FUNC(glTexCoord2sv);
+    MAP_FUNC(glTexCoord2iv);
+    MAP_FUNC(glTexCoord2dv);
+    MAP_FUNC(glTexCoord3f);
+    MAP_FUNC(glTexCoord3s);
+    MAP_FUNC(glTexCoord3i);
+    MAP_FUNC(glTexCoord3d);
+    MAP_FUNC(glTexCoord3fv);
+    MAP_FUNC(glTexCoord3sv);
+    MAP_FUNC(glTexCoord3iv);
+    MAP_FUNC(glTexCoord3dv);
+    MAP_FUNC(glTexCoord4f);
+    MAP_FUNC(glTexCoord4s);
+    MAP_FUNC(glTexCoord4i);
+    MAP_FUNC(glTexCoord4d);
+    MAP_FUNC(glTexCoord4fv);
+    MAP_FUNC(glTexCoord4sv);
+    MAP_FUNC(glTexCoord4iv);
+    MAP_FUNC(glTexCoord4dv);
+    MAP_FUNC(glTexGeni);
+    MAP_FUNC(glTexGeniv);
+    MAP_FUNC(glTexGenf);
+    MAP_FUNC(glTexGenfv);
+    MAP_FUNC(glTexGend);
+    MAP_FUNC(glTexGendv);
+    MAP_FUNC(glTranslated);
+    MAP_FUNC(glVertex2f);
+    MAP_FUNC(glVertex2s);
+    MAP_FUNC(glVertex2i);
+    MAP_FUNC(glVertex2d);
+    MAP_FUNC(glVertex2fv);
+    MAP_FUNC(glVertex2sv);
+    MAP_FUNC(glVertex2iv);
+    MAP_FUNC(glVertex2dv);
+    MAP_FUNC(glVertex3f);
+    MAP_FUNC(glVertex3s);
+    MAP_FUNC(glVertex3i);
+    MAP_FUNC(glVertex3d);
+    MAP_FUNC(glVertex3fv);
+    MAP_FUNC(glVertex3sv);
+    MAP_FUNC(glVertex3iv);
+    MAP_FUNC(glVertex3dv);
+    MAP_FUNC(glVertex4f);
+    MAP_FUNC(glVertex4s);
+    MAP_FUNC(glVertex4i);
+    MAP_FUNC(glVertex4d);
+    MAP_FUNC(glVertex4fv);
+    MAP_FUNC(glVertex4sv);
+    MAP_FUNC(glVertex4iv);
+    MAP_FUNC(glVertex4dv);
+    MAP_FUNC(glClearDepth);
+    MAP_FUNC(glDepthRange);
+    MAP_FUNC(glDrawBuffer);
+    MAP_FUNC(glGetDoublev);
+    MAP_FUNC(glGetTexImage);
+    MAP_FUNC(glPixelStoref);
+    MAP_FUNC(glPolygonMode);
+    MAP_FUNC(glTexImage1D);
+    MAP_FUNC(glCopyTexImage1D);
+    MAP_FUNC(glCopyTexSubImage1D);
+    MAP_FUNC(glTexSubImage1D);
+    MAP_FUNC(glGetError);
+    MAP_FUNC(glGetString);
 //    UNIMPL_PH(glMultiTexCoord1f);
 //    UNIMPL_PH(glMultiTexCoord1s);
 //    UNIMPL_PH(glMultiTexCoord1i);
@@ -501,39 +519,38 @@ __eglMustCastToProperFunctionPointerType prehook(const char *procname) {
 }
 
 __eglMustCastToProperFunctionPointerType posthook(const char *procname) {
-
     return NULL;
 }
 
 EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY glXGetProcAddress (const char *procname) {
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
                         "%s @ %s(%s)", RENDERERNAME, __FUNCTION__, procname);
-    __eglMustCastToProperFunctionPointerType proc = NULL;
-
-    proc = prehook(procname);
-    if (proc) return proc;
-    else
-        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "bad func addr: %s(%s) @ prehook", __FUNCTION__, procname);
-
-    proc = eglGetProcAddress(procname);
-    if (proc) return proc;
-    else
-        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "bad func addr: %s(%s) @ system", __FUNCTION__, procname);
-
-    proc = posthook(procname);
-    if (!proc)
-        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                            "bad func addr: %s(%s) @ posthook", __FUNCTION__, procname);
-    return proc;
+    return eglGetProcAddress(procname);
 }
 
 EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress (const char *procname) {
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
                         "%s @ %s(%s)", RENDERERNAME, __FUNCTION__, procname);
 
-    return g_target_egl_func.eglGetProcAddress(procname);
+    __eglMustCastToProperFunctionPointerType proc = NULL;
+
+    proc = prehook(procname);
+    if (proc) return proc;
+//    else
+//        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+//                            "null func addr: %s(%s) @ prehook", __FUNCTION__, procname);
+
+//    proc = g_egl_func.eglGetProcAddress(procname);
+    if (proc) return proc;
+//    else
+//        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+//                            "null func addr: %s(%s) @ system", __FUNCTION__, procname);
+
+    proc = posthook(procname);
+//    if (!proc)
+//        __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+//                            "null func addr: %s(%s) @ posthook", __FUNCTION__, procname);
+    return proc;
 }
 
 //static const unsigned char* vendor = "GL_VENDOR";
