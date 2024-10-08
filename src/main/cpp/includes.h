@@ -18,6 +18,8 @@
 
 static int g_initialized = 0;
 
+void proc_init();
+
 typedef __eglMustCastToProperFunctionPointerType (EGLGETPROCADDRESSPROC) (const char *procname);
 typedef EGLGETPROCADDRESSPROC* EGLGETPROCADDRESSPROCP;
 typedef EGLContext (EGLCREATECONTEXTPROC) (EGLDisplay, EGLConfig, EGLContext, const EGLint *);
