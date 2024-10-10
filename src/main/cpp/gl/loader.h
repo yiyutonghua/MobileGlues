@@ -1,0 +1,10 @@
+//
+// Created by Swung 0x48 on 2024/10/10.
+//
+
+#ifndef FOLD_CRAFT_LAUNCHER_GL_LOADER_H
+#define FOLD_CRAFT_LAUNCHER_GL_LOADER_H
+
+
+
+#endif //FOLD_CRAFT_LAUNCHER_GL_LOADER_H

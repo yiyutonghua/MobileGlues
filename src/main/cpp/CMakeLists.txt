@@ -29,9 +29,10 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         native-lib.cpp
         init.cpp
         main.c
-        gl.c
-        egl.cpp
-        gles3.h
+        gl/gl.c
+        egl/egl.c
+        egl/loader.c
+        gles/loader.c
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ./includes)

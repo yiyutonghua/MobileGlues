@@ -4,14 +4,17 @@
 
 #include <string.h>
 #include "includes.h"
-#include <GL/gl.h>
+#include "gl/gl.h"
+#include "egl/egl.h"
+#include "egl/loader.h"
+#include "gles/loader.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void init_target_egl();
-void init_target_gles();
+struct egl_func_t g_egl_func;
+
 __eglMustCastToProperFunctionPointerType prehook(const char *procname);
 __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
@@ -25,35 +28,13 @@ void proc_init() {
                             "Cannot load system libEGL.so!");
 
     g_egl_func.eglGetProcAddress = _mglues_dlsym(handle, "eglGetProcAddress");
+    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+                        "Got target eglGetProcAddress @ 0x%lx", g_egl_func.eglGetProcAddress);
 
     init_target_egl();
     init_target_gles();
 
     g_initialized = 1;
-}
-
-void init_target_egl() {
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-
-    g_egl_func.eglCreateContext =
-            (EGLCREATECONTEXTPROCP)g_egl_func.eglGetProcAddress("eglCreateContext");
-    g_egl_func.eglDestroyContext =
-            (EGLDESTROYCONTEXTPROCP) g_egl_func.eglGetProcAddress("eglDestroyContext");
-    g_egl_func.eglMakeCurrent =
-            (EGLMAKECURRENTPROCP) g_egl_func.eglGetProcAddress("eglMakeCurrent");
-
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglCreateContext @ 0x%lx", g_egl_func.eglCreateContext);
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglDestroyContext @ 0x%lx", g_egl_func.eglDestroyContext);
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglMakeCurrent @ 0x%lx", g_egl_func.eglMakeCurrent);
-}
-
-void init_target_gles() {
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
 }
 
 #define MAP_FUNC(name) if (strcmp(procname, #name) == 0)  \
@@ -64,18 +45,18 @@ void init_target_gles() {
 
 
 __eglMustCastToProperFunctionPointerType prehook(const char *procname) {
-    if (!g_initialized)
-        proc_init();
+//    if (!g_initialized)
+//        proc_init();
     if (!strncmp(procname, "egl", 3)) {
-//        MAP_FUNC_MGLUES(eglCreateContext);
-//        MAP_FUNC_MGLUES(eglDestroyContext);
-//        MAP_FUNC_MGLUES(eglMakeCurrent);
-        if (strcmp(procname, "eglCreateContext") == 0)
-            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglCreateContext;
-        if (strcmp(procname, "eglDestroyContext") == 0)
-            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglDestroyContext;
-        if (strcmp(procname, "eglMakeCurrent") == 0)
-            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglMakeCurrent;
+        MAP_FUNC_MGLUES(eglCreateContext);
+        MAP_FUNC_MGLUES(eglDestroyContext);
+        MAP_FUNC_MGLUES(eglMakeCurrent);
+//        if (strcmp(procname, "eglCreateContext") == 0)
+//            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglCreateContext;
+//        if (strcmp(procname, "eglDestroyContext") == 0)
+//            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglDestroyContext;
+//        if (strcmp(procname, "eglMakeCurrent") == 0)
+//            return (__eglMustCastToProperFunctionPointerType) g_egl_func.eglMakeCurrent;
     }
 
     // OpenGL 1.1

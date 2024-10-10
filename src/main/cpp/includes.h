@@ -12,7 +12,8 @@
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
 
-#include "egl.h"
+#include "egl/egl.h"
+#include "egl/loader.h"
 
 #define _mglues_dlopen(name) dlopen(name, RTLD_LAZY)
 #define _mglues_dlclose(handle) dlclose(handle)
@@ -27,7 +28,7 @@ EGLContext mglues_eglCreateContext (EGLDisplay dpy, EGLConfig config, EGLContext
 EGLBoolean mglues_eglDestroyContext(EGLDisplay dpy, EGLContext ctx);
 EGLBoolean mglues_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 
-static struct egl_func_t g_egl_func;
+extern struct egl_func_t g_egl_func;
 
 
 #endif //MOBILEGLUES_INCLUDES_H
