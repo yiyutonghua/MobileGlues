@@ -42,14 +42,6 @@ static const char *gles3_lib[] = {
         NULL
 };
 
-static const char *egl_lib[] = {
-#if defined(BCMHOST)
-        "libbrcmEGL",
-#endif
-        "libEGL",
-        NULL
-};
-
 void *open_lib(const char **names, const char *override) {
     void *lib = NULL;
 
@@ -83,8 +75,6 @@ void load_libs() {
     first = 0;
     const char *gles_override = GetEnvVar("LIBGL_GLES");
     gles = open_lib(gles3_lib, gles_override);
-    const char *egl_override = GetEnvVar("LIBGL_EGL");
-    egl = open_lib(egl_lib, egl_override);
 }
 
 void *(*gles_getProcAddress)(const char *name);

@@ -8,6 +8,7 @@
 #include "egl/egl.h"
 #include "egl/loader.h"
 #include "gles/loader.h"
+#include "gl/envvars.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,18 +20,7 @@ __eglMustCastToProperFunctionPointerType prehook(const char *procname);
 __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
 void proc_init() {
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-
-    void* handle = _mglues_dlopen("libEGL.so");
-    if (handle == NULL)
-        __android_log_print(ANDROID_LOG_FATAL, RENDERERNAME,
-                            "Cannot load system libEGL.so!");
-
-    g_egl_func.eglGetProcAddress = _mglues_dlsym(handle, "eglGetProcAddress");
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "Got target eglGetProcAddress @ 0x%lx", g_egl_func.eglGetProcAddress);
-
+    LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     init_target_egl();
     init_target_gles();
 

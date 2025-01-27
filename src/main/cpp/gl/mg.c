@@ -10,7 +10,7 @@ gl_state_t gl_state;
 GLenum pname_convert(GLenum pname){
     switch (pname) {
         case GL_TEXTURE_LOD_BIAS:
-            LOG_D("pnameConvert: GL_TEXTURE_LOD_BIAS -> GL_TEXTURE_LOD_BIAS_EXT");
+            LOG_D("pnameConvert: GL_TEXTURE_LOD_BIAS -> GL_TEXTURE_LOD_BIAS_QCOM");
             return GL_TEXTURE_LOD_BIAS_QCOM;
     }
     return pname;

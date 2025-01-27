@@ -12,7 +12,17 @@ struct egl_func_t {
     EGLCREATECONTEXTPROCP eglCreateContext;
     EGLDESTROYCONTEXTPROCP eglDestroyContext;
     EGLMAKECURRENTPROCP eglMakeCurrent;
+    EGLQUERYSTRINGPROCP eglQueryString;
+    EGLTERMINATEPROCP eglTerminate;
+    EGLCHOOSECONFIGPROCP eglChooseConfig;
+    EGLBINDAPIPROCP eglBindAPI;
+    EGLINITIALIZEPROCP eglInitialize;
+    EGLGETDISPLAYP eglGetDisplay;
+    EGLCREATEPBUFFERSURFACEPROCP eglCreatePbufferSurface;
+    EGLDESTROYSURFACEPROCP eglDestroySurface;
+    EGLGETERRORPROCP eglGetError;
 };
+
 
 void init_target_egl();
 

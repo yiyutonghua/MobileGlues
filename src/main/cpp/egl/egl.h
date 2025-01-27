@@ -19,7 +19,7 @@ typedef const char * (*EGLQUERYSTRINGPROCP)(EGLDisplay dpy, EGLint name);
 typedef EGLBoolean (*EGLGETCONFIGSPROCP)(EGLDisplay dpy, EGLConfig *configs, EGLint config_size, EGLint *num_config);
 typedef EGLBoolean (*EGLCHOOSECONFIGPROCP)(EGLDisplay dpy, const EGLint *attrib_list, EGLConfig *configs, EGLint config_size, EGLint *num_config);
 typedef EGLBoolean (*EGLGETCONFIGATTRIBPROCP)(EGLDisplay dpy, EGLConfig config, EGLint attribute, EGLint *value);
-typedef
+
 typedef EGLSurface (*EGLCREATEWINDOWSURFACEPROCP)(EGLDisplay dpy, EGLConfig config, EGLNativeWindowType win, const EGLint *attrib_list);
 typedef EGLSurface (*EGLCREATEPBUFFERSURFACEPROCP)(EGLDisplay dpy, EGLConfig config, const EGLint *attrib_list);
 typedef EGLSurface (*EGLCREATEPIXMAPSURFACEPROCP)(EGLDisplay dpy, EGLConfig config, EGLNativePixmapType pixmap, const EGLint *attrib_list);
@@ -27,7 +27,7 @@ typedef EGLBoolean (*EGLDESTROYSURFACEPROCP)(EGLDisplay dpy, EGLSurface surface)
 typedef EGLBoolean (*EGLQUERYSURFACEPROCP)(EGLDisplay dpy, EGLSurface surface, EGLint attribute, EGLint *value);
 typedef EGLBoolean (*EGLBINDAPIPROCP)(EGLenum api);
 typedef EGLenum (*EGLQUERYAPIPROCP)(void);
-typedef
+
 typedef EGLBoolean (*EGLWAITCLIENTPROCP)(void);
 typedef EGLBoolean (*EGLRELEASETHREADPROCP)(void);
 typedef EGLSurface (*EGLCREATEPBUFFERFROMCLIENTBUFFERPROCP)(EGLDisplay dpy, EGLenum buftype, EGLClientBuffer buffer, EGLConfig config, const EGLint *attrib_list);
