@@ -14,15 +14,13 @@
 extern "C" {
 #endif
 
-struct egl_func_t g_egl_func;
-
 __eglMustCastToProperFunctionPointerType prehook(const char *procname);
 __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    init_target_egl();
     init_target_gles();
+    init_target_egl();
 
     g_initialized = 1;
 }
@@ -492,12 +490,6 @@ __eglMustCastToProperFunctionPointerType prehook(const char *procname) {
 __eglMustCastToProperFunctionPointerType posthook(const char *procname) {
     return NULL;
 }
-
-//EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY glXGetProcAddress (const char *procname) {
-//    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-//                        "%s @ %s(%s)", RENDERERNAME, __FUNCTION__, procname);
-//    return eglGetProcAddress(procname);
-//}
 
 EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress (const char *procname) {
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,

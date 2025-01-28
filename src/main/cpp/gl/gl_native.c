@@ -693,11 +693,11 @@ NATIVE_FUNCTION_HEAD(GLboolean, glIsFramebuffer,GLuint framebuffer) NATIVE_FUNCT
 NATIVE_FUNCTION_HEAD(void, glBindFramebuffer,GLenum target, GLuint framebuffer) NATIVE_FUNCTION_END_NO_RETURN(void,glBindFramebuffer,target,framebuffer)
 NATIVE_FUNCTION_HEAD(void, glDeleteFramebuffers,GLsizei n, const GLuint *framebuffers) NATIVE_FUNCTION_END_NO_RETURN(void,glDeleteFramebuffers,n,framebuffers)
 NATIVE_FUNCTION_HEAD(void, glGenFramebuffers,GLsizei n, GLuint *framebuffers) NATIVE_FUNCTION_END_NO_RETURN(void,glGenFramebuffers,n,framebuffers)
-//NATIVE_FUNCTION_HEAD(GLenum, glCheckFramebufferStatus,GLenum target) NATIVE_FUNCTION_END(GLenum,glCheckFramebufferStatus,target)
+NATIVE_FUNCTION_HEAD(GLenum, glCheckFramebufferStatus,GLenum target) NATIVE_FUNCTION_END(GLenum,glCheckFramebufferStatus,target)
 
 
 NATIVE_FUNCTION_HEAD(void, glFramebufferTexture1D,GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) NATIVE_FUNCTION_END_NO_RETURN(void,glFramebufferTexture1D,target,attachment,textarget,texture,level)
-//NATIVE_FUNCTION_HEAD(void, glFramebufferTexture2D,GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) NATIVE_FUNCTION_END_NO_RETURN(void,glFramebufferTexture2D,target,attachment,textarget,texture,level)
+NATIVE_FUNCTION_HEAD(void, glFramebufferTexture2D,GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) NATIVE_FUNCTION_END_NO_RETURN(void,glFramebufferTexture2D,target,attachment,textarget,texture,level)
 
 NATIVE_FUNCTION_HEAD(void, glFramebufferTexture3D,GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset) NATIVE_FUNCTION_END_NO_RETURN(void,glFramebufferTexture3D,target,attachment,textarget,texture,level,zoffset)
 NATIVE_FUNCTION_HEAD(void, glFramebufferRenderbuffer,GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) NATIVE_FUNCTION_END_NO_RETURN(void,glFramebufferRenderbuffer,target,attachment,renderbuffertarget,renderbuffer)
