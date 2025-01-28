@@ -21,6 +21,7 @@ find_library(GLSLANG_LIB glslang PATHS ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/)
 add_library(${CMAKE_PROJECT_NAME} SHARED
         init.cpp
         main.c
+        gl/gl_native.c
         gl/gl.c
         gl/envvars.c
         gl/log.c
