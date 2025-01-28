@@ -9,9 +9,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void *(*gles_getProcAddress)(const char *name);
+
 void *proc_address(void *lib, const char *name);
+
 extern void *gles, *egl;
+
+#ifdef __cplusplus
+}
+#endif
+
+void init_target_gles();
 
 #define WARN_NULL(name) if (name == NULL) { LOG_W("%s line %d function %s: " #name " is NULL\n", __FILE__, __LINE__, __func__); }
 
@@ -69,7 +81,5 @@ GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
 }
 
 #define LOAD_EGL(name) LOAD_LIB(egl, name)
-
-void init_target_gles();
 
 #endif // _MOBILEGLUES_LOADER_H_
