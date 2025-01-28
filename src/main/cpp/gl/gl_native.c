@@ -915,7 +915,7 @@ NATIVE_FUNCTION_HEAD(void,glEnableVertexAttribArray,GLuint index); NATIVE_FUNCTI
 NATIVE_FUNCTION_HEAD(void,glGetActiveAttrib,GLuint program, GLuint index, GLsizei bufSize, GLsizei* length, GLint* size, GLenum* type, GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(void,glGetActiveAttrib,program,index,bufSize,length,size,type,name)
 NATIVE_FUNCTION_HEAD(void,glGetActiveUniform,GLuint program, GLuint index, GLsizei bufSize, GLsizei* length, GLint* size, GLenum* type, GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(void,glGetActiveUniform,program,index,bufSize,length,size,type,name)
 NATIVE_FUNCTION_HEAD(GLint,glGetAttribLocation,GLuint program, const GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(GLint,glGetAttribLocation,program,name)
-NATIVE_FUNCTION_HEAD(GLint,glGetUniformLocation,GLuint program, const GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(GLint,glGetUniformLocation,program,name)
+NATIVE_FUNCTION_HEAD(GLint,glGetUniformLocation,GLuint program, const GLchar* name); NATIVE_FUNCTION_END(GLint,glGetUniformLocation,program,name)
 NATIVE_FUNCTION_HEAD(void,glGetUniformfv,GLuint program, GLint location, GLfloat* params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetUniformfv,program,location,params)
 NATIVE_FUNCTION_HEAD(void,glGetUniformiv,GLuint program, GLint location, GLint* params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetUniformiv,program,location,params)
 NATIVE_FUNCTION_HEAD(void,glGetVertexAttribdv,GLuint index, GLenum pname, GLdouble* params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetVertexAttribdv,index,pname,params)
@@ -927,6 +927,7 @@ NATIVE_FUNCTION_HEAD(void,glUniform2f,GLint location, GLfloat v0, GLfloat v1); N
 NATIVE_FUNCTION_HEAD(void,glUniform3f,GLint location, GLfloat v0, GLfloat v1, GLfloat v2); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform3f,location,v0,v1,v2)
 NATIVE_FUNCTION_HEAD(void,glUniform4f,GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform4f,location,v0,v1,v2,v3)
 NATIVE_FUNCTION_HEAD(void,glUniform1i,GLint location, GLint v0); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform1i,location,v0)
+
 NATIVE_FUNCTION_HEAD(void,glUniform2i,GLint location, GLint v0, GLint v1); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform2i,location,v0,v1)
 NATIVE_FUNCTION_HEAD(void,glUniform3i,GLint location, GLint v0, GLint v1, GLint v2); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform3i,location,v0,v1,v2)
 NATIVE_FUNCTION_HEAD(void,glUniform4i,GLint location, GLint v0, GLint v1, GLint v2, GLint v3); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform4i,location,v0,v1,v2,v3)
@@ -941,6 +942,7 @@ NATIVE_FUNCTION_HEAD(void,glUniform4iv,GLint location, GLsizei count, const GLin
 NATIVE_FUNCTION_HEAD(void,glUniformMatrix2fv,GLint location, GLsizei count, GLboolean transpose, const GLfloat* value); NATIVE_FUNCTION_END_NO_RETURN(void,glUniformMatrix2fv,location,count,transpose,value)
 NATIVE_FUNCTION_HEAD(void,glUniformMatrix3fv,GLint location, GLsizei count, GLboolean transpose, const GLfloat* value); NATIVE_FUNCTION_END_NO_RETURN(void,glUniformMatrix3fv,location,count,transpose,value)
 NATIVE_FUNCTION_HEAD(void,glUniformMatrix4fv,GLint location, GLsizei count, GLboolean transpose, const GLfloat* value); NATIVE_FUNCTION_END_NO_RETURN(void,glUniformMatrix4fv,location,count,transpose,value)
+
 NATIVE_FUNCTION_HEAD(void,glVertexAttrib1d,GLuint index, GLdouble x); NATIVE_FUNCTION_END_NO_RETURN(void,glVertexAttrib1d,index,x)
 NATIVE_FUNCTION_HEAD(void,glVertexAttrib1dv,GLuint index, const GLdouble* v); NATIVE_FUNCTION_END_NO_RETURN(void,glVertexAttrib1dv,index,v)
 NATIVE_FUNCTION_HEAD(void,glVertexAttrib1f,GLuint index, GLfloat x); NATIVE_FUNCTION_END_NO_RETURN(void,glVertexAttrib1f,index,x)
