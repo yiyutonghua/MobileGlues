@@ -70,4 +70,6 @@ GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
 
 #define LOAD_EGL(name) LOAD_LIB(egl, name)
 
+void init_target_gles();
+
 #endif // _MOBILEGLUES_LOADER_H_

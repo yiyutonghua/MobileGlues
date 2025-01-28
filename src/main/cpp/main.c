@@ -493,11 +493,11 @@ __eglMustCastToProperFunctionPointerType posthook(const char *procname) {
     return NULL;
 }
 
-EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY glXGetProcAddress (const char *procname) {
-    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
-                        "%s @ %s(%s)", RENDERERNAME, __FUNCTION__, procname);
-    return eglGetProcAddress(procname);
-}
+//EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY glXGetProcAddress (const char *procname) {
+//    __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
+//                        "%s @ %s(%s)", RENDERERNAME, __FUNCTION__, procname);
+//    return eglGetProcAddress(procname);
+//}
 
 EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress (const char *procname) {
     __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME,
