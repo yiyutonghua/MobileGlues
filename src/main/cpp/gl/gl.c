@@ -98,13 +98,14 @@ GLAPI void *APIENTRY glMapBuffer (GLenum target, GLenum access) {
     LOAD_GLES(glGetBufferParameteriv,void, GLenum target, GLenum pname, GLint* params);
     LOAD_GLES(glMapBufferRange,void*, GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access);
 
-    GLint buffer_size = 0;
-    gles_glGetBufferParameteriv(target, GL_BUFFER_SIZE, &buffer_size);
-
     GLbitfield flags = gl_to_es_access(access);
     if (flags == 0) {
         flags = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
     }
+
+    GLint buffer_size = 0;
+    gles_glGetBufferParameteriv(target, GL_BUFFER_SIZE, &buffer_size);
+
     void* ptr = gles_glMapBufferRange(target, 0, buffer_size, flags);
     return ptr;
 }
