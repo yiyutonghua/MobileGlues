@@ -901,7 +901,7 @@ NATIVE_FUNCTION_HEAD(GLboolean,glIsBuffer,GLuint buffer); NATIVE_FUNCTION_END_NO
 //NATIVE_FUNCTION_HEAD(void,glBufferData,GLenum target, GLsizeiptr size, const void* data, GLenum usage); NATIVE_FUNCTION_END_NO_RETURN(void,glBufferData,target,size,data,usage)
 NATIVE_FUNCTION_HEAD(void,glBufferSubData,GLenum target, GLintptr offset, GLsizeiptr size, const void* data); NATIVE_FUNCTION_END_NO_RETURN(void,glBufferSubData,target,offset,size,data)
 NATIVE_FUNCTION_HEAD(void,glGetBufferSubData,GLenum target, GLintptr offset, GLsizeiptr size, void* data); NATIVE_FUNCTION_END_NO_RETURN(void,glGetBufferSubData,target,offset,size,data)
-NATIVE_FUNCTION_HEAD(GLboolean,glUnmapBuffer,GLenum target); NATIVE_FUNCTION_END_NO_RETURN(GLboolean,glUnmapBuffer,target)
+//NATIVE_FUNCTION_HEAD(GLboolean,glUnmapBuffer,GLenum target); NATIVE_FUNCTION_END_NO_RETURN(GLboolean,glUnmapBuffer,target)
 NATIVE_FUNCTION_HEAD(void,glGetBufferParameteriv,GLenum target, GLenum pname, GLint* params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetBufferParameteriv,target,pname,params)
 NATIVE_FUNCTION_HEAD(void,glGetBufferPointerv,GLenum target, GLenum pname, void* *params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetBufferPointerv,target,pname,*params)
 NATIVE_FUNCTION_HEAD(void,glBlendEquationSeparate,GLenum modeRGB, GLenum modeAlpha); NATIVE_FUNCTION_END_NO_RETURN(void,glBlendEquationSeparate,modeRGB,modeAlpha)
