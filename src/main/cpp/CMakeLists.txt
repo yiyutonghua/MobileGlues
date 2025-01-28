@@ -27,6 +27,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gl/log.c
         gl/shader.c
         gl/texture.c
+        gl/drawing.c
         gl/mg.c
         gl/buffer.c
         gl/getter.c

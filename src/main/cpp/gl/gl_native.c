@@ -665,7 +665,8 @@ NATIVE_FUNCTION_HEAD(void, glVertexAttribI4sv,GLuint index, const GLshort *v) NA
 NATIVE_FUNCTION_HEAD(void, glVertexAttribI4ubv,GLuint index, const GLubyte *v) NATIVE_FUNCTION_END_NO_RETURN(void,glVertexAttribI4ubv,index,v)
 NATIVE_FUNCTION_HEAD(void, glVertexAttribI4usv,GLuint index, const GLushort *v) NATIVE_FUNCTION_END_NO_RETURN(void,glVertexAttribI4usv,index,v)
 NATIVE_FUNCTION_HEAD(void, glGetUniformuiv,GLuint program, GLint location, GLuint *params) NATIVE_FUNCTION_END_NO_RETURN(void,glGetUniformuiv,program,location,params)
-NATIVE_FUNCTION_HEAD(void, glBindFragDataLocation,GLuint program, GLuint color, const GLchar *name) NATIVE_FUNCTION_END_NO_RETURN(void,glBindFragDataLocation,program,color,name)
+//NATIVE_FUNCTION_HEAD(void, glBindFragDataLocation,GLuint program, GLuint color, const GLchar *name) NATIVE_FUNCTION_END_NO_RETURN(void,glBindFragDataLocation,program,color,name)
+GLAPI GLAPIENTRY void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {}
 NATIVE_FUNCTION_HEAD(GLint, glGetFragDataLocation,GLuint program, const GLchar *name) NATIVE_FUNCTION_END(GLint,glGetFragDataLocation,program,name)
 NATIVE_FUNCTION_HEAD(void, glUniform1ui,GLint location, GLuint v0) NATIVE_FUNCTION_END_NO_RETURN(void,glUniform1ui,location,v0)
 NATIVE_FUNCTION_HEAD(void, glUniform2ui,GLint location, GLuint v0, GLuint v1) NATIVE_FUNCTION_END_NO_RETURN(void,glUniform2ui,location,v0,v1)
@@ -1000,7 +1001,7 @@ NATIVE_FUNCTION_HEAD(void,glUniformBlockBinding,GLuint program, GLuint uniformBl
 NATIVE_FUNCTION_HEAD(void,glDrawElementsBaseVertex,GLenum mode, GLsizei count, GLenum type, const void* indices, GLint basevertex); NATIVE_FUNCTION_END_NO_RETURN(void,glDrawElementsBaseVertex,mode,count,type,indices,basevertex)
 NATIVE_FUNCTION_HEAD(void,glDrawRangeElementsBaseVertex,GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, const void* indices, GLint basevertex); NATIVE_FUNCTION_END_NO_RETURN(void,glDrawRangeElementsBaseVertex,mode,start,end,count,type,indices,basevertex)
 NATIVE_FUNCTION_HEAD(void,glDrawElementsInstancedBaseVertex,GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei instancecount, GLint basevertex); NATIVE_FUNCTION_END_NO_RETURN(void,glDrawElementsInstancedBaseVertex,mode,count,type,indices,instancecount,basevertex)
-NATIVE_FUNCTION_HEAD(void,glMultiDrawElementsBaseVertex,GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount, const GLint* basevertex); NATIVE_FUNCTION_END_NO_RETURN(void,glMultiDrawElementsBaseVertex,mode,count,type,indices,drawcount,basevertex)
+//NATIVE_FUNCTION_HEAD(void,glMultiDrawElementsBaseVertex,GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount, const GLint* basevertex); NATIVE_FUNCTION_END_NO_RETURN(void,glMultiDrawElementsBaseVertex,mode,count,type,indices,drawcount,basevertex)
 NATIVE_FUNCTION_HEAD(void,glProvokingVertex,GLenum mode); NATIVE_FUNCTION_END_NO_RETURN(void,glProvokingVertex,mode)
 NATIVE_FUNCTION_HEAD(GLsync,glFenceSync,GLenum condition, GLbitfield flags); NATIVE_FUNCTION_END(GLsync,glFenceSync,condition,flags)
 NATIVE_FUNCTION_HEAD(GLboolean,glIsSync,GLsync sync); NATIVE_FUNCTION_END_NO_RETURN(GLboolean,glIsSync,sync)
@@ -2359,7 +2360,8 @@ NATIVE_FUNCTION_HEAD(void,glProgramParameteriEXT,GLuint program, GLenum pname, G
 NATIVE_FUNCTION_HEAD(void,glProgramEnvParameters4fvEXT,GLenum target, GLuint index, GLsizei count, const GLfloat* params); NATIVE_FUNCTION_END_NO_RETURN(void,glProgramEnvParameters4fvEXT,target,index,count,params)
 NATIVE_FUNCTION_HEAD(void,glProgramLocalParameters4fvEXT,GLenum target, GLuint index, GLsizei count, const GLfloat* params); NATIVE_FUNCTION_END_NO_RETURN(void,glProgramLocalParameters4fvEXT,target,index,count,params)
 NATIVE_FUNCTION_HEAD(void,glGetUniformuivEXT,GLuint program, GLint location, GLuint* params); NATIVE_FUNCTION_END_NO_RETURN(void,glGetUniformuivEXT,program,location,params)
-NATIVE_FUNCTION_HEAD(void,glBindFragDataLocationEXT,GLuint program, GLuint color, const GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(void,glBindFragDataLocationEXT,program,color,name)
+//NATIVE_FUNCTION_HEAD(void,glBindFragDataLocationEXT,GLuint program, GLuint color, const GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(void,glBindFragDataLocationEXT,program,color,name)
+GLAPI GLAPIENTRY void glBindFragDataLocationEXT(GLuint program, GLuint color, const GLchar *name) {}
 NATIVE_FUNCTION_HEAD(GLint,glGetFragDataLocationEXT,GLuint program, const GLchar* name); NATIVE_FUNCTION_END_NO_RETURN(GLint,glGetFragDataLocationEXT,program,name)
 NATIVE_FUNCTION_HEAD(void,glUniform1uiEXT,GLint location, GLuint v0); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform1uiEXT,location,v0)
 NATIVE_FUNCTION_HEAD(void,glUniform2uiEXT,GLint location, GLuint v0, GLuint v1); NATIVE_FUNCTION_END_NO_RETURN(void,glUniform2uiEXT,location,v0,v1)
