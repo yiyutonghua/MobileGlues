@@ -59,6 +59,15 @@ void init_target_gles();
 #define LOAD_GLES2(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
 #define LOAD_GLES3(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
 
+void glClearError();
+void glCheckError();
+
+#define GL_CHECKERROR(stmt) do { \
+  glClearError();                \
+  stmt;                          \
+  glCheckError();                \
+} while (0)
+
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
 GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
     typedef type (*name##_PTR)(__VA_ARGS__);                                \

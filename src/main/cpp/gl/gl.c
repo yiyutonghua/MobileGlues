@@ -6,6 +6,23 @@
 #include "../gles/loader.h"
 #include "mg.h"
 
+void glClearError() {
+    LOAD_GLES(glGetError, GLenum)
+    GLenum err = gles_glGetError();
+    while (err != GL_NO_ERROR) {
+        err = gles_glGetError();
+    }
+}
+
+void glCheckError() {
+    LOAD_GLES(glGetError, GLenum)
+    GLenum err = gles_glGetError();
+    while (err != GL_NO_ERROR) {
+        err = gles_glGetError();
+        LOG_E("GL ERROR: %d", err)
+    }
+}
+
 /*
 * Miscellaneous
 */
