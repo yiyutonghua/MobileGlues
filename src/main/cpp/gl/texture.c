@@ -19,6 +19,8 @@
 
 #define DEBUG 0
 
+const GLenum GLUBYTE = GL_UNSIGNED_BYTE;
+
 int nlevel(int size, int level) {
     if(size) {
         size>>=level;
@@ -27,17 +29,92 @@ int nlevel(int size, int level) {
     return size;
 }
 
-GLenum internal_convert(GLenum internal_format, GLenum type) {
-    switch (internal_format) {
+void internal_convert(GLenum* internal_format, GLenum* type) {
+    switch (*internal_format) {
         case GL_DEPTH_COMPONENT:
-            if(type == GL_UNSIGNED_SHORT)
-                return GL_DEPTH_COMPONENT16;
-            if(type == GL_UNSIGNED_INT)
-                return GL_DEPTH_COMPONENT24;
-            if(type == GL_FLOAT)
-                return GL_DEPTH_COMPONENT32F;
+            if (*type == GL_UNSIGNED_SHORT) {
+                *internal_format = GL_DEPTH_COMPONENT16;
+            } else if (*type == GL_UNSIGNED_INT) {
+                *internal_format = GL_DEPTH_COMPONENT32;
+            } else if (*type == GL_FLOAT) {
+                *internal_format = GL_DEPTH_COMPONENT32F;
+            } else if (*type == GL_DOUBLE) {
+                *internal_format = GL_DEPTH_COMPONENT32;
+            }
+            break;
+
+        case GL_DEPTH_STENCIL:
+            *internal_format = GL_DEPTH24_STENCIL8;
+            *type = GL_UNSIGNED_INT_24_8;
+            break;
+
+        case GL_RGB10_A2:
+            *type = GL_UNSIGNED_INT_2_10_10_10_REV;
+            break;
+
+        case GL_RGB5_A1:
+            *type = GL_UNSIGNED_SHORT_5_5_5_1;
+            break;
+
+        case GL_COMPRESSED_RED_RGTC1:
+        case GL_COMPRESSED_RG_RGTC2:
+            *type = 0;
+            break;
+
+        case GL_SRGB8:
+            *type = GL_UNSIGNED_BYTE;
+            break;
+
+        case GL_RGBA32F:
+        case GL_RGB32F:
+        case GL_RG32F:
+        case GL_R32F:
+            *type = GL_FLOAT;
+            break;
+
+        case GL_R11F_G11F_B10F:
+        case GL_RGB9_E5:
+            *type = GL_FLOAT;
+            break;
+
+        case GL_RGBA32UI:
+        case GL_RGB32UI:
+        case GL_RG32UI:
+        case GL_R32UI:
+            *type = GL_UNSIGNED_INT;
+            break;
+
+        case GL_RGBA32I:
+        case GL_RGB32I:
+        case GL_RG32I:
+        case GL_R32I:
+            *type = GL_INT;
+            break;
+
+        case GL_RGBA16:
+            *type = GL_UNSIGNED_SHORT;
+            break;
+
+        case GL_RGBA8:
+            *type = GL_UNSIGNED_BYTE;
+            break;
+
+        case GL_RGBA16F:
+            *type = GL_FLOAT;
+            break;
+
+        default:
+            if (*internal_format == GL_RGB8 && *type != GL_UNSIGNED_BYTE) {
+                *type = GL_UNSIGNED_BYTE; 
+            }
+            else if (*internal_format == GL_RGBA16F && *type != GL_HALF_FLOAT) {
+                *type = GL_HALF_FLOAT; 
+            }
+            else if (*internal_format == GL_RGBA16_SNORM && *type != GL_SHORT) {
+                *type = GL_SHORT; 
+            }
+            break;
     }
-    return internal_format;
 }
 
 void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
@@ -48,17 +125,14 @@ void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
     LOG_D("glTexParameterf, target: %d, pname: %d, param: %f",target, pname, param);
     LOAD_GLES(glTexParameterf, void, GLenum target, GLenum pname, GLfloat param);
     gles_glTexParameterf(target,pname, param);
-    LOAD_GLES(glGetError, GLenum)
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("ERROR: %d", ERR)
+    CHECK_GL_ERROR
 }
 
 void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels) {
     LOG();
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type);
-    GLenum convertedInternal = internal_convert(internalFormat, type);
+    internal_convert(&internalFormat,& type);
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_1D) {
@@ -66,23 +140,20 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
         LOAD_GLES(glGetIntegerv, void, GLenum pname, GLint * data)
         gles_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max1);
         set_gl_state_proxy_width(((width << level) > max1) ? 0 : width);
-        set_gl_state_proxy_intformat(convertedInternal);
+        set_gl_state_proxy_intformat(internalFormat);
         return;
     }
 
     LOAD_GLES(glTexImage1D, void, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels);
-    gles_glTexImage1D(target, level, convertedInternal, width, border, format, type, pixels);
+    gles_glTexImage1D(target, level, internalFormat, width, border, format, type, pixels);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glTexImage1D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels) {
     LOG();
-    GLenum convertedInternal = internal_convert(internalFormat, type);
-    LOG_D("glTexImage2D,target: %d,level: %d,internalFormat: %d,width: %d,height: %d,border: %d,format: %d,type: %d",target,level,convertedInternal,width,height,border,format,type);
+    internal_convert(&internalFormat,& type);
+    LOG_D("glTexImage2D,target: %d,level: %d,internalFormat: %d->%d,width: %d,height: %d,border: %d,format: %d,type: %d",target,level,internalFormat,internalFormat,width,height,border,format,type);
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
         int max1 = 4096;
@@ -90,15 +161,12 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         gles_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max1);
         set_gl_state_proxy_width(((width<<level)>max1)?0:width);
         set_gl_state_proxy_height(((height<<level)>max1)?0:height);
-        set_gl_state_proxy_intformat(convertedInternal);
+        set_gl_state_proxy_intformat(internalFormat);
         return;
     }
     LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
-    gles_glTexImage2D(target,level,convertedInternal,width,height,border,format,type,pixels);
-    LOAD_GLES(glGetError, GLenum)
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("ERROR: %d", ERR)
+    gles_glTexImage2D(target,level,internalFormat,width,height,border,format,type,pixels);
+    CHECK_GL_ERROR
 }
 
 void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid* pixels) {
@@ -106,7 +174,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage3D, target: %d, level: %d, internalFormat: %d, width: %d, height: %d, depth: %d, border: %d, format: %d, type: %d",
           target, level, internalFormat, width, height, depth, border, format, type);
 
-    GLenum convertedInternal = internal_convert(internalFormat, type);
+    internal_convert(&internalFormat,& type);
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_3D) {
@@ -116,17 +184,14 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
         set_gl_state_proxy_width(((width << level) > max1) ? 0 : width);
         set_gl_state_proxy_height(((height << level) > max1) ? 0 : height);
         //set_gl_state_proxy_depth(((depth << level) > max1) ? 0 : depth);
-        set_gl_state_proxy_intformat(convertedInternal);
+        set_gl_state_proxy_intformat(internalFormat);
         return;
     }
 
     LOAD_GLES(glTexImage3D, void, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLsizei depth, GLint border, GLenum format, GLenum type, const GLvoid* pixels);
-    gles_glTexImage3D(target, level, convertedInternal, width, height, depth, border, format, type, pixels);
+    gles_glTexImage3D(target, level, internalFormat, width, height, depth, border, format, type, pixels);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glTexImage3D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width) {
@@ -134,15 +199,12 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d",
           target, levels, internalFormat, width);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glTexStorage1D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width);
-    gles_glTexStorage1D(target, levels, convertedInternal, width);
+    gles_glTexStorage1D(target, levels, internalFormat, width);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glTexStorage1D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height) {
@@ -150,10 +212,10 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage2D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d",
           target, levels, internalFormat, width, height);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glTexStorage2D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height);
-    gles_glTexStorage2D(target, levels, convertedInternal, width, height);
+    gles_glTexStorage2D(target, levels, internalFormat, width, height);
 
     LOAD_GLES(glGetError, GLenum);
     GLenum ERR = gles_glGetError();
@@ -166,15 +228,12 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage3D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d, depth: %d",
           target, levels, internalFormat, width, height, depth);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glTexStorage3D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth);
-    gles_glTexStorage3D(target, levels, convertedInternal, width, height, depth);
+    gles_glTexStorage3D(target, levels, internalFormat, width, height, depth);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glTexStorage3D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border) {
@@ -182,15 +241,12 @@ void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x
     LOG_D("glCopyTexImage1D, target: %d, level: %d, internalFormat: %d, x: %d, y: %d, width: %d, border: %d",
           target, level, internalFormat, x, y, width, border);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glCopyTexImage1D, void, GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border);
-    gles_glCopyTexImage1D(target, level, convertedInternal, x, y, width, border);
+    gles_glCopyTexImage1D(target, level, internalFormat, x, y, width, border);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glCopyTexImage1D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border) {
@@ -198,15 +254,12 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
     LOG_D("glCopyTexImage2D, target: %d, level: %d, internalFormat: %d, x: %d, y: %d, width: %d, height: %d, border: %d",
           target, level, internalFormat, x, y, width, height, border);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glCopyTexImage2D, void, GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border);
-    gles_glCopyTexImage2D(target, level, convertedInternal, x, y, width, height, border);
+    gles_glCopyTexImage2D(target, level, internalFormat, x, y, width, height, border);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glCopyTexImage2D ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height) {
@@ -214,15 +267,12 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
     LOG_D("glRenderbufferStorage, target: %d, internalFormat: %d, width: %d, height: %d",
           target, internalFormat, width, height);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glRenderbufferStorage, void, GLenum target, GLenum internalFormat, GLsizei width, GLsizei height);
-    gles_glRenderbufferStorage(target, convertedInternal, width, height);
+    gles_glRenderbufferStorage(target, internalFormat, width, height);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glRenderbufferStorage ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height) {
@@ -230,15 +280,12 @@ void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum int
     LOG_D("glRenderbufferStorageMultisample, target: %d, samples: %d, internalFormat: %d, width: %d, height: %d",
           target, samples, internalFormat, width, height);
 
-    GLenum convertedInternal = internal_convert(internalFormat, GL_UNSIGNED_BYTE);
+    internal_convert(&internalFormat,&GLUBYTE);
 
     LOAD_GLES(glRenderbufferStorageMultisample, void, GLenum target, GLsizei samples, GLenum internalFormat, GLsizei width, GLsizei height);
-    gles_glRenderbufferStorageMultisample(target, samples, convertedInternal, width, height);
+    gles_glRenderbufferStorageMultisample(target, samples, internalFormat, width, height);
 
-    LOAD_GLES(glGetError, GLenum);
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("glRenderbufferStorageMultisample ERROR: %d", ERR);
+    CHECK_GL_ERROR
 }
 
 void glGetTexLevelParameterfv(GLenum target, GLint level,GLenum pname, GLfloat *params) {
@@ -261,10 +308,7 @@ void glGetTexLevelParameterfv(GLenum target, GLint level,GLenum pname, GLfloat *
     }
     LOAD_GLES(glGetTexLevelParameterfv, void, GLenum target, GLint level,GLenum pname, GLfloat *params);
     gles_glGetTexLevelParameterfv(target,level,pname,params);
-    LOAD_GLES(glGetError, GLenum)
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("ERROR: %d", ERR)
+    CHECK_GL_ERROR
 }
 
 void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *params) {
@@ -287,16 +331,6 @@ void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *pa
     }
     LOAD_GLES(glGetTexLevelParameteriv, void, GLenum target, GLint level,GLenum pname, GLint *params);
     GLint *fparams = NULL;
-    gles_glGetTexLevelParameteriv(target,level,pname,fparams);
-    if(pname==GL_TEXTURE_BORDER_COLOR) {
-        for(int i=0; i<4; ++i) {
-            params[i] = fparams[i];
-        }
-    } else {
-        (*params) = fparams[0];
-    }
-    LOAD_GLES(glGetError, GLenum)
-    GLenum ERR = gles_glGetError();
-    if (ERR != GL_NO_ERROR)
-        LOG_E("ERROR: %d", ERR)
+    gles_glGetTexLevelParameteriv(target,level,pname,params);
+    CHECK_GL_ERROR
 }

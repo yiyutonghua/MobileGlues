@@ -23,7 +23,6 @@ static int g_initialized = 0;
 
 void proc_init();
 
-
 EGLContext mglues_eglCreateContext (EGLDisplay dpy, EGLConfig config, EGLContext share_context, const EGLint *attrib_list);
 EGLBoolean mglues_eglDestroyContext(EGLDisplay dpy, EGLContext ctx);
 EGLBoolean mglues_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);

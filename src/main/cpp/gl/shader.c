@@ -80,6 +80,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
         }
 
         gles_glShaderSource(shader, count, (const GLchar * const*)&converted, length);
+        CHECK_GL_ERROR
     } else {
         LOG_E("No gles_glShaderSource")
     }

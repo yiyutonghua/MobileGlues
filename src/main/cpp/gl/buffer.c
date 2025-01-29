@@ -50,7 +50,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
     g_active_mapping.size = buffer_size;
     g_active_mapping.flags = flags;
     g_active_mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
-
+    CHECK_GL_ERROR
     return ptr;
 }
 
@@ -111,5 +111,6 @@ GLboolean glUnmapBuffer(GLenum target) {
         glDeleteBuffers(1, &temp_pbo);
     }
     memset(&g_active_mapping, 0, sizeof(BufferMapping));
+    CHECK_GL_ERROR
     return GL_TRUE;
 }

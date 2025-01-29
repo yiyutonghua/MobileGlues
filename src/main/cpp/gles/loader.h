@@ -56,6 +56,11 @@ static name##_PTR egl_##name = NULL; \
         } \
 }
 
+#define CHECK_GL_ERROR                                                      \
+    LOAD_GLES(glGetError, GLenum)                                           \
+    GLenum ERR = gles_glGetError();                                         \
+    if (ERR != GL_NO_ERROR)                                                 \
+        LOG_E("ERROR: %d", ERR)                                             \
 
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
 GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
