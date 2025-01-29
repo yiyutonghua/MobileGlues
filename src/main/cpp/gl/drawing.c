@@ -10,12 +10,13 @@ void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, c
     LOG();
     glUnmapBuffer(GL_ARRAY_BUFFER);
     glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+
     for (int i = 0; i < primcount; i++) {
-    if (counts[i] > 0)
-    glDrawElementsBaseVertex(mode,
-            counts[i],
-            type,
-            indices[i],
-            basevertex[i]);
+        if (counts[i] > 0)
+            glDrawElementsBaseVertex(mode,
+                    counts[i],
+                    type,
+                    indices[i],
+                    basevertex[i]);
     }
 }
