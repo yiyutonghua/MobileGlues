@@ -12,6 +12,8 @@
 #include <regex>
 #include <strstream>
 
+#define DEBUG 0
+
 char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
 
 typedef std::vector<uint32_t> Spirv;

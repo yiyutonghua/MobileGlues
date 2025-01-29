@@ -27,6 +27,12 @@ static inline void set_gl_state_##name (GLenum value) { \
     gl_state->name=value; \
     LOG_D(" -> gl_state: %s is %d",#name,value); \
 }
+#define FUNC_GL_STATE_SIZEI_DECLARATION(name) static inline void set_gl_state_##name (GLsizei value);
+#define FUNC_GL_STATE_ENUM_DECLARATION(name) static inline void set_gl_state_##name (GLenum value);
+
+FUNC_GL_STATE_SIZEI_DECLARATION(proxy_width)
+FUNC_GL_STATE_SIZEI_DECLARATION(proxy_height)
+FUNC_GL_STATE_ENUM_DECLARATION(proxy_intformat)
 
 struct hard_ext_s {
     GLint maxsize;

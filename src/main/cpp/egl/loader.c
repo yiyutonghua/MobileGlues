@@ -10,6 +10,8 @@
 #include "../gl/envvars.h"
 #include "../gles/loader.h"
 
+#define DEBUG 0
+
 void init_target_egl() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     EGLDisplay eglDisplay = EGL_NO_DISPLAY;
