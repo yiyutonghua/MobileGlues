@@ -17,6 +17,8 @@
 #include "glsl/glsl_for_es.h"
 #include "mg.h"
 
+#define DEBUG 0
+
 int nlevel(int size, int level) {
     if(size) {
         size>>=level;

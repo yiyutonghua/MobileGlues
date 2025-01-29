@@ -4,6 +4,8 @@
 
 #include "drawing.h"
 
+#define DEBUG 0
+
 void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, const void * const *indices, GLsizei primcount, const GLint * basevertex) {
     LOG();
     for (int i = 0; i < primcount; i++) {

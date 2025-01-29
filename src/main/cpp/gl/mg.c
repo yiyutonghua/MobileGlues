@@ -4,8 +4,14 @@
 
 #include "mg.h"
 
+#define DEBUG 0
+
 hard_ext_t hard_ext;
 gl_state_t gl_state;
+
+FUNC_GL_STATE_SIZEI(proxy_width)
+FUNC_GL_STATE_SIZEI(proxy_height)
+FUNC_GL_STATE_ENUM(proxy_intformat)
 
 GLenum pname_convert(GLenum pname){
     switch (pname) {

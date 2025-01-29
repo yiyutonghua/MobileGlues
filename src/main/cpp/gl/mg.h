@@ -41,9 +41,6 @@ struct gl_state_s {
 };
 typedef struct gl_state_s* gl_state_t;
 extern gl_state_t gl_state;
-FUNC_GL_STATE_SIZEI(proxy_width)
-FUNC_GL_STATE_SIZEI(proxy_height)
-FUNC_GL_STATE_ENUM(proxy_intformat)
 
 GLenum pname_convert(GLenum pname);
 GLenum map_tex_target(GLenum target);

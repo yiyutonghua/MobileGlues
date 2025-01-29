@@ -10,6 +10,8 @@
 #include "../gles/loader.h"
 #include "mg.h"
 
+#define DEBUG 0
+
 GLAPI GLAPIENTRY GLenum glGetError() {
 	LOG();
 	LOAD_GLES(glGetError, GLenum); 

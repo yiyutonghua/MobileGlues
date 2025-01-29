@@ -14,6 +14,8 @@
 #include "../includes.h"
 #include "glsl/glsl_for_es.h"
 
+#define DEBUG 0
+
 bool can_run_essl3(int esversion, const char *glsl) {
     int glsl_version;
 
@@ -73,12 +75,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
             LOG_D("%s", source);
             GLint shaderType;
             glGetShaderiv(shader, GL_SHADER_TYPE, &shaderType);
-            if(glsl_version < 140) {
-                
-            }
-            else {
-                converted = GLSLtoGLSLES(source, shaderType, 320);
-            }
+            converted = glsl_version<140?GLSLtoGLSLES_1(source, shaderType):GLSLtoGLSLES_2(source,shaderType,320);
             LOG_D("\n[INFO] [Shader] Converted Shader source: \n%s", converted);
         }
 

@@ -12,7 +12,10 @@
 #include "../gl/log.h"
 #include "../gl/envvars.h"
 
+#define DEBUG 0
+
 void *glXGetProcAddress(const char *name) {
+    LOG()
     void* proc = dlsym(RTLD_DEFAULT, (const char*)name);
 
     if (!proc) {
@@ -25,6 +28,7 @@ void *glXGetProcAddress(const char *name) {
 }
 
 void *glXGetProcAddressARB(const char *name) {
+    LOG()
     void* proc = dlsym(RTLD_DEFAULT, (const char*)name);
 
     if (!proc) {

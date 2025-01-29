@@ -12,7 +12,7 @@
 #include <regex>
 #include <strstream>
 
-#define DBG(d)
+char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
 
 typedef std::vector<uint32_t> Spirv;
 
@@ -311,7 +311,7 @@ std::string addPrecisionToSampler2DShadow(const std::string& glslCode) {
     return result;
 }
 
-char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
+char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     glslang::InitializeProcess();
     EShLanguage shader_language;
     switch (glsl_type) {
@@ -343,7 +343,7 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
         std::strcpy(shader_source, shader_str.c_str());
 
     }
-    DBG(SHUT_LOGD("GLSL version: %d",glsl_version);)
+    LOG_D("GLSL version: %d",glsl_version);
 
     shader.setStrings(&shader_source, 1);
 
@@ -360,7 +360,7 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
         LOG_D("GLSL Compiling ERROR: \n%s",shader.getInfoLog());
         return NULL;
     }
-    DBG(SHUT_LOGD("GLSL Compiled.");)
+    LOG_D("GLSL Compiled.");
 
     glslang::TProgram program;
     program.addShader(&shader);
@@ -369,7 +369,7 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
         LOG_D("Shader Linking ERROR: %s",program.getInfoLog());
         return nullptr;
     }
-    DBG(SHUT_LOGD("Shader Linked." );)
+    LOG_D("Shader Linked." );
     std::vector<unsigned int> spirv_code;
     glslang::SpvOptions spvOptions;
     spvOptions.disableOptimizer = true;
@@ -395,14 +395,6 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
     spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &compiler_glsl);
     spvc_compiler_create_shader_resources(compiler_glsl, &resources);
     spvc_resources_get_resource_list_for_type(resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &list, &count);
-    DBG(for (i = 0; i < count; i++)
-    {
-        SHUT_LOGD("ID: %u, BaseTypeID: %u, TypeID: %u, Name: %s\n", list[i].id, list[i].base_type_id, list[i].type_id,
-               list[i].name);
-        SHUT_LOGD("  Set: %u, Binding: %u\n",
-               spvc_compiler_get_decoration(compiler_glsl, list[i].id, SpvDecorationDescriptorSet),
-               spvc_compiler_get_decoration(compiler_glsl, list[i].id, SpvDecorationBinding));
-    })
     spvc_compiler_create_compiler_options(compiler_glsl, &options);
     spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, essl_version >= 300 ? essl_version : 300);
     spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
@@ -419,9 +411,20 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version) {
     char* result_essl = new char[essl.length() + 1];
     std::strcpy(result_essl, essl.c_str());
 
-    DBG(SHUT_LOGD("GLSL to GLSL ES Complete: \n%s",result_essl))
+    LOG_D("Originally GLSL to GLSL ES Complete: \n%s",result_essl)
 
     free(shader_source);
     glslang::FinalizeProcess();
     return result_essl;
+}
+
+char * GLSLtoGLSLES_1(char* glsl_code, GLenum glsl_type) {
+    LOG_D("input shader:\n%s\n", glsl_code)
+    LOG_D("use plus.\n")
+    //PreConvert();
+    char * result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? 35633 : 35632, 460LL, 320);
+    LOG_D("result shader:\n%s\n", result)
+    char * ret = (char*)malloc(sizeof(char) * strlen(result) + 1);
+    strcpy(ret, result);
+    return ret;
 }

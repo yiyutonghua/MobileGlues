@@ -15,6 +15,8 @@
 #include "../gl/mg.h"
 #include "../gl/buffer.h"
 
+#define DEBUG 0
+
 void *gles = NULL, *egl = NULL;
 
 static const char *path_prefix[] = {

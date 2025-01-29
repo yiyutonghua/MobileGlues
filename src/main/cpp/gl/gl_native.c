@@ -10,6 +10,8 @@
 #include "../gles/loader.h"
 #include "mg.h"
 
+#define DEBUG false
+
 /*
 * Miscellaneous
 */

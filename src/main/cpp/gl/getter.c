@@ -4,6 +4,8 @@
 
 #include "getter.h"
 
+#define DEBUG 0
+
 GLAPI GLAPIENTRY void glGetIntegerv(GLenum pname, GLint *params) {
     LOG();
     LOG_D("glGetIntegerv, pname: %d",pname);

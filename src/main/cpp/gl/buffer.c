@@ -4,6 +4,8 @@
 
 #include "buffer.h"
 
+#define DEBUG 0
+
 static GLenum get_binding_query(GLenum target) {
     switch(target) {
         case GL_ARRAY_BUFFER:          return GL_ARRAY_BUFFER_BINDING;
@@ -15,6 +17,7 @@ static GLenum get_binding_query(GLenum target) {
 }
 
 void* glMapBuffer(GLenum target, GLenum access) {
+    LOG()
     if (get_binding_query(target) == 0) {
         return NULL;
     }
@@ -74,6 +77,7 @@ static void force_unmap(GLenum target, GLuint original_buffer) {
 }
 
 GLboolean glUnmapBuffer(GLenum target) {
+    LOG()
     if (g_active_mapping.mapped_ptr == NULL ||
         g_active_mapping.target != target ||
         g_active_mapping.buffer_id == 0)

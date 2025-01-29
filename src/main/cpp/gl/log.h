@@ -4,21 +4,14 @@
 
 #ifndef MOBILEGLUES_LOG_H
 
-//#define DEBUG
+#define GLOBAL_DEBUG 0
 
-#ifdef DEBUG
-#define LOG() __android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, "Use function: %s", __FUNCTION__);
-#define LOG_D(...) __android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, __VA_ARGS__);
-#define LOG_W(...) __android_log_print(ANDROID_LOG_WARN, RENDERERNAME, __VA_ARGS__);
-#define LOG_E(...) __android_log_print(ANDROID_LOG_ERROR, RENDERERNAME, __VA_ARGS__);
-#define LOG_F(...) __android_log_print(ANDROID_LOG_FATAL, RENDERERNAME, __VA_ARGS__);
-#else
-#define LOG() {}
-#define LOG_D(...) {}
-#define LOG_W(...) {}
-#define LOG_E(...) {}
-#define LOG_F(...) {}
-#endif
+#define LOG() if(DEBUG||GLOBAL_DEBUG) __android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, "Use function: %s", __FUNCTION__);
+#define LOG_D(...) if(DEBUG||GLOBAL_DEBUG) __android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, __VA_ARGS__);
+#define LOG_W(...) if(DEBUG||GLOBAL_DEBUG) __android_log_print(ANDROID_LOG_WARN, RENDERERNAME, __VA_ARGS__);
+#define LOG_E(...) if(DEBUG||GLOBAL_DEBUG) __android_log_print(ANDROID_LOG_ERROR, RENDERERNAME, __VA_ARGS__);
+#define LOG_F(...) if(DEBUG||GLOBAL_DEBUG) __android_log_print(ANDROID_LOG_FATAL, RENDERERNAME, __VA_ARGS__);
+
 #define LOG_V(...) __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME, __VA_ARGS__);
 #define LOG_I(...) __android_log_print(ANDROID_LOG_INFO, RENDERERNAME, __VA_ARGS__);
 
