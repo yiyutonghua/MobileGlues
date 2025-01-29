@@ -13,4 +13,8 @@
 #ifndef MOBILEGLUES_GETTER_H
 #define MOBILEGLUES_GETTER_H
 
+GLAPI GLAPIENTRY const GLubyte * glGetString( GLenum name );
+GLAPI GLAPIENTRY GLenum glGetError();
+GLAPI GLAPIENTRY void glGetIntegerv(GLenum pname, GLint *params);
+
 #endif //MOBILEGLUES_GETTER_H
