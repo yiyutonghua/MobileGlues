@@ -156,7 +156,7 @@ const GLubyte * glGetString( GLenum name ) {
         case GL_VENDOR:
             return (const GLubyte *) "Swung0x48, BZLZHH, Tungsten";
         case GL_VERSION:
-            return (const GLubyte *) "3.0 MobileGlues";
+            return (const GLubyte *) "3.3.0 MobileGlues";
         case GL_RENDERER:
             return gles_glGetString(GL_RENDERER);
         case GL_SHADING_LANGUAGE_VERSION:
