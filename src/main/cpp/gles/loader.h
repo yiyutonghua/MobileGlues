@@ -78,4 +78,16 @@ GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
         LOG_E("ERROR: %d", ERR)                                             \
 }
 
+#define STUB_FUNCTION_HEAD(type,name,...)                                   \
+GLAPI GLAPIENTRY type name(__VA_ARGS__) {
+
+#define STUB_FUNCTION_END(type,name,...)                                    \
+    LOG_W("No function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);         \
+    return (type)0;                                                         \
+}
+
+#define STUB_FUNCTION_END_NO_RETURN(type,name,...)                          \
+    LOG_W("No function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);         \
+}
+
 #endif // _MOBILEGLUES_LOADER_H_
