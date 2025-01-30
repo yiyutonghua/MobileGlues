@@ -9,6 +9,7 @@
 #include "loader.h"
 #include "../gles/loader.h"
 #include "mg.h"
+#include <GLES/gl32.h>
 
 #define DEBUG false
 
@@ -368,4 +369,3 @@ NATIVE_FUNCTION_HEAD(void, glTexBuffer, GLenum target, GLenum internalformat, GL
 NATIVE_FUNCTION_HEAD(void, glTexBufferRange, GLenum target, GLenum internalformat, GLuint buffer, GLintptr offset, GLsizeiptr size) NATIVE_FUNCTION_END_NO_RETURN(void, glTexBufferRange, target,internalformat,buffer,offset,size)
 NATIVE_FUNCTION_HEAD(void, glTexStorage3DMultisample, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations) NATIVE_FUNCTION_END_NO_RETURN(void, glTexStorage3DMultisample, target,samples,internalformat,width,height,depth,fixedsamplelocations)
 NATIVE_FUNCTION_HEAD(void*, glMapBufferRange, GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) NATIVE_FUNCTION_END(void*, glMapBufferRange, target,offset,length,access)
-NATIVE_FUNCTION_HEAD(const GLubyte *, glGetStringi, GLenum name, GLuint index) NATIVE_FUNCTION_END(const GLubyte *, glGetStringi, name,index)

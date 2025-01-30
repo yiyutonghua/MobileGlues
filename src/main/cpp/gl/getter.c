@@ -12,6 +12,26 @@ void glGetIntegerv(GLenum pname, GLint *params) {
     if (pname == GL_CONTEXT_PROFILE_MASK) {
         (*params) = GL_CONTEXT_CORE_PROFILE_BIT;
         return;
+    } 
+    if (pname == GL_NUM_EXTENSIONS) {
+        static GLint num_extensions = -1;
+        if (num_extensions == -1) {
+            const GLubyte* ext_str = glGetString(GL_EXTENSIONS);
+            if (ext_str) {
+                char* copy = strdup((const char*)ext_str);
+                char* token = strtok(copy, " ");
+                num_extensions = 0;
+                while (token) {
+                    num_extensions++;
+                    token = strtok(NULL, " ");
+                }
+                free(copy);
+            } else {
+                num_extensions = 0;
+            }
+        }
+        (*params) = num_extensions;
+        return;
     }
     LOAD_GLES(glGetIntegerv, void, GLenum pname, GLint *params);
     gles_glGetIntegerv(pname, params);
@@ -26,7 +46,7 @@ GLenum glGetError() {
 }
 
 char* GetExtensionsList() {
-    char *extensions = (char*)malloc(10000);
+    char *extensions = (char*)malloc(20000);
     strcpy(extensions,
            "GL_EXT_abgr "
            "GL_EXT_packed_pixels "
@@ -145,7 +165,8 @@ char* GetExtensionsList() {
            "GL_ARB_vertex_program "
            "GL_ARB_fragment_program "
            "GL_EXT_program_parameters "
-           "GL_ARB_get_program_binary ");
+           "GL_ARB_get_program_binary "
+           "GL_ARB_draw_buffers_blend ");
     return extensions;
 }
 
@@ -165,4 +186,68 @@ const GLubyte * glGetString( GLenum name ) {
             return (const GLubyte *) GetExtensionsList();
     }
     return gles_glGetString(name);
+}
+
+const GLubyte * glGetStringi(GLenum name, GLuint index) {
+    LOG();
+    LOAD_GLES(glGetStringi, const GLubyte *, GLenum, GLuint);
+    typedef struct {
+        GLenum name;
+        const char** parts;
+        GLuint count;
+    } StringCache;
+    static StringCache caches[] = {
+            {GL_EXTENSIONS, NULL, 0},
+            {GL_VENDOR, NULL, 0},
+            {GL_VERSION, NULL, 0},
+            {GL_SHADING_LANGUAGE_VERSION, NULL, 0}
+    };
+    static int initialized = 0;
+    if (!initialized) {
+        for (int i = 0; i < sizeof(caches)/sizeof(StringCache); i++) {
+            GLenum target = caches[i].name;
+            const GLubyte* str = NULL;
+            const char* delimiter = " ";
+
+            switch (target) {
+                case GL_VENDOR:
+                    str = (const GLubyte*)"Swung0x48, BZLZHH, Tungsten";
+                    delimiter = ", ";
+                    break;
+                case GL_VERSION:
+                    str = (const GLubyte*)"3.3.0 MobileGlues";
+                    delimiter = " .";
+                    break;
+                case GL_SHADING_LANGUAGE_VERSION:
+                    str = (const GLubyte*)"4.50 MobileGlues with glslang and SPIRV-Cross";
+                    break;
+                case GL_EXTENSIONS:
+                    str = glGetString(GL_EXTENSIONS);
+                    break;
+            }
+
+            if (!str) continue;
+
+            char* copy = strdup((const char*)str);
+            char* token = strtok(copy, delimiter);
+            while (token) {
+                caches[i].parts = (const char**)realloc(caches[i].parts, (caches[i].count + 1) * sizeof(char*));
+                caches[i].parts[caches[i].count++] = strdup(token);
+                token = strtok(NULL, delimiter);
+            }
+            free(copy);
+        }
+        initialized = 1;
+    }
+
+    for (int i = 0; i < sizeof(caches)/sizeof(StringCache); i++) {
+        if (caches[i].name == name) {
+            if (index >= caches[i].count) {
+                return NULL;
+            }
+            return (const GLubyte*)caches[i].parts[index];
+        }
+    }
+
+    return NULL;
 }

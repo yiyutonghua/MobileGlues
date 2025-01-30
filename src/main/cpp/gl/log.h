@@ -12,8 +12,8 @@
 #define LOG_E(...) if(DEBUG||GLOBAL_DEBUG) {__android_log_print(ANDROID_LOG_ERROR, RENDERERNAME, __VA_ARGS__);printf(__VA_ARGS__);printf("\n\n");}
 #define LOG_F(...) if(DEBUG||GLOBAL_DEBUG) {__android_log_print(ANDROID_LOG_FATAL, RENDERERNAME, __VA_ARGS__);printf(__VA_ARGS__);printf("\n\n");}
 
-#define LOG_V(...) __android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME, __VA_ARGS__);
-#define LOG_I(...) __android_log_print(ANDROID_LOG_INFO, RENDERERNAME, __VA_ARGS__);
+#define LOG_V(...) {__android_log_print(ANDROID_LOG_VERBOSE, RENDERERNAME, __VA_ARGS__);printf(__VA_ARGS__);printf("\n\n");}
+#define LOG_I(...) {__android_log_print(ANDROID_LOG_INFO, RENDERERNAME, __VA_ARGS__);printf(__VA_ARGS__);printf("\n\n");}
 
 #define MOBILEGLUES_LOG_H
 

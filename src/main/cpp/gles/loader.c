@@ -108,6 +108,23 @@ void init_gl_state() {
     set_gl_state_proxy_intformat(0);
 }
 
+
+void LogOpenGLExtensions() {
+    const GLubyte* raw_extensions = glGetString(GL_EXTENSIONS);
+    LOG_D("Extensions list using glGetString:\n%s", raw_extensions ? (const char*)raw_extensions : "(null)");
+    GLint num_extensions = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &num_extensions);
+    LOG_D("Extensions list using glGetStringi:\n");
+    for (GLint i = 0; i < num_extensions; ++i) {
+        const GLubyte* extension = glGetStringi(GL_EXTENSIONS, i);
+        if (extension) {
+            LOG_D("%s", (const char*)extension);
+        } else {
+            LOG_D("(null)");
+        }
+    }
+}
+
 void init_target_gles() {
     LOG_I("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     LOG_I("Initializing %s @ OpenGL ES", RENDERERNAME);
@@ -116,4 +133,5 @@ void init_target_gles() {
     set_hard_ext();
     LOG_I("Initializing %s @ gl_state", RENDERERNAME);
     init_gl_state();
+    LogOpenGLExtensions();
 }
