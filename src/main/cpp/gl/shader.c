@@ -5,6 +5,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <android/log.h>
 #include "shader.h"
 
