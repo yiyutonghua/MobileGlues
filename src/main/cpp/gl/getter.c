@@ -135,6 +135,7 @@ char* GetExtensionsList() {
            "GL_EXT_framebuffer_blit "
            "GL_ARB_draw_buffers "
            "GL_EXT_draw_buffers2 "
+           "GL_ARB_draw_buffers_blend "
            "GL_ARB_point_sprite "
            "GL_ARB_texture_cube_map "
            "GL_EXT_texture_cube_map "
@@ -165,8 +166,15 @@ char* GetExtensionsList() {
            "GL_ARB_vertex_program "
            "GL_ARB_fragment_program "
            "GL_EXT_program_parameters "
-           "GL_ARB_get_program_binary "
-           "GL_ARB_draw_buffers_blend ");
+           "ARB_imaging "
+           "GL_ARB_draw_buffers_blend "
+           "OpenGL30 "
+           "OpenGL31 "
+           "OpenGL32 "
+           "OpenGL33 "
+           "OpenGL40 "
+           "OpenGL40 "
+           "GL_ARB_get_program_binary ");
     return extensions;
 }
 
@@ -177,7 +185,7 @@ const GLubyte * glGetString( GLenum name ) {
         case GL_VENDOR:
             return (const GLubyte *) "Swung0x48, BZLZHH, Tungsten";
         case GL_VERSION:
-            return (const GLubyte *) "3.3.0 MobileGlues";
+            return (const GLubyte *) "4.0.0 MobileGlues";
         case GL_RENDERER:
             return gles_glGetString(GL_RENDERER);
         case GL_SHADING_LANGUAGE_VERSION:
@@ -215,7 +223,7 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
                     delimiter = ", ";
                     break;
                 case GL_VERSION:
-                    str = (const GLubyte*)"3.3.0 MobileGlues";
+                    str = (const GLubyte*)"4.0.0 MobileGlues";
                     delimiter = " .";
                     break;
                 case GL_SHADING_LANGUAGE_VERSION:
