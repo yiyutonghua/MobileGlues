@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("mobileglues")
 
+enable_language(CXX)
+
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,7 +32,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gl/texture.c
         gl/drawing.c
         gl/mg.c
-        gl/buffer.c
+        gl/buffer.cpp
         gl/getter.c
         gl/glsl/glsl_for_es.cpp
         glx/lookup.c

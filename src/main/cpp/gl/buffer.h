@@ -12,10 +12,14 @@
 #include "../gles/loader.h"
 #include "mg.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     GLenum target;
     GLuint buffer_id;
-    void* mapped_ptr;
+    void *mapped_ptr;
     GLsizeiptr size;
     GLbitfield flags;
     GLboolean is_dirty;
@@ -24,10 +28,16 @@ typedef struct {
 static BufferMapping g_active_mapping = {0};
 
 static GLenum get_binding_query(GLenum target);
-static void force_unmap(GLenum target, GLuint original_buffer);
+
+GLboolean force_unmap();
 
 GLAPI GLAPIENTRY GLboolean glUnmapBuffer(GLenum target);
+
 GLAPI GLAPIENTRY void *glMapBuffer(GLenum target, GLenum access);
+
+#ifdef __cplusplus
+}
+#endif
 
 #define MOBILEGLUES_BUFFER_H
 

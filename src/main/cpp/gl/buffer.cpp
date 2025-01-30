@@ -3,8 +3,11 @@
 //
 
 #include "buffer.h"
+#include <unordered_map>
 
 #define DEBUG 0
+
+std::unordered_map<GLuint, BufferMapping> g_active_mappings;
 
 static GLenum get_binding_query(GLenum target) {
     switch(target) {
@@ -44,58 +47,55 @@ void* glMapBuffer(GLenum target, GLenum access) {
     }
     void* ptr = glMapBufferRange(target, 0, buffer_size, flags);
     if (!ptr) return NULL;
-    g_active_mapping.target = target;
-    g_active_mapping.buffer_id = (GLuint)current_buffer;
-    g_active_mapping.mapped_ptr = ptr;
-    g_active_mapping.size = buffer_size;
-    g_active_mapping.flags = flags;
-    g_active_mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
+    BufferMapping mapping;
+    mapping.target = target;
+    mapping.buffer_id = (GLuint)current_buffer;
+    mapping.mapped_ptr = ptr;
+    mapping.size = buffer_size;
+    mapping.flags = flags;
+    mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
+    g_active_mappings[current_buffer] = mapping;
     CHECK_GL_ERROR
     return ptr;
 }
 
-static void force_unmap(GLenum target, GLuint original_buffer) {
-    GLint prev_buffer;
-    glGetIntegerv(get_binding_query(target), &prev_buffer);
-    GLuint temp_buffer;
-    glGenBuffers(1, &temp_buffer);
-    glBindBuffer(target, temp_buffer);
-    glBindBuffer(target, 0);
-    glDeleteBuffers(1, &temp_buffer);
-    if (target == GL_ARRAY_BUFFER) {
-        GLint prev_element_array;
-        glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_array);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_array);
-    } else {
-        GLint prev_array;
-        glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindBuffer(GL_ARRAY_BUFFER, prev_array);
+GLboolean force_unmap() {
+    if (g_active_mappings.empty())
+        return GL_FALSE;
+
+    LOAD_GLES(glBindBuffer, void, GLenum target, GLuint buffer)
+    LOAD_GLES(glUnmapBuffer, GLboolean, GLenum target);
+
+    for (auto& [buffer, binding]: g_active_mappings) {
+        GLint prev_buffer = 0;
+        GLenum binding_query = get_binding_query(binding.target);
+        glGetIntegerv(binding_query, &prev_buffer);
+
+        gles_glBindBuffer(binding.target, binding.buffer_id);
+        GLboolean result = gles_glUnmapBuffer(binding.target);
+        gles_glBindBuffer(binding.target, prev_buffer);
     }
-    glBindBuffer(target, original_buffer);
+
+    g_active_mappings.clear();
+
+    return GL_TRUE;
 }
 
 GLboolean glUnmapBuffer(GLenum target) {
     LOG()
-    if (g_active_mapping.mapped_ptr == NULL ||
-        g_active_mapping.target != target ||
-        g_active_mapping.buffer_id == 0) {
-        return GL_FALSE;
-    }
 
-    GLint prev_buffer;
+    GLint buffer;
     GLenum binding_query = get_binding_query(target);
-    glGetIntegerv(binding_query, &prev_buffer);
+    glGetIntegerv(binding_query, &buffer);
 
-    glBindBuffer(target, g_active_mapping.buffer_id);
+    if (buffer == 0)
+        return GL_FALSE;
 
     LOAD_GLES(glUnmapBuffer, GLboolean, GLenum target);
     GLboolean result = gles_glUnmapBuffer(target);
 
-    glBindBuffer(target, prev_buffer);
+    g_active_mappings.erase(buffer);
 
-    memset(&g_active_mapping, 0, sizeof(BufferMapping));
     CHECK_GL_ERROR
     return result;
 }
