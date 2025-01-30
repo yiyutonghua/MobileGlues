@@ -63,9 +63,10 @@ static name##_PTR egl_##name = NULL; \
         LOG_E("ERROR: %d", ERR)                                             \
 
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
-GLAPI GLAPIENTRY type name(__VA_ARGS__) {                                   \
-    typedef type (*name##_PTR)(__VA_ARGS__);                                \
-    name##_PTR gles_##name = NULL;
+GLAPI GLAPIENTRY type name##ARB(__VA_ARGS__) __attribute__((alias(#name))); \
+GLAPI GLAPIENTRY type name(__VA_ARGS__)  {                                  \
+typedef type (*name##_PTR)(__VA_ARGS__);                                    \
+name##_PTR gles_##name = NULL;
 
 #define NATIVE_FUNCTION_END(type,name,...)                                  \
     LOG_D("Use native function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); \
