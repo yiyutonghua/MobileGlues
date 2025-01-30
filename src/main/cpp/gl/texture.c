@@ -29,6 +29,28 @@ int nlevel(int size, int level) {
     return size;
 }
 
+static bool support_rgba16 = false;
+static bool checked_rgba16 = false;
+
+bool check_rgba16() {
+    LOAD_GLES(glGetStringi, const GLubyte *, GLenum, GLuint);
+    LOAD_GLES(glGetIntegerv, void, GLenum pname, GLint *params);
+
+    GLint numFormats = 0;
+    gles_glGetIntegerv(GL_NUM_EXTENSIONS, &numFormats);
+
+    for (int i = 0; i < numFormats; ++i) {
+        const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
+        if (strcmp((const char*)extension, "GL_EXT_texture_norm16") == 0) {
+            printf("supports GL_EXT_texture_norm16\n");
+            return true;
+        }
+    }
+    printf("does not support GL_EXT_texture_norm16\n");
+
+    return false;
+}
+
 void internal_convert(GLenum* internal_format, GLenum* type) {
     switch (*internal_format) {
         case GL_DEPTH_COMPONENT:
@@ -92,11 +114,19 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             *type = GL_INT;
             break;
 
-        case GL_RGBA16:
-            *internal_format = GL_RGBA16F;
-            *type = GL_FLOAT;
+        case GL_RGBA16: {
+            if (!checked_rgba16) {
+                support_rgba16 = check_rgba16();
+                checked_rgba16 = true;
+            }
+            if (support_rgba16) {
+                *type = GL_UNSIGNED_SHORT;
+            } else {
+                *internal_format = GL_RGBA16F;
+                *type = GL_FLOAT;
+            }
             break;
-
+        }
         case GL_RGBA8:
             *type = GL_UNSIGNED_BYTE;
             break;
