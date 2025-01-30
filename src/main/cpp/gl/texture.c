@@ -42,11 +42,9 @@ bool check_rgba16() {
     for (int i = 0; i < numFormats; ++i) {
         const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
         if (strcmp((const char*)extension, "GL_EXT_texture_norm16") == 0) {
-            printf("supports GL_EXT_texture_norm16\n");
             return true;
         }
     }
-    printf("does not support GL_EXT_texture_norm16\n");
 
     return false;
 }
