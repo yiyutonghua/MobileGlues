@@ -10,7 +10,7 @@
 void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, const void * const *indices, GLsizei primcount, const GLint * basevertex) {
     LOG();
 
-    force_unmap();
+//    force_unmap();
 
     for (int i = 0; i < primcount; i++) {
         if (counts[i] > 0)
