@@ -39,13 +39,14 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             } else if (*type == GL_FLOAT) {
                 *internal_format = GL_DEPTH_COMPONENT32F;
             } else if (*type == GL_DOUBLE) {
-                *internal_format = GL_DEPTH_COMPONENT32;
+                *internal_format = GL_DEPTH_COMPONENT32F;
+                *type = GL_FLOAT;
             }
             break;
 
         case GL_DEPTH_STENCIL:
-            *internal_format = GL_DEPTH24_STENCIL8;
-            *type = GL_UNSIGNED_INT_24_8;
+            *internal_format = GL_DEPTH32F_STENCIL8;
+            *type = GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
             break;
 
         case GL_RGB10_A2:
@@ -53,7 +54,7 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             break;
 
         case GL_RGB5_A1:
-            *type = GL_UNSIGNED_SHORT_5_5_5_1;
+            *type = GL_UNSIGNED_INT_2_10_10_10_REV;
             break;
 
         case GL_COMPRESSED_RED_RGTC1:
@@ -92,7 +93,8 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             break;
 
         case GL_RGBA16:
-            *type = GL_UNSIGNED_SHORT;
+            *internal_format = GL_RGBA16F;
+            *type = GL_FLOAT;
             break;
 
         case GL_RGBA8:
@@ -106,9 +108,6 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
         default:
             if (*internal_format == GL_RGB8 && *type != GL_UNSIGNED_BYTE) {
                 *type = GL_UNSIGNED_BYTE; 
-            }
-            else if (*internal_format == GL_RGBA16F && *type != GL_HALF_FLOAT) {
-                *type = GL_HALF_FLOAT; 
             }
             else if (*internal_format == GL_RGBA16_SNORM && *type != GL_SHORT) {
                 *type = GL_SHORT; 

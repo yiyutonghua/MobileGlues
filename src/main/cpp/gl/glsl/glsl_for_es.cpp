@@ -326,10 +326,20 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
         case GL_COMPUTE_SHADER:
             shader_language = EShLanguage::EShLangCompute;
             break;
+        case GL_TESS_CONTROL_SHADER:
+            shader_language = EShLanguage::EShLangTessControl;
+            break;
+        case GL_TESS_EVALUATION_SHADER:
+            shader_language = EShLanguage::EShLangTessEvaluation;
+            break;
+        case GL_GEOMETRY_SHADER:
+            shader_language = EShLanguage::EShLangGeometry;
+            break;
         default:
             LOG_D("GLSL type not supported!");
             return nullptr;
     }
+
 
     glslang::TShader shader(shader_language);
 

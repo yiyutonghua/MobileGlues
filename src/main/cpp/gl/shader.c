@@ -78,8 +78,10 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
             converted = glsl_version<140?GLSLtoGLSLES_1(source, shaderType):GLSLtoGLSLES_2(source,shaderType,320);
             LOG_D("\n[INFO] [Shader] Converted Shader source: \n%s", converted);
         }
-
-        gles_glShaderSource(shader, count, (const GLchar * const*)&converted, length);
+        if (converted)
+            gles_glShaderSource(shader, count, (const GLchar * const*)&converted, NULL);
+        else
+            LOG_E("Failed to convert glsl.")
         CHECK_GL_ERROR
     } else {
         LOG_E("No gles_glShaderSource")
