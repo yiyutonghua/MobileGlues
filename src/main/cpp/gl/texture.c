@@ -92,7 +92,8 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             break;
 
         case GL_RGBA16:
-            *type = GL_UNSIGNED_SHORT;
+            *internal_format = GL_RGBA16F;
+            *type = GL_FLOAT;
             break;
 
         case GL_RGBA8:
@@ -100,6 +101,7 @@ void internal_convert(GLenum* internal_format, GLenum* type) {
             break;
 
         case GL_RGBA16F:
+        case GL_R16F:
             *type = GL_FLOAT;
             break;
 
@@ -153,7 +155,7 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels) {
     LOG();
     internal_convert(&internalFormat,& type);
-    LOG_D("glTexImage2D,target: %d,level: %d,internalFormat: %d->%d,width: %d,height: %d,border: %d,format: %d,type: %d",target,level,internalFormat,internalFormat,width,height,border,format,type);
+    LOG_D("glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
         int max1 = 4096;
