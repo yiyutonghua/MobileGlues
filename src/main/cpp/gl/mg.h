@@ -50,5 +50,7 @@ extern gl_state_t gl_state;
 
 GLenum pname_convert(GLenum pname);
 GLenum map_tex_target(GLenum target);
+void write_log(const char* format, ...);
+void clear_log();
 
 #endif //MOBILEGLUES_MG_H

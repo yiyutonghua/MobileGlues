@@ -13,6 +13,29 @@ FUNC_GL_STATE_SIZEI(proxy_width)
 FUNC_GL_STATE_SIZEI(proxy_height)
 FUNC_GL_STATE_ENUM(proxy_intformat)
 
+#define LOG_FILE_PATH "/sdcard/mg.log"
+
+void write_log(const char* format, ...) {
+    FILE* file = fopen(LOG_FILE_PATH, "a");
+    if (file == NULL) {
+        return;
+    }
+    va_list args;
+    va_start(args, format);
+    vfprintf(file, format, args);
+    va_end(args);
+    fprintf(file, "\n");
+    fclose(file);
+}
+
+void clear_log() {
+    FILE* file = fopen(LOG_FILE_PATH, "w");
+    if (file == NULL) {
+        return;
+    }
+    fclose(file);
+}
+
 GLenum pname_convert(GLenum pname){
     switch (pname) {
         //useless now

@@ -19,6 +19,7 @@ __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
+    clear_log();
     init_target_gles();
     init_target_egl();
 

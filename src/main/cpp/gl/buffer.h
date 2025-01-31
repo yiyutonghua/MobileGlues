@@ -3,6 +3,9 @@
 //
 
 #ifndef MOBILEGLUES_BUFFER_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "../includes.h"
 #include "gl.h"
@@ -11,10 +14,6 @@
 #include "loader.h"
 #include "../gles/loader.h"
 #include "mg.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef struct {
     GLenum target;

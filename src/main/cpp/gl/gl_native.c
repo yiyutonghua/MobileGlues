@@ -11,7 +11,7 @@
 #include "mg.h"
 #include <GLES/gl32.h>
 
-#define DEBUG false
+#define DEBUG 0
 
 NATIVE_FUNCTION_HEAD(void, glActiveTexture, GLenum texture) NATIVE_FUNCTION_END_NO_RETURN(void, glActiveTexture, texture)
 NATIVE_FUNCTION_HEAD(void, glAttachShader, GLuint program, GLuint shader) NATIVE_FUNCTION_END_NO_RETURN(void, glAttachShader, program,shader)
@@ -37,7 +37,7 @@ NATIVE_FUNCTION_HEAD(void, glCompileShader, GLuint shader) NATIVE_FUNCTION_END_N
 NATIVE_FUNCTION_HEAD(void, glCompressedTexImage2D, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glCompressedTexImage2D, target,level,internalformat,width,height,border,imageSize,data)
 NATIVE_FUNCTION_HEAD(void, glCompressedTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glCompressedTexSubImage2D, target,level,xoffset,yoffset,width,height,format,imageSize,data)
 //NATIVE_FUNCTION_HEAD(void, glCopyTexImage2D, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border) NATIVE_FUNCTION_END_NO_RETURN(void, glCopyTexImage2D, target,level,internalformat,x,y,width,height,border)
-NATIVE_FUNCTION_HEAD(void, glCopyTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) NATIVE_FUNCTION_END_NO_RETURN(void, glCopyTexSubImage2D, target,level,xoffset,yoffset,x,y,width,height)
+//NATIVE_FUNCTION_HEAD(void, glCopyTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) NATIVE_FUNCTION_END_NO_RETURN(void, glCopyTexSubImage2D, target,level,xoffset,yoffset,x,y,width,height)
 NATIVE_FUNCTION_HEAD(GLuint, glCreateProgram) NATIVE_FUNCTION_END(GLuint, glCreateProgram)
 NATIVE_FUNCTION_HEAD(GLuint, glCreateShader, GLenum type) NATIVE_FUNCTION_END(GLuint, glCreateShader, type)
 NATIVE_FUNCTION_HEAD(void, glCullFace, GLenum mode) NATIVE_FUNCTION_END_NO_RETURN(void, glCullFace, mode)
@@ -121,7 +121,7 @@ NATIVE_FUNCTION_HEAD(void, glStencilOpSeparate, GLenum face, GLenum sfail, GLenu
 //NATIVE_FUNCTION_HEAD(void, glTexParameterf, GLenum target, GLenum pname, GLfloat param) NATIVE_FUNCTION_END_NO_RETURN(void, glTexParameterf, target,pname,param)
 NATIVE_FUNCTION_HEAD(void, glTexParameterfv, GLenum target, GLenum pname, const GLfloat *params) NATIVE_FUNCTION_END_NO_RETURN(void, glTexParameterfv, target,pname,params)
 NATIVE_FUNCTION_HEAD(void, glTexParameteri, GLenum target, GLenum pname, GLint param) NATIVE_FUNCTION_END_NO_RETURN(void, glTexParameteri, target,pname,param)
-NATIVE_FUNCTION_HEAD(void, glTexParameteriv, GLenum target, GLenum pname, const GLint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glTexParameteriv, target,pname,params)
+//NATIVE_FUNCTION_HEAD(void, glTexParameteriv, GLenum target, GLenum pname, const GLint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glTexParameteriv, target,pname,params)
 NATIVE_FUNCTION_HEAD(void, glTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) NATIVE_FUNCTION_END_NO_RETURN(void, glTexSubImage2D, target,level,xoffset,yoffset,width,height,format,type,pixels)
 NATIVE_FUNCTION_HEAD(void, glUniform1f, GLint location, GLfloat v0) NATIVE_FUNCTION_END_NO_RETURN(void, glUniform1f, location,v0)
 NATIVE_FUNCTION_HEAD(void, glUniform1fv, GLint location, GLsizei count, const GLfloat *value) NATIVE_FUNCTION_END_NO_RETURN(void, glUniform1fv, location,count,value)
