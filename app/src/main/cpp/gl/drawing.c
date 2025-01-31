@@ -13,7 +13,7 @@ void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, c
 //    force_unmap();
 
     for (int i = 0; i < primcount; i++) {
-        if (counts[i] > 0 && counts[i] < 50000)
+        if (counts[i] > 0)
             glDrawElementsBaseVertex(mode,
                     counts[i],
                     type,
