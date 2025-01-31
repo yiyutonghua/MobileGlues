@@ -17,11 +17,29 @@ extern "C" {
 __eglMustCastToProperFunctionPointerType prehook(const char *procname);
 __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
+extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
+
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     clear_log();
     init_target_gles();
     init_target_egl();
+
+    const char *shaderconv_lib = "libshaderconv";
+    const char *func_name = "MesaConvertShader";
+    const char *glslconv_name[] = {shaderconv_lib, NULL};
+    void* glslconv = open_lib(glslconv_name, shaderconv_lib);
+    if (glslconv == NULL) {
+        printf("%s not found\n", shaderconv_lib);
+    }
+    else {
+        MesaConvertShader = dlsym(glslconv, func_name);
+        if (MesaConvertShader) {
+            printf("%s loaded\n", shaderconv_lib);
+        } else {
+            printf("failed to load %s\n", shaderconv_lib);
+        }
+    }
 
     g_initialized = 1;
 }
