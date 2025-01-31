@@ -12,6 +12,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "../mg.h"
+    
 __attribute__((visibility("default"))) extern char *GLSLtoGLSLES_1(char *glsl_code, GLenum glsl_type);
 __attribute__((visibility("default"))) extern char *GLSLtoGLSLES_2(char *glsl_code, GLenum glsl_type, uint essl_version);
 __attribute__((visibility("default"))) extern int getGLSLVersion(const char* glsl_code);

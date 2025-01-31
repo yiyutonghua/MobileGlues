@@ -31,9 +31,8 @@ void init_target_gles();
     if (g_gles_func.name == NULL) { \
         LOG_W("%s line %d function %s: " #name " is NULL\n", __FILE__, __LINE__, __func__); \
     }
-#define DEBUG 0
 
-#if DEBUG
+#if GLOBAL_DEBUG
 #define INIT_GLES_FUNC(name)                                      \
     {                                                             \
         LOG_D("INIT_GLES_FUNC(%s)", #name);                       \
@@ -86,11 +85,17 @@ static name##_PTR egl_##name = NULL; \
         } \
 }
 
+#define CLEAR_GL_ERROR \
+    LOAD_GLES(glGetError, GLenum)                                           \
+    GLenum ERR = gles_glGetError();                                         \
+    while (ERR != GL_NO_ERROR)                                              \
+        ERR = gles_glGetError();
+
 #define CHECK_GL_ERROR                                                      \
     LOAD_GLES(glGetError, GLenum)                                           \
     GLenum ERR = gles_glGetError();                                         \
     if (ERR != GL_NO_ERROR)                                                 \
-        LOG_E("ERROR: %d", ERR)                                             \
+        LOG_E("ERROR: %d", ERR)
 
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
 GLAPI GLAPIENTRY type name##ARB(__VA_ARGS__) __attribute__((alias(#name))); \

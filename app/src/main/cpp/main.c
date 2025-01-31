@@ -21,6 +21,7 @@ extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned i
 
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
+    clear_log();
     init_target_gles();
     init_target_egl();
 
