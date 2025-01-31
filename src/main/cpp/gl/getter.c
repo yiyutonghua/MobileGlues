@@ -46,8 +46,7 @@ GLenum glGetError() {
 }
 
 char* GetExtensionsList() {
-    char *extensions = (char*)malloc(20000);
-    strcpy(extensions,
+    return
            /*"GL_EXT_abgr "
            "GL_EXT_packed_pixels "
            "GL_EXT_compiled_vertex_array "
@@ -174,8 +173,7 @@ char* GetExtensionsList() {
            "OpenGL33 "
            "OpenGL40 "
            "OpenGL40 "
-           "GL_ARB_get_program_binary ");
-    return extensions;
+           "GL_ARB_get_program_binary ";
 }
 
 const GLubyte * glGetString( GLenum name ) {
