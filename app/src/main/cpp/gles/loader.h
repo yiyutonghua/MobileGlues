@@ -104,6 +104,7 @@ name##_PTR gles_##name = NULL;
     return gles_##name(__VA_ARGS__);                                        \
 }
 
+#if GLOBAL_DEBUG
 #define NATIVE_FUNCTION_END_NO_RETURN(type,name,...)                        \
     LOG_D("Use native function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); \
     LOAD_RAW_GLES(name, type, __VA_ARGS__);                                 \
@@ -113,6 +114,13 @@ name##_PTR gles_##name = NULL;
     if (ERR != GL_NO_ERROR)                                                 \
         LOG_E("ERROR: %d", ERR)                                             \
 }
+#else
+#define NATIVE_FUNCTION_END_NO_RETURN(type,name,...)                        \
+    LOG_D("Use native function: %s @ %s(...)", RENDERERNAME, __FUNCTION__); \
+    LOAD_RAW_GLES(name, type, __VA_ARGS__);                                 \
+    gles_##name(__VA_ARGS__);                                               \
+}
+#endif
 
 #define STUB_FUNCTION_HEAD(type,name,...)                                   \
 GLAPI GLAPIENTRY type name(__VA_ARGS__) {
