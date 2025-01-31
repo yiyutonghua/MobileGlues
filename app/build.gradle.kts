@@ -12,10 +12,15 @@ android {
         applicationId = "com.fcl.plugin.mobileglues"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 10
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters.clear()
+            abiFilters.add("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -34,7 +39,8 @@ android {
             manifestPlaceholders["renderer"] = "MobileGlues:libmobileglues.so:libEGL.so"
 
             manifestPlaceholders["boatEnv"] = mutableMapOf<String,String>().apply {
-                put("LIBGL_ES", "320")
+                put("LIBGL_ES", "3")
+                put("DLOPEN", "libspirv-cross-c-shared.so,libshaderconv.so")
             }.run {
                 var env = ""
                 forEach { (key, value) ->
@@ -43,7 +49,8 @@ android {
                 env.dropLast(1)
             }
             manifestPlaceholders["pojavEnv"] = mutableMapOf<String,String>().apply {
-                put("LIBGL_ES", "320")
+                put("LIBGL_ES", "3")
+                put("DLOPEN", "libspirv-cross-c-shared.so,libshaderconv.so")
                 put("POJAV_RENDERER", "opengles3")
             }.run {
                 var env = ""
@@ -56,11 +63,11 @@ android {
     }
 
     externalNativeBuild {
-        ndkBuild {
-            path("src/main/cpp/Android.mk")
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
-    ndkVersion = "25.1.8937393"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
