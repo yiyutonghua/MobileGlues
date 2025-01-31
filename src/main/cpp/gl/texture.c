@@ -138,18 +138,18 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         case GL_R16F:
             *type = GL_FLOAT;
             break;
-            
+
         case GL_R16:
             *internal_format = GL_R16F;
             *type = GL_FLOAT;
             break;
-            
+
         case GL_RGB16F:
             *type = GL_HALF_FLOAT;
             if(format)
                 *format = GL_RGB;
             break;
-            
+
         case GL_RG16F:
             *type = GL_FLOAT;
             if(format)
@@ -426,7 +426,7 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
     GLint realInternalFormat;
     gles_glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &realInternalFormat);
     internalFormat = (GLenum)realInternalFormat;
-    
+
     LOG_D("glRenderbufferStorage, target: %d, internalFormat: %d, width: %d, height: %d",
           target, internalFormat, width, height);
 
@@ -522,4 +522,13 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
     }
 
     CHECK_GL_ERROR
+}
+
+void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
+    LOG();
+    LOAD_GLES_FUNC(glTexSubImage2D)
+
+    gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+
+    CLEAR_GL_ERROR
 }
