@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "../gl/log.h"
 #include "../gl/gl.h"
+#include "gles.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,23 +27,52 @@ void init_target_gles();
 
 #define WARN_NULL(name) if (name == NULL) { LOG_W("%s line %d function %s: " #name " is NULL\n", __FILE__, __LINE__, __func__); }
 
-void *open_lib(const char **names, const char *override);
-#define LOAD_RAW_GLES(name, type, ...)                                      \
-    {                                                                       \
-        if (gles != NULL) {                                                 \
-            gles_##name = (name##_PTR)proc_address(gles, #name);            \
-        }                                                                   \
-        WARN_NULL(gles_##name);                                             \
+#define WARN_GLES_NULL(name) \
+    if (g_gles_func.name == NULL) { \
+        LOG_W("%s line %d function %s: " #name " is NULL\n", __FILE__, __LINE__, __func__); \
     }
+#define DEBUG 0
+
+#if DEBUG
+#define INIT_GLES_FUNC(name)                                      \
+    {                                                             \
+        LOG_D("INIT_GLES_FUNC(%s)", #name);                       \
+        g_gles_func.name = (name##_PTR)proc_address(gles, #name); \
+        WARN_GLES_NULL(name)                                      \
+    }
+#else
+#define INIT_GLES_FUNC(name) \
+    {                        \
+        g_gles_func.name = (name##_PTR)proc_address(gles, #name); \
+    }
+#endif
+
+#define LOAD_GLES_FUNC(name) \
+    name##_PTR gles_##name = g_gles_func.name;
+
+#define LOAD_GLES(name,type, ...) LOAD_GLES_FUNC(name)
+#define LOAD_GLES2(name,type, ...) LOAD_GLES_FUNC(name)
+#define LOAD_GLES3(name,type, ...) LOAD_GLES_FUNC(name)
+
+void *open_lib(const char **names, const char *override);
+#define LOAD_RAW_GLES(name, type, ...)                  \
+    gles_##name = g_gles_func.name;                     \
+//#define LOAD_RAW_GLES(name, type, ...)                                      \
+//    {                                                                       \
+//        if (gles != NULL) {                                                 \
+//            gles_##name = (name##_PTR)proc_address(gles, #name);            \
+//        }                                                                   \
+//        WARN_NULL(gles_##name);                                             \
+//    }
 
 #define LOAD_LIB(type, name, ...)                                           \
     typedef type (*name##_PTR)(__VA_ARGS__);                                \
     name##_PTR gles_##name = NULL;                                          \
     LOAD_RAW_GLES(name, type, __VA_ARGS__)
 
-#define LOAD_GLES(name,type, ...)            LOAD_LIB(type, name, __VA_ARGS__)
-#define LOAD_GLES2(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
-#define LOAD_GLES3(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
+//#define LOAD_GLES(name,type, ...)            LOAD_LIB(type, name, __VA_ARGS__)
+//#define LOAD_GLES2(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
+//#define LOAD_GLES3(name,type, ...)           LOAD_LIB(type, name, __VA_ARGS__)
 #define LOAD_EGL(name) \
 static name##_PTR egl_##name = NULL; \
 { \

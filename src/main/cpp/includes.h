@@ -27,7 +27,5 @@ EGLContext mglues_eglCreateContext (EGLDisplay dpy, EGLConfig config, EGLContext
 EGLBoolean mglues_eglDestroyContext(EGLDisplay dpy, EGLContext ctx);
 EGLBoolean mglues_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
 
-extern struct egl_func_t g_egl_func;
-
 
 #endif //MOBILEGLUES_INCLUDES_H

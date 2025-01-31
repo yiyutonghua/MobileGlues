@@ -158,8 +158,10 @@ void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
 
 void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels) {
     LOG();
+    LOG_D("glTexImage1D not implemeted!");
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type);
+    return;
     internal_convert(&internalFormat,& type);
 
     GLenum rtarget = map_tex_target(target);
@@ -172,8 +174,8 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
         return;
     }
 
-    LOAD_GLES(glTexImage1D, void, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels);
-    gles_glTexImage1D(target, level, internalFormat, width, border, format, type, pixels);
+//    LOAD_GLES(glTexImage1D, void, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels);
+//    gles_glTexImage1D(target, level, internalFormat, width, border, format, type, pixels);
 
     CHECK_GL_ERROR
 }
@@ -202,7 +204,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage3D, target: %d, level: %d, internalFormat: %d, width: %d, height: %d, depth: %d, border: %d, format: %d, type: %d",
           target, level, internalFormat, width, height, depth, border, format, type);
 
-    internal_convert(&internalFormat,& type);
+    internal_convert(&internalFormat, &type);
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_3D) {
@@ -224,13 +226,14 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 
 void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width) {
     LOG();
+    LOG_D("glTexStorage1D not implemented!")
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d",
           target, levels, internalFormat, width);
-
+    return;
     internal_convert(&internalFormat,&GLUBYTE);
 
-    LOAD_GLES(glTexStorage1D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width);
-    gles_glTexStorage1D(target, levels, internalFormat, width);
+//    LOAD_GLES(glTexStorage1D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width);
+//    gles_glTexStorage1D(target, levels, internalFormat, width);
 
     CHECK_GL_ERROR
 }
@@ -266,13 +269,14 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
 
 void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border) {
     LOG();
+    LOG_D("glCopyTexImage1D not implemented!");
     LOG_D("glCopyTexImage1D, target: %d, level: %d, internalFormat: %d, x: %d, y: %d, width: %d, border: %d",
           target, level, internalFormat, x, y, width, border);
-
+    return;
     internal_convert(&internalFormat,&GLUBYTE);
 
-    LOAD_GLES(glCopyTexImage1D, void, GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border);
-    gles_glCopyTexImage1D(target, level, internalFormat, x, y, width, border);
+//    LOAD_GLES(glCopyTexImage1D, void, GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLint border);
+//    gles_glCopyTexImage1D(target, level, internalFormat, x, y, width, border);
 
     CHECK_GL_ERROR
 }

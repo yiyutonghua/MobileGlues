@@ -46,6 +46,47 @@ typedef EGLBoolean (*eglWaitClient_PTR)();
 typedef EGLBoolean (*eglWaitGL_PTR)();
 typedef EGLBoolean (*eglWaitNative_PTR)(EGLint engine);
 
+struct egl_func_t {
+    eglBindAPI_PTR eglBindAPI;
+    eglBindTexImage_PTR eglBindTexImage;
+    eglChooseConfig_PTR eglChooseConfig;
+    eglCopyBuffers_PTR eglCopyBuffers;
+    eglCreateContext_PTR eglCreateContext;
+    eglCreatePbufferFromClientBuffer_PTR eglCreatePbufferFromClientBuffer;
+    eglCreatePbufferSurface_PTR eglCreatePbufferSurface;
+    eglCreatePixmapSurface_PTR eglCreatePixmapSurface;
+    eglCreatePlatformWindowSurface_PTR eglCreatePlatformWindowSurface;
+    eglCreateWindowSurface_PTR eglCreateWindowSurface;
+    eglDestroyContext_PTR eglDestroyContext;
+    eglDestroySurface_PTR eglDestroySurface;
+    eglGetConfigAttrib_PTR eglGetConfigAttrib;
+    eglGetConfigs_PTR eglGetConfigs;
+    eglGetCurrentContext_PTR eglGetCurrentContext;
+    eglGetCurrentDisplay_PTR eglGetCurrentDisplay;
+    eglGetCurrentSurface_PTR eglGetCurrentSurface;
+    eglGetDisplay_PTR eglGetDisplay;
+    eglGetPlatformDisplay_PTR eglGetPlatformDisplay;
+    eglGetError_PTR eglGetError;
+    eglGetProcAddress_PTR eglGetProcAddress;
+    eglInitialize_PTR eglInitialize;
+    eglMakeCurrent_PTR eglMakeCurrent;
+    eglQueryAPI_PTR eglQueryAPI;
+    eglQueryContext_PTR eglQueryContext;
+    eglQueryString_PTR eglQueryString;
+    eglQuerySurface_PTR eglQuerySurface;
+    eglReleaseTexImage_PTR eglReleaseTexImage;
+    eglReleaseThread_PTR eglReleaseThread;
+    eglSurfaceAttrib_PTR eglSurfaceAttrib;
+    eglSwapBuffers_PTR eglSwapBuffers;
+    eglSwapBuffersWithDamageEXT_PTR eglSwapBuffersWithDamageEXT;
+    eglSwapInterval_PTR eglSwapInterval;
+    eglTerminate_PTR eglTerminate;
+    eglUnlockSurfaceKHR_PTR eglUnlockSurfaceKHR;
+    eglWaitClient_PTR eglWaitClient;
+    eglWaitGL_PTR eglWaitGL;
+    eglWaitNative_PTR eglWaitNative;
+};
+
 /*
 struct egl_func_t {
     EGLGETPROCADDRESSPROCP eglGetProcAddress;
