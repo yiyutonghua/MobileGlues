@@ -13,7 +13,7 @@ FUNC_GL_STATE_SIZEI(proxy_width)
 FUNC_GL_STATE_SIZEI(proxy_height)
 FUNC_GL_STATE_ENUM(proxy_intformat)
 
-#define LOG_FILE_PATH "/sdcard/mg.log"
+#define LOG_FILE_PATH "/sdcard/FCL/log/mg.log"
 
 void write_log(const char* format, ...) {
     FILE* file = fopen(LOG_FILE_PATH, "a");
