@@ -15,8 +15,13 @@ FUNC_GL_STATE_ENUM(proxy_intformat)
 
 #define LOG_FILE_PATH "/sdcard/FCL/log/mg.log"
 
+FILE* file;
+
+void start_log() {
+    file = fopen(LOG_FILE_PATH, "a");
+}
+
 void write_log(const char* format, ...) {
-    FILE* file = fopen(LOG_FILE_PATH, "a");
     if (file == NULL) {
         return;
     }
@@ -25,11 +30,12 @@ void write_log(const char* format, ...) {
     vfprintf(file, format, args);
     va_end(args);
     fprintf(file, "\n");
-    fclose(file);
+    // Todo: close file
+    //fclose(file);
 }
 
 void clear_log() {
-    FILE* file = fopen(LOG_FILE_PATH, "w");
+    file = fopen(LOG_FILE_PATH, "w");
     if (file == NULL) {
         return;
     }
