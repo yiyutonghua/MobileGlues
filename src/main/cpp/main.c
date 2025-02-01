@@ -23,6 +23,7 @@ void load_libs();
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     clear_log();
+    start_log();
 
     load_libs();
     init_target_egl();

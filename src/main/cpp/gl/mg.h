@@ -58,6 +58,8 @@ GLenum pname_convert(GLenum pname);
 
 GLenum map_tex_target(GLenum target);
 
+void start_log();
+
 void write_log(const char *format, ...);
 
 void clear_log();
