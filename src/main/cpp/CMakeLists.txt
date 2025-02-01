@@ -33,7 +33,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gl/drawing.c
         gl/mg.c
         gl/buffer.cpp
-        gl/getter.c
+        gl/getter.cpp
         gl/glsl/glsl_for_es.cpp
         glx/lookup.c
         egl/egl.c
