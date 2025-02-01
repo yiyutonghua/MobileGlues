@@ -18,12 +18,15 @@ __eglMustCastToProperFunctionPointerType prehook(const char *procname);
 __eglMustCastToProperFunctionPointerType posthook(const char *procname);
 
 extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
+void load_libs();
 
 void proc_init() {
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     clear_log();
-    init_target_gles();
+
+    load_libs();
     init_target_egl();
+    init_target_gles();
 
     const char *shaderconv_lib = "libshaderconv";
     const char *func_name = "MesaConvertShader";
