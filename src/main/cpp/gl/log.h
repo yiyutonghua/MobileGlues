@@ -4,6 +4,8 @@
 
 #ifndef MOBILEGLUES_LOG_H
 
+#include "mg.h"
+
 #define GLOBAL_DEBUG 0
 
 #define LOG() if(DEBUG||GLOBAL_DEBUG) {__android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, "Use function: %s", __FUNCTION__);printf("Use function: %s\n", __FUNCTION__);write_log("Use function: %s\n", __FUNCTION__);}
