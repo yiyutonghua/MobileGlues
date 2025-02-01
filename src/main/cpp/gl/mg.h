@@ -17,6 +17,10 @@
 #include "../includes.h"
 #include "glsl/glsl_for_es.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FUNC_GL_STATE_SIZEI(name) \
 void set_gl_state_##name (GLsizei value) { \
     gl_state->name=value; \
@@ -31,13 +35,15 @@ void set_gl_state_##name (GLenum value) { \
 #define FUNC_GL_STATE_ENUM_DECLARATION(name) void set_gl_state_##name (GLenum value);
 
 FUNC_GL_STATE_SIZEI_DECLARATION(proxy_width)
+
 FUNC_GL_STATE_SIZEI_DECLARATION(proxy_height)
+
 FUNC_GL_STATE_ENUM_DECLARATION(proxy_intformat)
 
 struct hard_ext_s {
     GLint maxsize;
 };
-typedef struct hard_ext_s* hard_ext_t;
+typedef struct hard_ext_s *hard_ext_t;
 extern hard_ext_t hard_ext;
 
 struct gl_state_s {
@@ -45,12 +51,19 @@ struct gl_state_s {
     GLsizei proxy_height;
     GLenum proxy_intformat;
 };
-typedef struct gl_state_s* gl_state_t;
+typedef struct gl_state_s *gl_state_t;
 extern gl_state_t gl_state;
 
 GLenum pname_convert(GLenum pname);
+
 GLenum map_tex_target(GLenum target);
-void write_log(const char* format, ...);
+
+void write_log(const char *format, ...);
+
 void clear_log();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //MOBILEGLUES_MG_H
