@@ -62,7 +62,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_RGB10_A2:
-            *type = GL_UNSIGNED_INT_10_10_10_2;
+            *type = GL_UNSIGNED_INT_2_10_10_10_REV;
             break;
 
         case GL_RGB5_A1:
@@ -222,7 +222,7 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         return;
     }
     LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
-    gles_glTexImage2D(target,level,internalFormat,width,height,border,format,type,pixels);
+    gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
     CHECK_GL_ERROR
 }
 
