@@ -34,6 +34,8 @@ GLAPI GLAPIENTRY GLboolean glUnmapBuffer(GLenum target);
 
 GLAPI GLAPIENTRY void *glMapBuffer(GLenum target, GLenum access);
 
+GLAPI GLAPIENTRY void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags);
+
 #ifdef __cplusplus
 }
 #endif

@@ -500,6 +500,7 @@ void init_target_gles() {
     INIT_GLES_FUNC(glTexBufferRange)
     INIT_GLES_FUNC(glTexStorage3DMultisample)
     INIT_GLES_FUNC(glMapBufferRange)
+    INIT_GLES_FUNC(glBufferStorageEXT)
     
 
     LogOpenGLExtensions();

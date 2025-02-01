@@ -173,7 +173,8 @@ char* GetExtensionsList() {
            "OpenGL33 "
            "OpenGL40 "
            "OpenGL40 "
-           "GL_ARB_get_program_binary ";
+           "GL_ARB_get_program_binary "
+           "GL_ARB_buffer_storage ";
 }
 
 const GLubyte * glGetString( GLenum name ) {
