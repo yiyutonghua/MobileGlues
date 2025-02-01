@@ -14,6 +14,7 @@
 #include "../gl/log.h"
 #include "../gl/mg.h"
 #include "../gl/buffer.h"
+#include "../gl/getter.h"
 
 #define DEBUG 0
 
@@ -128,16 +129,41 @@ void LogOpenGLExtensions() {
     }
 }
 
+void InitGLESCapabilities() {
+    InitGLESBaseExtensions();
+
+    int has_GL_EXT_buffer_storage = 0;
+    LOAD_GLES_FUNC(glGetStringi)
+    LOAD_GLES_FUNC(glGetIntegerv)
+
+    GLint num_es_extensions = 0;
+    gles_glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
+    LOG_I("Detected %d OpenGL ES extensions.", num_es_extensions);
+    for (GLint i = 0; i < num_es_extensions; ++i) {
+        const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
+        if (extension) {
+            LOG_I("%s", (const char*)extension);
+            if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
+                has_GL_EXT_buffer_storage = 1;
+            }
+        } else {
+            LOG_I("(null)");
+        }
+    }
+
+    if (has_GL_EXT_buffer_storage) {
+        AppendExtension("GL_ARB_buffer_storage");
+    }
+}
+
 void init_target_gles() {
     LOG_I("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    LOG_I("Initializing %s @ OpenGL ES", RENDERERNAME);
-    load_libs();
     LOG_I("Initializing %s @ hard_ext", RENDERERNAME);
     set_hard_ext();
     LOG_I("Initializing %s @ gl_state", RENDERERNAME);
     init_gl_state();
 
-    LOG_I("Initializing %s @ INIT_GLES_FUNC", RENDERERNAME);
+    LOG_I("Initializing %s @ init_gles_func", RENDERERNAME);
     memset(&g_gles_func, 0, sizeof(g_gles_func));
     INIT_GLES_FUNC(glActiveTexture)
     INIT_GLES_FUNC(glAttachShader)
@@ -500,7 +526,8 @@ void init_target_gles() {
     INIT_GLES_FUNC(glTexBufferRange)
     INIT_GLES_FUNC(glTexStorage3DMultisample)
     INIT_GLES_FUNC(glMapBufferRange)
-    
+    INIT_GLES_FUNC(glBufferStorageEXT)
 
+    InitGLESCapabilities();
     LogOpenGLExtensions();
 }

@@ -182,7 +182,99 @@ char* disable_GL_ARB_derivative_control(char* glslCode) {
     return result;
 }
 
-std::string forceSupporter(const std::string& glslCode) {
+char* forceSupporterInput(char* glslCode) {
+    // first
+    const char* target = "const mat3 rotInverse = transpose(rot);";
+    const char* replacement = "const mat3 rotInverse = mat3(rot[0][0], rot[1][0], rot[2][0], rot[0][1], rot[1][1], rot[2][1], rot[0][2], rot[1][2], rot[2][2]);";
+
+    char* pos = strstr(glslCode, target);
+    if (pos != nullptr) {
+        size_t targetLen = strlen(target);
+        size_t replacementLen = strlen(replacement);
+
+        size_t newSize = strlen(glslCode) - targetLen + replacementLen + 1;
+        char* modifiedCode = new char[newSize];
+
+        strncpy(modifiedCode, glslCode, pos - glslCode);
+        modifiedCode[pos - glslCode] = '\0';
+
+        strcat(modifiedCode, replacement);
+
+        strcat(modifiedCode, pos + targetLen);
+        glslCode = new char[strlen(modifiedCode) + 1];
+        std::strcpy(glslCode, modifiedCode);
+        std::free(modifiedCode);
+    }
+    
+    // second
+    if (!std::strstr(glslCode, "deferredOutput2 = GI_TemporalFilter()")) {
+        return glslCode;
+    }
+
+    if (std::strstr(glslCode, "vec4 GI_TemporalFilter()")) {
+        return glslCode;
+    }
+
+
+    LOG_D("find GI_TemporalFilter()")
+    
+    const char* GI_TemporalFilter = R"(
+vec4 GI_TemporalFilter() {
+    vec2 uv = gl_FragCoord.xy / screenSize;
+    uv += taaJitter * pixelSize;
+    vec4 currentGI = texture(colortex0, uv);
+    float depth = texture(depthtex0, uv).r;
+    vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    vec4 viewPos = gbufferProjectionInverse * clipPos;
+    viewPos /= viewPos.w;
+    vec4 worldPos = gbufferModelViewInverse * viewPos;
+    vec4 prevClipPos = gbufferPreviousProjection * (gbufferPreviousModelView * worldPos);
+    prevClipPos /= prevClipPos.w;
+    vec2 prevUV = prevClipPos.xy * 0.5 + 0.5;
+    vec4 historyGI = texture(colortex1, prevUV);
+    float difference = length(currentGI.rgb - historyGI.rgb);
+    float thresholdValue = 0.1;
+    float adaptiveBlend = mix(0.9, 0.0, smoothstep(thresholdValue, thresholdValue * 2.0, difference));
+    vec4 filteredGI = mix(currentGI, historyGI, adaptiveBlend);
+    if (difference > thresholdValue * 2.0) {
+        filteredGI = currentGI;
+    }
+    return filteredGI;
+}
+)";
+
+    char *mainPos = strstr(glslCode, "\nvoid main()");
+    if (mainPos == NULL) {
+        LOG_E("Error: 'void main()' not found in GLSL code.");
+        return glslCode;
+    }
+
+    size_t prefixLength = mainPos - glslCode; 
+    size_t originalLength = strlen(glslCode);
+    size_t insertLength = strlen(GI_TemporalFilter);
+
+    char *modifiedCode = (char *)malloc(originalLength + insertLength + 2);
+    if (modifiedCode == NULL) {
+        LOG_E("Memory allocation failed.");
+        return glslCode;
+    }
+
+    strncpy(modifiedCode, glslCode, prefixLength); 
+    modifiedCode[prefixLength] = '\0';
+
+    strcat(modifiedCode, "\n");
+    strcat(modifiedCode, GI_TemporalFilter);
+    strcat(modifiedCode, "\n");
+
+    strcat(modifiedCode, mainPos);
+
+    free(glslCode);
+    glslCode = modifiedCode;
+
+    return glslCode;
+}
+
+std::string forceSupporterOutput(const std::string& glslCode) {
     bool hasPrecisionFloat = glslCode.find("precision ") != std::string::npos &&
                              glslCode.find("float;") != std::string::npos;
     bool hasPrecisionInt = glslCode.find("precision ") != std::string::npos &&
@@ -340,12 +432,13 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
             return nullptr;
     }
 
-
     glslang::TShader shader(shader_language);
 
     char* correct_glsl = glsl_code;
     correct_glsl = removeLineDirective(correct_glsl);
     correct_glsl = disable_GL_ARB_derivative_control(correct_glsl);
+    correct_glsl = forceSupporterInput(correct_glsl);
+    LOG_D("Firstly converted GLSL:\n%s",correct_glsl)
     char *shader_source = correct_glsl;
     int glsl_version = getGLSLVersion(shader_source);
     if (glsl_version == -1) {
@@ -418,7 +511,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     essl = removeLayoutBinding(essl);
     //essl = removeLocationBinding(essl);
     //essl = addPrecisionToSampler2DShadow(essl);
-    essl = forceSupporter(essl);
+    essl = forceSupporterOutput(essl);
 
     char* result_essl = new char[essl.length() + 1];
     std::strcpy(result_essl, essl.c_str());

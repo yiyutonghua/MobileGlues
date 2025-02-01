@@ -99,3 +99,10 @@ GLboolean glUnmapBuffer(GLenum target) {
     CHECK_GL_ERROR
     return result;
 }
+
+void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags) {
+    LOG()
+    LOAD_GLES_FUNC(glBufferStorageEXT)
+    gles_glBufferStorageEXT(target,size,data,flags);
+    CHECK_GL_ERROR
+}

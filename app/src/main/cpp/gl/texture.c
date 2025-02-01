@@ -52,17 +52,6 @@ bool check_rgba16() {
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     switch (*internal_format) {
         case GL_DEPTH_COMPONENT:
-            if (*type == GL_UNSIGNED_SHORT) {
-                *internal_format = GL_DEPTH_COMPONENT16;
-            } else if (*type == GL_UNSIGNED_INT) {
-                *internal_format = GL_DEPTH_COMPONENT32;
-            } else if (*type == GL_FLOAT) {
-                *internal_format = GL_DEPTH_COMPONENT32F;
-            } else if (*type == GL_DOUBLE) {
-                *internal_format = GL_DEPTH_COMPONENT32F;
-                *type = GL_FLOAT;
-            }
-
             *internal_format = GL_DEPTH_COMPONENT32F;
             *type = GL_FLOAT;
             break;
@@ -77,12 +66,12 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_RGB5_A1:
-            *type = GL_UNSIGNED_INT_2_10_10_10_REV;
+            *type = GL_UNSIGNED_SHORT_5_5_5_1;
             break;
 
         case GL_COMPRESSED_RED_RGTC1:
         case GL_COMPRESSED_RG_RGTC2:
-            *type = 0;
+            LOG_E("GL_COMPRESSED_RED_RGTC1 or GL_COMPRESSED_RG_RGTC2 is not supported!")
             break;
 
         case GL_SRGB8:
@@ -96,9 +85,12 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             *type = GL_FLOAT;
             break;
 
-        case GL_R11F_G11F_B10F:
         case GL_RGB9_E5:
-            *type = GL_FLOAT;
+            *type = GL_UNSIGNED_INT_5_9_9_9_REV;
+            break;
+            
+        case GL_R11F_G11F_B10F:
+            *type = GL_UNSIGNED_INT_10F_11F_11F_REV;
             break;
 
         case GL_RGBA32UI:
@@ -134,9 +126,15 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
                 *format = GL_RGBA;
             break;
 
+        case GL_RGBA:
+            *type = GL_UNSIGNED_BYTE;
+            if (format)
+                *format = GL_RGBA;
+            break;
+            
         case GL_RGBA16F:
         case GL_R16F:
-            *type = GL_FLOAT;
+            *type = GL_HALF_FLOAT;
             break;
 
         case GL_R16:
@@ -144,6 +142,13 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             *type = GL_FLOAT;
             break;
 
+        case GL_RGB16:
+            *internal_format = GL_RGB16F;
+            *type = GL_HALF_FLOAT;
+            if(format)
+                *format = GL_RGB;
+            break;
+            
         case GL_RGB16F:
             *type = GL_HALF_FLOAT;
             if(format)
@@ -151,7 +156,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_RG16F:
-            *type = GL_FLOAT;
+            *type = GL_HALF_FLOAT;
             if(format)
                 *format = GL_RG;
             break;
@@ -217,7 +222,7 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         return;
     }
     LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
-    gles_glTexImage2D(target,level,internalFormat,width,height,border,format,type,pixels);
+    gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
     CHECK_GL_ERROR
 }
 
@@ -527,7 +532,8 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
 void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
     LOG();
     LOAD_GLES_FUNC(glTexSubImage2D)
-
+    if (format == GL_BGRA)
+        format=GL_BGRA_EXT;
     gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
 
     CLEAR_GL_ERROR
