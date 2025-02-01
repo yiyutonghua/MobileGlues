@@ -122,10 +122,14 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         }
         case GL_RGBA8:
             *type = GL_UNSIGNED_BYTE;
+            if (format)
+                *format = GL_RGBA;
             break;
 
         case GL_RGBA:
             *type = GL_UNSIGNED_BYTE;
+            if (format)
+                *format = GL_RGBA;
             break;
             
         case GL_RGBA16F:
@@ -138,6 +142,13 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             *type = GL_FLOAT;
             break;
 
+        case GL_RGB16:
+            *internal_format = GL_RGB16F;
+            *type = GL_HALF_FLOAT;
+            if(format)
+                *format = GL_RGB;
+            break;
+            
         case GL_RGB16F:
             *type = GL_HALF_FLOAT;
             if(format)
