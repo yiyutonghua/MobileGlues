@@ -17,7 +17,7 @@
 #include "glsl/glsl_for_es.h"
 #include "mg.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 const GLenum GLUBYTE = GL_UNSIGNED_BYTE;
 
@@ -51,6 +51,23 @@ bool check_rgba16() {
 
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     switch (*internal_format) {
+        case GL_DEPTH_COMPONENT16:
+            *type = GL_UNSIGNED_SHORT;
+            break;
+            
+        case GL_DEPTH_COMPONENT24:
+            *type = GL_UNSIGNED_INT;
+            break;
+            
+        case GL_DEPTH_COMPONENT32:
+            *internal_format = GL_DEPTH_COMPONENT32F;
+            *type = GL_FLOAT;
+            break;
+            
+        case GL_DEPTH_COMPONENT32F:
+            *type = GL_FLOAT;
+            break;
+            
         case GL_DEPTH_COMPONENT:
             *internal_format = GL_DEPTH_COMPONENT32F;
             *type = GL_FLOAT;
@@ -166,6 +183,12 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
                 *format = GL_RED_INTEGER;
             *type = GL_UNSIGNED_BYTE;
             break;
+
+        case GL_RGB8_SNORM:
+        case GL_RGBA8_SNORM:
+            *type = GL_BYTE;
+            break;
+            
         default:
             if (*internal_format == GL_RGB8 && *type != GL_UNSIGNED_BYTE) {
                 *type = GL_UNSIGNED_BYTE; 
@@ -354,7 +377,7 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
     if (is_depth_format(internalFormat)) {
         GLenum format = GL_DEPTH_COMPONENT;
         GLenum type = GL_UNSIGNED_INT;
-
+        internal_convert(&internalFormat, &type, &format);
         LOAD_GLES(glTexImage2D, void, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
         gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, NULL);
         CHECK_GL_ERROR_NO_INIT
@@ -409,6 +432,8 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
     LOAD_GLES_FUNC(glGetTexLevelParameteriv);
     gles_glGetTexLevelParameteriv(target, level, GL_TEXTURE_INTERNAL_FORMAT, &internalFormat);
 
+    LOG_D("glCopyTexSubImage2D, target: %d, level: %d, ......, internalFormat: %d", target, level, internalFormat);
+    
     if (is_depth_format((GLenum)internalFormat)) {
         GLint prevReadFBO, prevDrawFBO;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
@@ -574,4 +599,15 @@ void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, G
     gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
 
     CLEAR_GL_ERROR
+}
+
+void glGenerateTextureMipmap(GLuint texture) {
+    GLint currentTexture;
+    // TODO: Use real target
+    GLenum binding = GL_TEXTURE_BINDING_2D;
+    GLenum target = GL_TEXTURE_2D;
+    glGetIntegerv(binding, &currentTexture);
+    glBindTexture(target, texture);
+    glGenerateMipmap(target);
+    glBindTexture(target, currentTexture);
 }
