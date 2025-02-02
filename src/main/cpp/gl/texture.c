@@ -17,7 +17,7 @@
 #include "glsl/glsl_for_es.h"
 #include "mg.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 const GLenum GLUBYTE = GL_UNSIGNED_BYTE;
 
