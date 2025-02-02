@@ -25,7 +25,7 @@ STUB_FUNCTION_HEAD(void, glEdgeFlag, GLboolean flag ) STUB_FUNCTION_END_NO_RETUR
 STUB_FUNCTION_HEAD(void, glEdgeFlagv, const GLboolean *flag ) STUB_FUNCTION_END_NO_RETURN(void, glEdgeFlagv,flag)
 STUB_FUNCTION_HEAD(void, glClipPlane, GLenum plane, const GLdouble *equation ) STUB_FUNCTION_END_NO_RETURN(void, glClipPlane,plane,equation)
 STUB_FUNCTION_HEAD(void, glGetClipPlane, GLenum plane, GLdouble *equation ) STUB_FUNCTION_END_NO_RETURN(void, glGetClipPlane,plane,equation)
-STUB_FUNCTION_HEAD(void, glDrawBuffer, GLenum mode ) STUB_FUNCTION_END_NO_RETURN(void, glDrawBuffer,mode)
+//STUB_FUNCTION_HEAD(void, glDrawBuffer, GLenum mode ) STUB_FUNCTION_END_NO_RETURN(void, glDrawBuffer,mode)
 
 STUB_FUNCTION_HEAD(void, glEnableClientState, GLenum cap ) STUB_FUNCTION_END_NO_RETURN(void, glEnableClientState,cap)
 STUB_FUNCTION_HEAD(void, glDisableClientState, GLenum cap ) STUB_FUNCTION_END_NO_RETURN(void, glDisableClientState,cap)
