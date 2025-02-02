@@ -170,7 +170,7 @@ NATIVE_FUNCTION_HEAD(void, glGetQueryiv, GLenum target, GLenum pname, GLint *par
 NATIVE_FUNCTION_HEAD(void, glGetQueryObjectuiv, GLuint id, GLenum pname, GLuint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glGetQueryObjectuiv, id,pname,params)
 //NATIVE_FUNCTION_HEAD(GLboolean, glUnmapBuffer, GLenum target) NATIVE_FUNCTION_END(GLboolean, glUnmapBuffer, target)
 NATIVE_FUNCTION_HEAD(void, glGetBufferPointerv, GLenum target, GLenum pname, void **params) NATIVE_FUNCTION_END_NO_RETURN(void, glGetBufferPointerv, target,pname,params)
-NATIVE_FUNCTION_HEAD(void, glDrawBuffers, GLsizei n, const GLenum *bufs) NATIVE_FUNCTION_END_NO_RETURN(void, glDrawBuffers, n,bufs)
+//NATIVE_FUNCTION_HEAD(void, glDrawBuffers, GLsizei n, const GLenum *bufs) NATIVE_FUNCTION_END_NO_RETURN(void, glDrawBuffers, n,bufs)
 NATIVE_FUNCTION_HEAD(void, glUniformMatrix2x3fv, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) NATIVE_FUNCTION_END_NO_RETURN(void, glUniformMatrix2x3fv, location,count,transpose,value)
 NATIVE_FUNCTION_HEAD(void, glUniformMatrix3x2fv, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) NATIVE_FUNCTION_END_NO_RETURN(void, glUniformMatrix3x2fv, location,count,transpose,value)
 NATIVE_FUNCTION_HEAD(void, glUniformMatrix2x4fv, GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) NATIVE_FUNCTION_END_NO_RETURN(void, glUniformMatrix2x4fv, location,count,transpose,value)

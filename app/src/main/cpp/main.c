@@ -312,7 +312,7 @@ __eglMustCastToProperFunctionPointerType prehook(const char *procname) {
     MAP_FUNC(glVertex4dv);
     MAP_FUNC(glClearDepth);
     MAP_FUNC(glDepthRange);
-    MAP_FUNC(glDrawBuffer);
+//    MAP_FUNC(glDrawBuffer);
     MAP_FUNC(glGetDoublev);
     MAP_FUNC(glGetTexImage);
     MAP_FUNC(glPixelStoref);

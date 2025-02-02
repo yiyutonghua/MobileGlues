@@ -784,7 +784,7 @@ GLAPI void GLAPIENTRY glClipPlane( GLenum plane, const GLdouble *equation );
 
 GLAPI void GLAPIENTRY glGetClipPlane( GLenum plane, GLdouble *equation );
 
-GLAPI void GLAPIENTRY glDrawBuffer( GLenum mode );
+//GLAPI void GLAPIENTRY glDrawBuffer( GLenum mode );
 
 GLAPI void GLAPIENTRY glReadBuffer( GLenum mode );
 
