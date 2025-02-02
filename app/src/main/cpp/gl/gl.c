@@ -17,3 +17,8 @@ GLAPI GLAPIENTRY void glClearDepth(GLclampd depth) {
 	glClearDepthf(depth);
 	glClear(GL_DEPTH_BUFFER_BIT);
 }
+
+
+void glHint(GLenum target, GLenum mode) {
+    LOG();
+}

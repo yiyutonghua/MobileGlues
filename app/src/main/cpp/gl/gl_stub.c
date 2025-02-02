@@ -707,7 +707,7 @@ STUB_FUNCTION_HEAD(void, glTextureParameteri, GLuint texture, GLenum pname, GLin
 STUB_FUNCTION_HEAD(void, glTextureParameterIiv, GLuint texture, GLenum pname, const GLint* params); STUB_FUNCTION_END_NO_RETURN(void, glTextureParameterIiv,texture,pname,params)
 STUB_FUNCTION_HEAD(void, glTextureParameterIuiv, GLuint texture, GLenum pname, const GLuint* params); STUB_FUNCTION_END_NO_RETURN(void, glTextureParameterIuiv,texture,pname,params)
 STUB_FUNCTION_HEAD(void, glTextureParameteriv, GLuint texture, GLenum pname, const GLint* param); STUB_FUNCTION_END_NO_RETURN(void, glTextureParameteriv,texture,pname,param)
-STUB_FUNCTION_HEAD(void, glGenerateTextureMipmap, GLuint texture); STUB_FUNCTION_END_NO_RETURN(void, glGenerateTextureMipmap,texture)
+//STUB_FUNCTION_HEAD(void, glGenerateTextureMipmap, GLuint texture); STUB_FUNCTION_END_NO_RETURN(void, glGenerateTextureMipmap,texture)
 STUB_FUNCTION_HEAD(void, glBindTextureUnit, GLuint unit, GLuint texture); STUB_FUNCTION_END_NO_RETURN(void, glBindTextureUnit,unit,texture)
 STUB_FUNCTION_HEAD(void, glGetTextureImage, GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void* pixels); STUB_FUNCTION_END_NO_RETURN(void, glGetTextureImage,texture,level,format,type,bufSize,pixels)
 STUB_FUNCTION_HEAD(void, glGetCompressedTextureImage, GLuint texture, GLint level, GLsizei bufSize, void* pixels); STUB_FUNCTION_END_NO_RETURN(void, glGetCompressedTextureImage,texture,level,bufSize,pixels)

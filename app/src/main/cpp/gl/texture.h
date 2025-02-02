@@ -5,7 +5,17 @@
 #ifndef MOBILEGLUES_TEXTURE_H
 #define MOBILEGLUES_TEXTURE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "gl.h"
+
+struct texture_t {
+    GLuint texture;
+    GLenum format;
+    GLint swizzle_param[4];
+};
 
 GLAPI GLAPIENTRY void glTexParameterf(GLenum target, GLenum pname, GLfloat param);
 GLAPI GLAPIENTRY void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type, const GLvoid* pixels);
@@ -23,5 +33,12 @@ GLAPI GLAPIENTRY void glGetTexLevelParameterfv(GLenum target, GLint level, GLenu
 GLAPI GLAPIENTRY void glGetTexLevelParameteriv(GLenum target, GLint level, GLenum pname, GLint *params);
 GLAPI GLAPIENTRY void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels);
 GLAPI GLAPIENTRY void glTexParameteriv(GLenum target, GLenum pname, const GLint* params);
+GLAPI GLAPIENTRY void glGenerateTextureMipmap(GLuint texture);
+GLAPI GLAPIENTRY void glBindTexture(GLenum target, GLuint texture);
+GLAPI GLAPIENTRY void glDeleteTextures(GLsizei n, const GLuint *textures);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
