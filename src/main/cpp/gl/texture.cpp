@@ -7,6 +7,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <unordered_map>
 #include <android/log.h>
 
 #include "gl.h"
@@ -31,6 +32,9 @@ int nlevel(int size, int level) {
 
 static bool support_rgba16 = false;
 static bool checked_rgba16 = false;
+
+std::unordered_map<GLuint, texture_t> g_textures;
+GLuint bound_texture = 0;
 
 bool check_rgba16() {
     LOAD_GLES(glGetStringi, const GLubyte *, GLenum, GLuint);
@@ -194,7 +198,7 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type);
     return;
-    internal_convert(&internalFormat,& type,&format);
+    internal_convert(reinterpret_cast<GLenum *>(&internalFormat), & type, &format);
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_1D) {
@@ -214,7 +218,9 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 
 void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels) {
     LOG();
-    internal_convert(&internalFormat,& type,&format);
+    auto& tex = g_textures[bound_texture];
+    tex.format = format;
+    internal_convert(reinterpret_cast<GLenum *>(&internalFormat), &type, &format);
     LOG_D("glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
@@ -228,6 +234,33 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     }
     LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
     gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+    if (tex.format == GL_BGRA) {
+        LOG_D("Detected GL_BGRA format @ tex = %d, do swizzle", bound_texture);
+        if (tex.swizzle_param[0] == 0) { // assert this as never called glTexParameteri(..., GL_TEXTURE_SWIZZLE_R, ...)
+            tex.swizzle_param[0] = GL_RED;
+            tex.swizzle_param[1] = GL_GREEN;
+            tex.swizzle_param[2] = GL_BLUE;
+            tex.swizzle_param[3] = GL_ALPHA;
+        }
+
+        GLint r = tex.swizzle_param[0];
+        GLint g = tex.swizzle_param[1];
+        GLint b = tex.swizzle_param[2];
+        GLint a = tex.swizzle_param[3];
+        tex.swizzle_param[0] = g;
+        tex.swizzle_param[1] = b;
+        tex.swizzle_param[2] = a;
+        tex.swizzle_param[3] = r;
+        tex.format = GL_RGBA;
+
+        LOAD_GLES_FUNC(glTexParameteri);
+        gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, tex.swizzle_param[0]);
+        gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, tex.swizzle_param[1]);
+        gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, tex.swizzle_param[2]);
+        gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, tex.swizzle_param[3]);
+        CHECK_GL_ERROR
+    }
+
     CHECK_GL_ERROR
 }
 
@@ -236,7 +269,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage3D, target: 0x%x, level: %d, internalFormat: 0x%x, width: 0x%x, height: %d, depth: %d, border: %d, format: 0x%x, type: %d",
           target, level, internalFormat, width, height, depth, border, format, type);
 
-    internal_convert(&internalFormat, &type,&format);
+    internal_convert(reinterpret_cast<GLenum *>(&internalFormat), &type, &format);
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_3D) {
@@ -262,7 +295,7 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d",
           target, levels, internalFormat, width);
     return;
-    internal_convert(&internalFormat,&GLUBYTE,NULL);
+    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
 
 //    LOAD_GLES(glTexStorage1D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width);
 //    gles_glTexStorage1D(target, levels, internalFormat, width);
@@ -275,7 +308,7 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage2D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d",
           target, levels, internalFormat, width, height);
 
-    internal_convert(&internalFormat,&GLUBYTE,NULL);
+    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
 
     LOAD_GLES(glTexStorage2D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height);
     gles_glTexStorage2D(target, levels, internalFormat, width, height);
@@ -291,7 +324,7 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage3D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d, depth: %d",
           target, levels, internalFormat, width, height, depth);
 
-    internal_convert(&internalFormat,&GLUBYTE,NULL);
+    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
 
     LOAD_GLES(glTexStorage3D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth);
     gles_glTexStorage3D(target, levels, internalFormat, width, height, depth);
@@ -552,10 +585,18 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
     if (pname == GL_TEXTURE_SWIZZLE_RGBA) {
         LOG_D("find GL_TEXTURE_SWIZZLE_RGBA, now use glTexParameteri");
         if (params) {
+            // deferred those call to draw call?
             gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, params[0]);
             gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, params[1]);
             gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, params[2]);
             gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, params[3]);
+
+            // save states for now
+            texture_t& tex = g_textures[bound_texture];
+            tex.swizzle_param[0] = params[0];
+            tex.swizzle_param[1] = params[1];
+            tex.swizzle_param[2] = params[2];
+            tex.swizzle_param[3] = params[3];
         } else {
             LOG_E("glTexParameteriv: params is null for GL_TEXTURE_SWIZZLE_RGBA");
         }
@@ -569,9 +610,39 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
 void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
     LOG();
     LOAD_GLES_FUNC(glTexSubImage2D)
-    if (format == GL_BGRA)
-        format=GL_BGRA_EXT;
     gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
 
     CLEAR_GL_ERROR
+}
+
+void glBindTexture(GLenum target, GLuint texture) {
+    LOG();
+    LOG_D("glBindTexture(0x%x, %d)", target, texture);
+    LOAD_GLES_FUNC(glBindTexture)
+    INIT_CHECK_GL_ERROR
+    gles_glBindTexture(target, texture);
+    CHECK_GL_ERROR_NO_INIT
+
+    if (target == GL_TEXTURE_2D) { // only care about 2D textures for now
+        g_textures[texture] = {
+                .texture = texture,
+                .format = 0,
+                .swizzle_param = {0},
+        };
+        bound_texture = texture;
+    }
+}
+
+void glDeleteTextures(GLsizei n, const GLuint *textures) {
+    LOG();
+    LOAD_GLES_FUNC(glDeleteTextures)
+    INIT_CHECK_GL_ERROR
+    gles_glDeleteTextures(n, textures);
+    CHECK_GL_ERROR_NO_INIT
+
+    for (GLsizei i = 0; i < n; ++i) {
+        g_textures.erase(textures[i]);
+        if (bound_texture == textures[i])
+            bound_texture = 0;
+    }
 }

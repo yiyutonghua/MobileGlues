@@ -29,7 +29,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gl/envvars.c
         gl/log.c
         gl/shader.c
-        gl/texture.c
+        gl/texture.cpp
         gl/drawing.c
         gl/mg.c
         gl/buffer.cpp
