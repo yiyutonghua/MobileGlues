@@ -427,10 +427,10 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
 void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, GLsizei height) {
     LOG();
 
-    LOAD_GLES_FUNC(glGetTexLevelParameteriv);
-    GLint realInternalFormat;
-    gles_glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &realInternalFormat);
-    internalFormat = (GLenum)realInternalFormat;
+    //LOAD_GLES_FUNC(glGetTexLevelParameteriv);
+    //GLint realInternalFormat;
+    //gles_glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &realInternalFormat);
+    //internalFormat = (GLenum)realInternalFormat;
 
     LOG_D("glRenderbufferStorage, target: %d, internalFormat: %d, width: %d, height: %d",
           target, internalFormat, width, height);
