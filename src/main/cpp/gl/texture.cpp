@@ -54,6 +54,8 @@ bool check_rgba16() {
 }
 
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
+    if (format && *format == GL_BGRA)
+        *format = GL_RGBA;
     switch (*internal_format) {
         case GL_DEPTH_COMPONENT16:
             *type = GL_UNSIGNED_SHORT;
@@ -112,6 +114,8 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             
         case GL_R11F_G11F_B10F:
             *type = GL_UNSIGNED_INT_10F_11F_11F_REV;
+            if (format)
+                *format = GL_RGB;
             break;
 
         case GL_RGBA32UI:
@@ -182,6 +186,11 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
                 *format = GL_RG;
             break;
 
+        case GL_R8:
+            if (format)
+                *format = GL_RED;
+            *type = GL_UNSIGNED_BYTE;
+            break;
         case GL_R8UI:
             if (format)
                 *format = GL_RED_INTEGER;
@@ -194,8 +203,11 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         default:
-            if (*internal_format == GL_RGB8 && *type != GL_UNSIGNED_BYTE) {
-                *type = GL_UNSIGNED_BYTE; 
+            if (*internal_format == GL_RGB8) {
+                if (*type != GL_UNSIGNED_BYTE)
+                    *type = GL_UNSIGNED_BYTE;
+                if (format)
+                    *format = GL_RGB;
             }
             else if (*internal_format == GL_RGBA16_SNORM && *type != GL_SHORT) {
                 *type = GL_SHORT; 
