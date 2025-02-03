@@ -83,6 +83,21 @@ void AppendExtension(const char* ext) {
 const GLubyte * glGetString( GLenum name ) {
     LOG();
     LOAD_GLES(glGetString, const GLubyte *, GLenum);
+    /* Feature in the Future
+     * Advanced OpenGL driver: NV renderer.
+    switch (name) {
+        case GL_VENDOR:
+            return (const GLubyte *) "NVIDIA Corporation";
+        case GL_VERSION:
+            return (const GLubyte *) "4.6.0 NVIDIA 572.16";
+        case GL_RENDERER:
+            return (const GLubyte *) "NVIDIA GeForce RTX 5090/PCIe/SSE2";
+        case GL_SHADING_LANGUAGE_VERSION:
+            return (const GLubyte *) "4.50 MobileGlues with glslang and SPIRV-Cross";
+        case GL_EXTENSIONS:
+            return (const GLubyte *) GetExtensionsList();
+    }
+    */
     switch (name) {
         case GL_VENDOR:
             return (const GLubyte *) "Swung0x48, BZLZHH, Tungsten";
