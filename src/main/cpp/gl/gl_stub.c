@@ -419,7 +419,7 @@ STUB_FUNCTION_HEAD(void, glLoadTransposeMatrixd,const GLdouble* m); STUB_FUNCTIO
 STUB_FUNCTION_HEAD(void, glMultTransposeMatrixf,const GLfloat* m); STUB_FUNCTION_END_NO_RETURN(void, glMultTransposeMatrixf,m)
 STUB_FUNCTION_HEAD(void, glMultTransposeMatrixd,const GLdouble* m); STUB_FUNCTION_END_NO_RETURN(void, glMultTransposeMatrixd,m)
 STUB_FUNCTION_HEAD(void, glMultiDrawArrays, GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount); STUB_FUNCTION_END_NO_RETURN(void, glMultiDrawArrays,mode,first,count,drawcount)
-STUB_FUNCTION_HEAD(void, glMultiDrawElements, GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount); STUB_FUNCTION_END_NO_RETURN(void, glMultiDrawElements,mode,count,type,indices,drawcount)
+//STUB_FUNCTION_HEAD(void, glMultiDrawElements, GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount); STUB_FUNCTION_END_NO_RETURN(void, glMultiDrawElements,mode,count,type,indices,drawcount)
 STUB_FUNCTION_HEAD(void, glPointParameterf, GLenum pname, GLfloat param); STUB_FUNCTION_END_NO_RETURN(void, glPointParameterf,pname,param)
 STUB_FUNCTION_HEAD(void, glPointParameterfv, GLenum pname, const GLfloat* params); STUB_FUNCTION_END_NO_RETURN(void, glPointParameterfv,pname,params)
 STUB_FUNCTION_HEAD(void, glPointParameteri, GLenum pname, GLint param); STUB_FUNCTION_END_NO_RETURN(void, glPointParameteri,pname,param)

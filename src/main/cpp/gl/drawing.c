@@ -9,9 +9,7 @@
 
 void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, const void * const *indices, GLsizei primcount, const GLint * basevertex) {
     LOG();
-
-//    force_unmap();
-
+    if (primcount <= 0 || !counts || !indices) return;
     for (int i = 0; i < primcount; i++) {
         if (counts[i] > 0)
             glDrawElementsBaseVertex(mode,
@@ -19,6 +17,22 @@ void glMultiDrawElementsBaseVertex( GLenum mode, GLsizei *counts, GLenum type, c
                     type,
                     indices[i],
                     basevertex[i]);
+    }
+}
+
+
+void glMultiDrawElements(GLenum mode,const GLsizei * count,GLenum type,const void * const * indices,GLsizei primcount) {
+    LOG();
+    if (primcount <= 0 || !count || !indices) return;
+    for (GLsizei i = 0; i < primcount; ++i) {
+        if (count[i] > 0) {
+            glDrawElements(
+                    mode,
+                    count[i],
+                    type,
+                    indices[i]
+            );
+        }
     }
 }
 
