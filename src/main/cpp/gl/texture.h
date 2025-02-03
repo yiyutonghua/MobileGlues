@@ -36,6 +36,7 @@ GLAPI GLAPIENTRY void glTexParameteriv(GLenum target, GLenum pname, const GLint*
 GLAPI GLAPIENTRY void glGenerateTextureMipmap(GLuint texture);
 GLAPI GLAPIENTRY void glBindTexture(GLenum target, GLuint texture);
 GLAPI GLAPIENTRY void glDeleteTextures(GLsizei n, const GLuint *textures);
+GLAPI GLAPIENTRY void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels);
 
 #ifdef __cplusplus
 }

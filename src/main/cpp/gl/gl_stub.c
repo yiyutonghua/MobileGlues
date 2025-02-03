@@ -295,7 +295,7 @@ STUB_FUNCTION_HEAD(void, glGetTexEnviv, GLenum target, GLenum pname, GLint *para
 
 
 //STUB_FUNCTION_HEAD(void, glTexImage1D, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format, GLenum type,const GLvoid* pixels ) STUB_FUNCTION_END_NO_RETURN(void, glTexImage1D,target,level,internalFormat,width,border,format,type,pixels)
-STUB_FUNCTION_HEAD(void, glGetTexImage, GLenum target, GLint level, GLenum format, GLenum type, GLvoid* pixels ) STUB_FUNCTION_END_NO_RETURN(void, glGetTexImage,target,level,format,type,pixels)
+//STUB_FUNCTION_HEAD(void, glGetTexImage, GLenum target, GLint level, GLenum format, GLenum type, GLvoid* pixels ) STUB_FUNCTION_END_NO_RETURN(void, glGetTexImage,target,level,format,type,pixels)
 /* 1.1 functions */
 
 STUB_FUNCTION_HEAD(void, glPrioritizeTextures, GLsizei n,const GLuint *textures,const GLclampf *priorities ) STUB_FUNCTION_END_NO_RETURN(void, glPrioritizeTextures,n,textures,priorities)

@@ -694,3 +694,59 @@ void glGenerateTextureMipmap(GLuint texture) {
     glGenerateMipmap(target);
     glBindTexture(target, currentTexture);
 }
+
+void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels) {
+    GLint prevFBO;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+    GLenum bindingTarget = get_binding_for_target(target);
+    if (bindingTarget == 0) return;
+
+    GLint oldTexBinding;
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(bindingTarget, &oldTexBinding);
+    GLuint texture = static_cast<GLuint>(oldTexBinding);
+    if (texture == 0) return;
+
+    GLint width, height;
+    glBindTexture(target, texture);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
+    glBindTexture(target, oldTexBinding);
+
+    if (width <= 0 || height <= 0) return;
+
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
+    } else {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+
+    GLint oldViewport[4];
+    glGetIntegerv(GL_VIEWPORT, oldViewport);
+    glViewport(0, 0, width, height);
+
+    GLint oldPackAlignment;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(0, 0, width, height, format, type, pixels);
+
+    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
+    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+
+    glDeleteFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+}
