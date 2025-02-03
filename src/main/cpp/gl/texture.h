@@ -12,6 +12,7 @@ extern "C" {
 #include "gl.h"
 
 struct texture_t {
+    GLenum target;
     GLuint texture;
     GLenum format;
     GLint swizzle_param[4];

@@ -662,9 +662,10 @@ void glBindTexture(GLenum target, GLuint texture) {
 
     if (target == GL_TEXTURE_2D) { // only care about 2D textures for now
         g_textures[texture] = {
+                .target = target,
                 .texture = texture,
                 .format = 0,
-                .swizzle_param = {0},
+                .swizzle_param = {0}
         };
         bound_texture = texture;
     }
@@ -686,9 +687,10 @@ void glDeleteTextures(GLsizei n, const GLuint *textures) {
 
 void glGenerateTextureMipmap(GLuint texture) {
     GLint currentTexture;
-    // TODO: Use real target
-    GLenum binding = GL_TEXTURE_BINDING_2D;
-    GLenum target = GL_TEXTURE_2D;
+    auto& tex = g_textures[bound_texture];
+    GLenum target = tex.target;
+    GLenum binding = get_binding_for_target(target);
+    if (binding == 0) return;
     glGetIntegerv(binding, &currentTexture);
     glBindTexture(target, texture);
     glGenerateMipmap(target);
