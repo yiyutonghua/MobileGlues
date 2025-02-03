@@ -310,6 +310,34 @@ std::string forceSupporterOutput(const std::string& glslCode) {
 std::string removeLayoutBinding(const std::string& glslCode) {
     std::regex bindingRegex(R"(layout\s*\(\s*binding\s*=\s*\d+\s*\)\s*)");
     std::string result = std::regex_replace(glslCode, bindingRegex, "");
+    std::regex bindingRegex2(R"(layout\s*\(\s*binding\s*=\s*\d+\s*,)");
+    result = std::regex_replace(result, bindingRegex2, "layout(");
+    return result;
+}
+
+// TODO
+std::string makeRGBWriteonly(const std::string& input) {
+    std::regex pattern(R"(.*layout\([^)]*rgba[^)]*\).*?)");
+    std::string result;
+    std::string::size_type start = 0;
+    std::string::size_type end;
+
+    while ((end = input.find('\n', start)) != std::string::npos) {
+        std::string line = input.substr(start, end - start);
+        if (std::regex_search(line, pattern)) {
+            result += "writeonly " + line + "\n";
+        } else {
+            result += line + "\n";
+        }
+        start = end + 1;
+    }
+    std::string lastLine = input.substr(start);
+    if (std::regex_search(lastLine, pattern)) {
+        result += "writeonly " + lastLine;
+    } else {
+        result += lastLine;
+    }
+
     return result;
 }
 
@@ -512,6 +540,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     //essl = removeLocationBinding(essl);
     //essl = addPrecisionToSampler2DShadow(essl);
     essl = forceSupporterOutput(essl);
+    essl = makeRGBWriteonly(essl);
 
     char* result_essl = new char[essl.length() + 1];
     std::strcpy(result_essl, essl.c_str());
