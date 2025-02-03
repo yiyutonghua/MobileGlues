@@ -370,7 +370,7 @@ STUB_FUNCTION_HEAD(void, glVertexAttribI4sv, GLuint index, const GLshort *v) STU
 STUB_FUNCTION_HEAD(void, glVertexAttribI4ubv, GLuint index, const GLubyte *v) STUB_FUNCTION_END_NO_RETURN(void, glVertexAttribI4ubv,index,v)
 STUB_FUNCTION_HEAD(void, glVertexAttribI4usv, GLuint index, const GLushort *v) STUB_FUNCTION_END_NO_RETURN(void, glVertexAttribI4usv,index,v)
 //STUB_FUNCTION_HEAD(void, glBindFragDataLocation, GLuint program, GLuint color, const GLchar *name) STUB_FUNCTION_END_NO_RETURN(void, glBindFragDataLocation,program,color,name)
-GLAPI GLAPIENTRY void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {}
+//GLAPI GLAPIENTRY void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {}
 STUB_FUNCTION_HEAD(void, glFramebufferTexture1D, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) STUB_FUNCTION_END_NO_RETURN(void, glFramebufferTexture1D,target,attachment,textarget,texture,level)
 STUB_FUNCTION_HEAD(void, glFramebufferTexture3D, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level, GLint zoffset) STUB_FUNCTION_END_NO_RETURN(void, glFramebufferTexture3D,target,attachment,textarget,texture,level,zoffset)
 // Shader

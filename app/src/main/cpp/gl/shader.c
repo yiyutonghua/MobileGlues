@@ -2,11 +2,7 @@
 // Created by BZLZHH on 2025/1/26.
 //
 
-#include <string.h>
-#include <malloc.h>
-#include <stdlib.h>
 #include <ctype.h>
-#include <android/log.h>
 #include "shader.h"
 
 #include "gl.h"
@@ -16,6 +12,8 @@
 #include "glsl/glsl_for_es.h"
 
 #define DEBUG 0
+
+struct shader_t shaderInfo;
 
 void trim(char* str) {
     char* end;
@@ -190,6 +188,9 @@ bool is_direct_shader(char *glsl)
 
 void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, const GLint *length) {    
     LOG();
+    shaderInfo.id = 0;
+    shaderInfo.converted = NULL;
+    shaderInfo.frag_data_changed = 0;
     int l = 0;
     for (int i=0; i<count; i++) l+=(length && length[i] >= 0)?length[i]:strlen(string[i]);
     char* source = NULL;
@@ -223,8 +224,11 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
             converted = process_uniform_declarations(converted);
             LOG_D("\n[INFO] [Shader] Converted Shader source: \n%s", converted);
         }
-        if (converted)
+        if (converted) {
+            shaderInfo.id = shader;
+            shaderInfo.converted = converted;
             gles_glShaderSource(shader, count, (const GLchar * const*)&converted, NULL);
+        }
         else
             LOG_E("Failed to convert glsl.")
         CHECK_GL_ERROR
@@ -232,4 +236,3 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
         LOG_E("No gles_glShaderSource")
     }
 }
-    
