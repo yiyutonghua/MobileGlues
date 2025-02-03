@@ -20,8 +20,6 @@
 
 #define DEBUG 0
 
-const GLenum GLUBYTE = GL_UNSIGNED_BYTE;
-
 int nlevel(int size, int level) {
     if(size) {
         size>>=level;
@@ -58,38 +56,46 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         *format = GL_RGBA;
     switch (*internal_format) {
         case GL_DEPTH_COMPONENT16:
-            *type = GL_UNSIGNED_SHORT;
+            if(type)
+                *type = GL_UNSIGNED_SHORT;
             break;
 
         case GL_DEPTH_COMPONENT24:
-            *type = GL_UNSIGNED_INT;
+            if(type)
+                *type = GL_UNSIGNED_INT;
             break;
 
         case GL_DEPTH_COMPONENT32:
             *internal_format = GL_DEPTH_COMPONENT32F;
-            *type = GL_FLOAT;
+            if(type)
+                *type = GL_FLOAT;
             break;
 
         case GL_DEPTH_COMPONENT32F:
-            *type = GL_FLOAT;
+            if(type)
+                *type = GL_FLOAT;
             break;
 
         case GL_DEPTH_COMPONENT:
             *internal_format = GL_DEPTH_COMPONENT32F;
-            *type = GL_FLOAT;
+            if(type)
+                *type = GL_FLOAT;
             break;
 
         case GL_DEPTH_STENCIL:
             *internal_format = GL_DEPTH32F_STENCIL8;
-            *type = GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
+            if(type)
+                *type = GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
             break;
 
         case GL_RGB10_A2:
-            *type = GL_UNSIGNED_INT_2_10_10_10_REV;
+            if(type)
+                *type = GL_UNSIGNED_INT_2_10_10_10_REV;
             break;
 
         case GL_RGB5_A1:
-            *type = GL_UNSIGNED_SHORT_5_5_5_1;
+            if(type)
+                *type = GL_UNSIGNED_SHORT_5_5_5_1;
             break;
 
         case GL_COMPRESSED_RED_RGTC1:
@@ -98,22 +104,26 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_SRGB8:
-            *type = GL_UNSIGNED_BYTE;
+            if(type)
+                *type = GL_UNSIGNED_BYTE;
             break;
 
         case GL_RGBA32F:
         case GL_RGB32F:
         case GL_RG32F:
         case GL_R32F:
-            *type = GL_FLOAT;
+            if(type)
+                *type = GL_FLOAT;
             break;
 
         case GL_RGB9_E5:
-            *type = GL_UNSIGNED_INT_5_9_9_9_REV;
+            if(type)
+                *type = GL_UNSIGNED_INT_5_9_9_9_REV;
             break;
             
         case GL_R11F_G11F_B10F:
-            *type = GL_UNSIGNED_INT_10F_11F_11F_REV;
+            if(type)
+                *type = GL_UNSIGNED_INT_10F_11F_11F_REV;
             if (format)
                 *format = GL_RGB;
             break;
@@ -122,14 +132,16 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         case GL_RGB32UI:
         case GL_RG32UI:
         case GL_R32UI:
-            *type = GL_UNSIGNED_INT;
+            if(type)
+                *type = GL_UNSIGNED_INT;
             break;
 
         case GL_RGBA32I:
         case GL_RGB32I:
         case GL_RG32I:
         case GL_R32I:
-            *type = GL_INT;
+            if(type)
+                *type = GL_INT;
             break;
 
         case GL_RGBA16: {
@@ -138,50 +150,59 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
                 checked_rgba16 = true;
             }
             if (support_rgba16) {
-                *type = GL_UNSIGNED_SHORT;
+                if(type)
+                    *type = GL_UNSIGNED_SHORT;
             } else {
                 *internal_format = GL_RGBA16F;
-                *type = GL_FLOAT;
+                if(type)
+                    *type = GL_FLOAT;
             }
             break;
         }
         case GL_RGBA8:
-            *type = GL_UNSIGNED_BYTE;
+            if(type)
+                *type = GL_UNSIGNED_BYTE;
             if (format)
                 *format = GL_RGBA;
             break;
 
         case GL_RGBA:
-            *type = GL_UNSIGNED_BYTE;
+            if(type)
+                *type = GL_UNSIGNED_BYTE;
             if (format)
                 *format = GL_RGBA;
             break;
             
         case GL_RGBA16F:
         case GL_R16F:
-            *type = GL_HALF_FLOAT;
+            if(type)
+                *type = GL_HALF_FLOAT;
             break;
 
         case GL_R16:
             *internal_format = GL_R16F;
-            *type = GL_FLOAT;
+            if(type)
+                *type = GL_FLOAT;
             break;
 
         case GL_RGB16:
             *internal_format = GL_RGB16F;
-            *type = GL_HALF_FLOAT;
+            if(type)
+                *type = GL_HALF_FLOAT;
             if(format)
                 *format = GL_RGB;
             break;
             
         case GL_RGB16F:
-            *type = GL_HALF_FLOAT;
+            if(type)
+                *type = GL_HALF_FLOAT;
             if(format)
                 *format = GL_RGB;
             break;
 
         case GL_RG16F:
-            *type = GL_HALF_FLOAT;
+            if(type)
+                *type = GL_HALF_FLOAT;
             if(format)
                 *format = GL_RG;
             break;
@@ -189,27 +210,30 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         case GL_R8:
             if (format)
                 *format = GL_RED;
-            *type = GL_UNSIGNED_BYTE;
+            if(type)
+                *type = GL_UNSIGNED_BYTE;
             break;
         case GL_R8UI:
             if (format)
                 *format = GL_RED_INTEGER;
-            *type = GL_UNSIGNED_BYTE;
+            if(type)
+                *type = GL_UNSIGNED_BYTE;
             break;
 
         case GL_RGB8_SNORM:
         case GL_RGBA8_SNORM:
-            *type = GL_BYTE;
+            if(type)
+                *type = GL_BYTE;
             break;
 
         default:
             if (*internal_format == GL_RGB8) {
-                if (*type != GL_UNSIGNED_BYTE)
+                if (type && *type != GL_UNSIGNED_BYTE)
                     *type = GL_UNSIGNED_BYTE;
                 if (format)
                     *format = GL_RGB;
             }
-            else if (*internal_format == GL_RGBA16_SNORM && *type != GL_SHORT) {
+            else if (type && *internal_format == GL_RGBA16_SNORM && *type != GL_SHORT) {
                 *type = GL_SHORT; 
             }
             break;
@@ -330,7 +354,7 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d",
           target, levels, internalFormat, width);
     return;
-    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
+    internal_convert(&internalFormat,NULL,NULL);
 
 //    LOAD_GLES(glTexStorage1D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width);
 //    gles_glTexStorage1D(target, levels, internalFormat, width);
@@ -343,7 +367,7 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage2D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d",
           target, levels, internalFormat, width, height);
 
-    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
+    internal_convert(&internalFormat,NULL,NULL);
 
     LOAD_GLES(glTexStorage2D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height);
     gles_glTexStorage2D(target, levels, internalFormat, width, height);
@@ -359,7 +383,7 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage3D, target: %d, levels: %d, internalFormat: %d, width: %d, height: %d, depth: %d",
           target, levels, internalFormat, width, height, depth);
 
-    internal_convert(&internalFormat,const_cast<GLenum*>(&GLUBYTE),NULL);
+    internal_convert(&internalFormat,NULL,NULL);
 
     LOAD_GLES(glTexStorage3D, void, GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth);
     gles_glTexStorage3D(target, levels, internalFormat, width, height, depth);
@@ -662,9 +686,10 @@ void glBindTexture(GLenum target, GLuint texture) {
 
     if (target == GL_TEXTURE_2D) { // only care about 2D textures for now
         g_textures[texture] = {
+                .target = target,
                 .texture = texture,
                 .format = 0,
-                .swizzle_param = {0},
+                .swizzle_param = {0}
         };
         bound_texture = texture;
     }
@@ -686,11 +711,57 @@ void glDeleteTextures(GLsizei n, const GLuint *textures) {
 
 void glGenerateTextureMipmap(GLuint texture) {
     GLint currentTexture;
-    // TODO: Use real target
-    GLenum binding = GL_TEXTURE_BINDING_2D;
-    GLenum target = GL_TEXTURE_2D;
+    auto& tex = g_textures[bound_texture];
+    GLenum target = tex.target;
+    GLenum binding = get_binding_for_target(target);
+    if (binding == 0) return;
     glGetIntegerv(binding, &currentTexture);
     glBindTexture(target, texture);
     glGenerateMipmap(target);
     glBindTexture(target, currentTexture);
+}
+
+void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels) {
+    GLint prevFBO;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+    GLenum bindingTarget = get_binding_for_target(target);
+    if (bindingTarget == 0) return;
+    GLint oldTexBinding;
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(bindingTarget, &oldTexBinding);
+    GLuint texture = static_cast<GLuint>(oldTexBinding);
+    if (texture == 0) return;
+    GLint width, height;
+    glBindTexture(target, texture);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
+    glBindTexture(target, oldTexBinding);
+    if (width <= 0 || height <= 0) return;
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
+    } else {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+    GLint oldViewport[4];
+    glGetIntegerv(GL_VIEWPORT, oldViewport);
+    glViewport(0, 0, width, height);
+    GLint oldPackAlignment;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(0, 0, width, height, format, type, pixels);
+    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
+    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+    glDeleteFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 }
