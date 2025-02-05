@@ -765,3 +765,18 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
     glDeleteFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 }
+
+void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels) {
+    LOG()
+    LOAD_GLES_FUNC(glReadPixels)
+    LOG_D("glReadPixels, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
+          x, y, width, height, format, type, pixels)
+    if (format == GL_BGRA && type == GL_UNSIGNED_INT_8_8_8_8) {
+        format = GL_RGBA;
+        type = GL_UNSIGNED_BYTE;
+    }
+    LOG_D("glReadPixels converted, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
+          x, y, width, height, format, type, pixels)
+    gles_glReadPixels(x, y, width, height, format, type, pixels);
+    CHECK_GL_ERROR
+}
