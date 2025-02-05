@@ -14,8 +14,9 @@ struct attachment_t {
 };
 
 struct framebuffer_t {
-    GLenum target;
-    struct attachment_t* attachment;
+    GLenum current_target;
+    struct attachment_t* draw_attachment;
+    struct attachment_t* read_attachment;
 };
 
 extern struct framebuffer_t* bound_framebuffer;

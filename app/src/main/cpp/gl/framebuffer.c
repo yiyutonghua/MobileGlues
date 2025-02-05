@@ -20,13 +20,22 @@ GLint getMaxDrawBuffers() {
 }
 
 void rebind_framebuffer(GLenum old_attachment, GLenum target_attachment) {
-    if (!bound_framebuffer || !bound_framebuffer->attachment)
+    if (!bound_framebuffer)
         return;
 
-    struct attachment_t attachment = bound_framebuffer->attachment[old_attachment - GL_COLOR_ATTACHMENT0];
+    struct attachment_t* attach;
+    if (bound_framebuffer->current_target == GL_DRAW_FRAMEBUFFER)
+        attach = bound_framebuffer->draw_attachment;
+    else
+        attach = bound_framebuffer->read_attachment;
+
+    if (!attach)
+        return;
+
+    struct attachment_t attachment = attach[old_attachment - GL_COLOR_ATTACHMENT0];
 
     LOAD_GLES(glFramebufferTexture2D, void, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
-    gles_glFramebufferTexture2D(bound_framebuffer->target, target_attachment, attachment.textarget, attachment.texture, attachment.level);
+    gles_glFramebufferTexture2D(bound_framebuffer->current_target, target_attachment, attachment.textarget, attachment.texture, attachment.level);
 }
 
 void glBindFramebuffer(GLenum target, GLuint framebuffer) {
@@ -39,9 +48,25 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
 
     if (!bound_framebuffer)
         bound_framebuffer = malloc(sizeof(struct framebuffer_t));
-    free(bound_framebuffer->attachment);
-    bound_framebuffer->attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
-    bound_framebuffer->target = target;
+
+    switch (target) {
+        case GL_DRAW_FRAMEBUFFER:
+            free(bound_framebuffer->draw_attachment);
+            bound_framebuffer->draw_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            break;
+        case GL_READ_FRAMEBUFFER:
+            free(bound_framebuffer->read_attachment);
+            bound_framebuffer->read_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            break;
+        case GL_FRAMEBUFFER:
+            free(bound_framebuffer->draw_attachment);
+            bound_framebuffer->draw_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            free(bound_framebuffer->read_attachment);
+            bound_framebuffer->read_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            break;
+        default:
+            break;
+    }
 
     CHECK_GL_ERROR
 }
@@ -51,10 +76,20 @@ void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, 
 
     LOG_D("glFramebufferTexture2D(0x%x, 0x%x, 0x%x, %d, %d)", target, attachment, textarget, texture, level)
 
-    if (bound_framebuffer && bound_framebuffer->attachment) {
-        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].textarget = textarget;
-        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].texture = texture;
-        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].level = level;
+    if (bound_framebuffer && attachment - GL_COLOR_ATTACHMENT0 <= getMaxDrawBuffers()) {
+        struct attachment_t* attach;
+        if (target == GL_DRAW_FRAMEBUFFER)
+            attach = bound_framebuffer->draw_attachment;
+        else
+            attach = bound_framebuffer->read_attachment;
+
+        if (attach) {
+            attach[attachment - GL_COLOR_ATTACHMENT0].textarget = textarget;
+            attach[attachment - GL_COLOR_ATTACHMENT0].texture = texture;
+            attach[attachment - GL_COLOR_ATTACHMENT0].level = level;
+        }
+
+        bound_framebuffer->current_target = target;
     }
 
     LOAD_GLES(glFramebufferTexture2D, void, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
