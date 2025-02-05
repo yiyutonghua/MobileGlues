@@ -20,6 +20,9 @@ GLint getMaxDrawBuffers() {
 }
 
 void rebind_framebuffer(GLenum old_attachment, GLenum target_attachment) {
+    if (!bound_framebuffer || !bound_framebuffer->attachment)
+        return;
+
     struct attachment_t attachment = bound_framebuffer->attachment[old_attachment - GL_COLOR_ATTACHMENT0];
 
     LOAD_GLES(glFramebufferTexture2D, void, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
@@ -34,8 +37,10 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
     LOAD_GLES(glBindFramebuffer, void, GLenum target, GLuint framebuffer)
     gles_glBindFramebuffer(target, framebuffer);
 
-    bound_framebuffer = NULL;
-    bound_framebuffer = malloc(sizeof(struct framebuffer_t));
+    if (!bound_framebuffer)
+        bound_framebuffer = malloc(sizeof(struct framebuffer_t));
+    free(bound_framebuffer->attachment);
+    bound_framebuffer->attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
     bound_framebuffer->target = target;
 
     CHECK_GL_ERROR
@@ -46,9 +51,11 @@ void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, 
 
     LOG_D("glFramebufferTexture2D(0x%x, 0x%x, 0x%x, %d, %d)", target, attachment, textarget, texture, level)
 
-    bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].textarget = textarget;
-    bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].texture = texture;
-    bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].level = level;
+    if (bound_framebuffer && bound_framebuffer->attachment) {
+        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].textarget = textarget;
+        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].texture = texture;
+        bound_framebuffer->attachment[attachment - GL_COLOR_ATTACHMENT0].level = level;
+    }
 
     LOAD_GLES(glFramebufferTexture2D, void, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
     gles_glFramebufferTexture2D(target, attachment, textarget, texture, level);
