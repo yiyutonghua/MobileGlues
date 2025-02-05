@@ -4,6 +4,7 @@
 
 #include "drawing.h"
 #include "buffer.h"
+#include "framebuffer.h"
 
 #define DEBUG 0
 
@@ -84,8 +85,23 @@ void glDrawBuffers(GLsizei n, const GLenum *bufs) {
     LOG()
 
     LOG_D("glDrawBuffers(%d, %p), [0]=0x%x", n, bufs, n ? bufs[0] : 0)
+
+    GLenum new_bufs[n];
+
+    for (int i = 0; i < n; i++) {
+        if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs <= GL_COLOR_ATTACHMENT0 + getMaxDrawBuffers()) {
+            GLenum target_attachment = GL_COLOR_ATTACHMENT0 + i;
+            new_bufs[i] = target_attachment;
+            if (bufs[i] == target_attachment)
+                continue;
+            rebind_framebuffer(bufs[i], target_attachment);
+        } else {
+            new_bufs[i] = bufs[i];
+        }
+    }
+
     LOAD_GLES(glDrawBuffers, void, GLsizei n, const GLenum *bufs)
-    gles_glDrawBuffers(n, bufs);
+    gles_glDrawBuffers(n, new_bufs);
 
     CHECK_GL_ERROR
 }
