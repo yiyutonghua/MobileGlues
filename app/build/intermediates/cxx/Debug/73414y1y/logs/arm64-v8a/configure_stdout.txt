@@ -1,3 +1,0 @@
--- Configuring done
--- Generating done
--- Build files have been written to: D:/Projects/FCL/MobileGlues/app/.cxx/Debug/73414y1y/arm64-v8a
