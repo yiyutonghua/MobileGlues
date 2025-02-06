@@ -280,8 +280,9 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     auto& tex = g_textures[bound_texture];
     tex.internal_format = internalFormat;
     tex.format = format;
+    LOG_D("mg_glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
     internal_convert(reinterpret_cast<GLenum *>(&internalFormat), &type, &format);
-    LOG_D("glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
+    LOG_D("gles_glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
         int max1 = 4096;
