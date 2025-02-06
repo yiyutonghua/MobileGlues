@@ -153,8 +153,6 @@ void glDrawBuffers(GLsizei n, const GLenum *bufs) {
         if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] <= GL_COLOR_ATTACHMENT0 + getMaxDrawBuffers()) {
             GLenum target_attachment = GL_COLOR_ATTACHMENT0 + i;
             new_bufs[i] = target_attachment;
-            if (bufs[i] == target_attachment)
-                continue;
             rebind_framebuffer(bufs[i], target_attachment);
         } else {
             new_bufs[i] = bufs[i];
