@@ -100,9 +100,9 @@ void *proc_address(void *lib, const char *name) {
     return dlsym(lib, name);
 }
 
-void set_hard_ext() {
-    hard_ext = (hard_ext_t)calloc(1, sizeof(struct hard_ext_s));
-    
+void set_hardware() {
+    hardware = (hardware_t)calloc(1, sizeof(struct hardware_s));
+    set_es_version();
 }
 
 void init_gl_state() {
@@ -158,8 +158,6 @@ void InitGLESCapabilities() {
 
 void init_target_gles() {
     LOG_D("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    LOG_D("Initializing %s @ hard_ext", RENDERERNAME);
-    set_hard_ext();
     LOG_D("Initializing %s @ gl_state", RENDERERNAME);
     init_gl_state();
 
@@ -527,6 +525,9 @@ void init_target_gles() {
     INIT_GLES_FUNC(glTexStorage3DMultisample)
     INIT_GLES_FUNC(glMapBufferRange)
     INIT_GLES_FUNC(glBufferStorageEXT)
+    
+    LOG_D("Initializing %s @ hardware", RENDERERNAME);
+    set_hardware();
 
     InitGLESCapabilities();
     LogOpenGLExtensions();

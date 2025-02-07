@@ -6,7 +6,7 @@
 
 #define DEBUG 0
 
-hard_ext_t hard_ext;
+hardware_t hardware;
 gl_state_t gl_state;
 
 FUNC_GL_STATE_SIZEI(proxy_width)

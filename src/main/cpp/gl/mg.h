@@ -40,11 +40,11 @@ FUNC_GL_STATE_SIZEI_DECLARATION(proxy_height)
 
 FUNC_GL_STATE_ENUM_DECLARATION(proxy_intformat)
 
-struct hard_ext_s {
-    GLint maxsize;
+struct hardware_s {
+    unsigned int es_version;
 };
-typedef struct hard_ext_s *hard_ext_t;
-extern hard_ext_t hard_ext;
+typedef struct hardware_s *hardware_t;
+extern hardware_t hardware;
 
 struct gl_state_s {
     GLsizei proxy_width;

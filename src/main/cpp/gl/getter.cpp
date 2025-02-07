@@ -24,7 +24,7 @@ void glGetIntegerv(GLenum pname, GLint *params) {
                 num_extensions = 0;
                 while (token) {
                     num_extensions++;
-                    token = strtok(NULL, " ");
+                    token = strtok(nullptr, " ");
                 }
                 free(copy);
             } else {
@@ -34,7 +34,7 @@ void glGetIntegerv(GLenum pname, GLint *params) {
         (*params) = num_extensions;
         return;
     }
-    LOAD_GLES(glGetIntegerv, void, GLenum pname, GLint *params);
+    LOAD_GLES_FUNC(glGetIntegerv);
     gles_glGetIntegerv(pname, params);
     LOG_D("  -> %d",*params);
     CHECK_GL_ERROR
@@ -42,8 +42,12 @@ void glGetIntegerv(GLenum pname, GLint *params) {
 
 GLenum glGetError() {
     LOG();
-    LOAD_GLES(glGetError, GLenum);
-    return gles_glGetError();
+    LOAD_GLES_FUNC(glGetError);
+    GLuint err = gles_glGetError();
+    if (err != GL_NO_ERROR) {
+        LOG_E(" -> %d", err);
+    }
+    return err;
 }
 
 static std::string es_ext;
@@ -80,9 +84,58 @@ void AppendExtension(const char* ext) {
     es_ext += ' ';
 }
 
+const char* getBeforeThirdSpace(const char* str) {
+    static char buffer[256];
+    int spaceCount = 0;
+    const char* start = str;
+    while (*str) {
+        if (*str == ' ') {
+            spaceCount++;
+            if (spaceCount == 3) break;
+        }
+        str++;
+    }
+    int len = str - start;
+    if (len >= sizeof(buffer)) len = sizeof(buffer) - 1;
+    strncpy(buffer, start, len);
+    buffer[len] = '\0';
+    return buffer;
+}
+
+
+const char* getGpuName() {
+    LOAD_GLES_FUNC(glGetString);
+    const char *gpuName = (const char *) gles_glGetString(GL_RENDERER);
+    return gpuName ? gpuName : "<unknown>";
+}
+
+void set_es_version() {
+    LOAD_GLES_FUNC(glGetString);
+    const char* ESVersion = getBeforeThirdSpace((const char*)gles_glGetString(GL_VERSION));
+    int major, minor;
+
+    if (sscanf(ESVersion, "OpenGL ES %d.%d", &major, &minor) == 2) {
+        hardware->es_version = major * 100 + minor * 10;
+    } else {
+        hardware->es_version = 300;
+    }
+    LOG_I("OpenGL ES Version: %s (%d)", ESVersion, hardware->es_version);
+    if (hardware->es_version < 300) {
+        LOG_I("OpenGL ES version is lower than 3.0! This version is not supported!");
+        LOG_I("Disable glslang and SPIRV-Cross. Using vgpu to process all shaders!");
+    }
+}
+
+const char* getGLESName() {
+    LOAD_GLES_FUNC(glGetString);
+    char* ESVersion = (char*)gles_glGetString(GL_VERSION);
+    return getBeforeThirdSpace(ESVersion);
+}
+
+static std::string rendererString;
 const GLubyte * glGetString( GLenum name ) {
     LOG();
-    LOAD_GLES(glGetString, const GLubyte *, GLenum);
+    LOAD_GLES_FUNC(glGetString);
     /* Feature in the Future
      * Advanced OpenGL driver: NV renderer.
     switch (name) {
@@ -103,36 +156,43 @@ const GLubyte * glGetString( GLenum name ) {
             return (const GLubyte *) "Swung0x48, BZLZHH, Tungsten";
         case GL_VERSION:
             return (const GLubyte *) "4.0.0 MobileGlues";
-        case GL_RENDERER:
-            return gles_glGetString(GL_RENDERER);
+        case GL_RENDERER: 
+        {
+            if (rendererString == std::string("")) {
+                const char* gpuName = getGpuName();
+                const char* glesName = getGLESName();
+                rendererString = std::string(gpuName) + " | " + std::string(glesName);
+            }
+            return (const GLubyte *)rendererString.c_str();
+        }
         case GL_SHADING_LANGUAGE_VERSION:
             return (const GLubyte *) "4.50 MobileGlues with glslang and SPIRV-Cross";
         case GL_EXTENSIONS:
             return (const GLubyte *) GetExtensionsList();
+        default:
+            return gles_glGetString(name);
     }
-
-    return gles_glGetString(name);
 }
 
 const GLubyte * glGetStringi(GLenum name, GLuint index) {
     LOG();
-    LOAD_GLES(glGetStringi, const GLubyte *, GLenum, GLuint);
+    LOAD_GLES_FUNC(glGetStringi);
     typedef struct {
         GLenum name;
         const char** parts;
         GLuint count;
     } StringCache;
     static StringCache caches[] = {
-            {GL_EXTENSIONS, NULL, 0},
-            {GL_VENDOR, NULL, 0},
-            {GL_VERSION, NULL, 0},
-            {GL_SHADING_LANGUAGE_VERSION, NULL, 0}
+            {GL_EXTENSIONS, nullptr, 0},
+            {GL_VENDOR, nullptr, 0},
+            {GL_VERSION, nullptr, 0},
+            {GL_SHADING_LANGUAGE_VERSION, nullptr, 0}
     };
     static int initialized = 0;
     if (!initialized) {
-        for (int i = 0; i < sizeof(caches)/sizeof(StringCache); i++) {
-            GLenum target = caches[i].name;
-            const GLubyte* str = NULL;
+        for (auto & cache : caches) {
+            GLenum target = cache.name;
+            const GLubyte* str = nullptr;
             const char* delimiter = " ";
 
             switch (target) {
@@ -150,6 +210,8 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
                 case GL_EXTENSIONS:
                     str = glGetString(GL_EXTENSIONS);
                     break;
+                default:
+                    return gles_glGetStringi(name, index);
             }
 
             if (!str) continue;
@@ -157,23 +219,23 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
             char* copy = strdup((const char*)str);
             char* token = strtok(copy, delimiter);
             while (token) {
-                caches[i].parts = (const char**)realloc(caches[i].parts, (caches[i].count + 1) * sizeof(char*));
-                caches[i].parts[caches[i].count++] = strdup(token);
-                token = strtok(NULL, delimiter);
+                cache.parts = (const char**)realloc(cache.parts, (cache.count + 1) * sizeof(char*));
+                cache.parts[cache.count++] = strdup(token);
+                token = strtok(nullptr, delimiter);
             }
             free(copy);
         }
         initialized = 1;
     }
 
-    for (int i = 0; i < sizeof(caches)/sizeof(StringCache); i++) {
-        if (caches[i].name == name) {
-            if (index >= caches[i].count) {
-                return NULL;
+    for (auto & cache : caches) {
+        if (cache.name == name) {
+            if (index >= cache.count) {
+                return nullptr;
             }
-            return (const GLubyte*)caches[i].parts[index];
+            return (const GLubyte*)cache.parts[index];
         }
     }
 
-    return NULL;
+    return nullptr;
 }

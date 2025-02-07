@@ -550,9 +550,10 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     return result_essl;
 }
 
-char * GLSLtoGLSLES_1(char* glsl_code, GLenum glsl_type) {
+char * GLSLtoGLSLES_1(char* glsl_code, GLenum glsl_type, unsigned int esversion) {
     LOG_W("Warning: use glsl optimizer to convert shader.")
-    char * result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? 35633 : 35632, 460LL, 320);
+    if (esversion < 300) esversion = 300;
+    char * result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? 35633 : 35632, 460LL, esversion);
     char * ret = (char*)malloc(sizeof(char) * strlen(result) + 1);
     strcpy(ret, result);
     return ret;

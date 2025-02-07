@@ -147,10 +147,14 @@ char* process_uniform_declarations(char* glslCode) {
             modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
         }
 
-        if (modifiedCodeIndex >= maxLength - 1) {
+        while (modifiedCodeIndex >= maxLength - 1) {
             maxLength *= 2;
-            modifiedGlslCode = (char*)realloc(modifiedGlslCode, maxLength);
-            if (!modifiedGlslCode) return NULL;
+            char* temp = (char*)realloc(modifiedGlslCode, maxLength);
+            if (!temp) {
+                free(modifiedGlslCode);
+                return NULL;
+            }
+            modifiedGlslCode = temp;
         }
     }
 
@@ -158,13 +162,14 @@ char* process_uniform_declarations(char* glslCode) {
     return modifiedGlslCode;
 }
 
-bool can_run_essl3(int esversion, const char *glsl) {
-    int glsl_version;
-
+bool can_run_essl3(unsigned int esversion, const char *glsl) {
     if (strncmp(glsl, "#version 100", 12) == 0) {
-        return true;
-    } else if (strncmp(glsl, "#version 300 es", 15) == 0) {
-        return true;
+        return true; 
+    }
+
+    unsigned int glsl_version = 0;
+    if (strncmp(glsl, "#version 300 es", 15) == 0) {
+        glsl_version = 300;
     } else if (strncmp(glsl, "#version 310 es", 15) == 0) {
         glsl_version = 310;
     } else if (strncmp(glsl, "#version 320 es", 15) == 0) {
@@ -172,17 +177,13 @@ bool can_run_essl3(int esversion, const char *glsl) {
     } else {
         return false;
     }
-
-    if (esversion >= glsl_version) {
-        return true;
-    } else {
-        return false;
-    }
+    return esversion >= glsl_version;
 }
+
 
 bool is_direct_shader(char *glsl)
 {
-    bool es3_ability = can_run_essl3(320, glsl); //Assuming it is 320
+    bool es3_ability = can_run_essl3(hardware->es_version, glsl);
     return es3_ability;
 }
 
@@ -220,7 +221,11 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
             LOG_D("%s", source);
             GLint shaderType;
             glGetShaderiv(shader, GL_SHADER_TYPE, &shaderType);
-            converted = glsl_version<140?GLSLtoGLSLES_1(source, shaderType):GLSLtoGLSLES_2(source,shaderType,320);
+            converted = glsl_version<140?GLSLtoGLSLES_1(source, shaderType, hardware->es_version):GLSLtoGLSLES_2(source,shaderType,hardware->es_version);
+            if (!converted) {
+                LOG_E("Failed to convert shader %d.", shader);
+                return;
+            }
             converted = process_uniform_declarations(converted);
             LOG_D("\n[INFO] [Shader] Converted Shader source: \n%s", converted);
         }
