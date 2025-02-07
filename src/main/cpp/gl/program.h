@@ -8,7 +8,7 @@
 #include "gl.h"
 
 GLAPI GLAPIENTRY void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name);
-
 GLAPI GLAPIENTRY void glLinkProgram(GLuint program);
+GLAPI GLAPIENTRY void glGetProgramiv(GLuint program, GLenum pname, GLint *params);
 
 #endif //MOBILEGLUES_PROGRAM_H

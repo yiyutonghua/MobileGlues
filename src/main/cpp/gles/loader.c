@@ -93,8 +93,6 @@ void load_libs() {
     egl = open_lib(egl_lib, egl_override);
 }
 
-void *(*gles_getProcAddress)(const char *name);
-
 void *proc_address(void *lib, const char *name) {
 //    printf("proc_address(%s)\n", name);
     return dlsym(lib, name);

@@ -29,4 +29,6 @@ GLAPI GLAPIENTRY void glDrawBuffer(GLenum buf);
 
 GLAPI GLAPIENTRY void glDrawBuffers(GLsizei n, const GLenum *bufs);
 
+GLAPI GLAPIENTRY GLenum glCheckFramebufferStatus(GLenum target);
+
 #endif //MOBILEGLUES_FRAMEBUFFER_H

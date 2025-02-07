@@ -1,5 +1,5 @@
-#ifndef _MOBILEGLUES_LOADER_H_
-#define _MOBILEGLUES_LOADER_H_
+#ifndef MOBILEGLUES_GLES_LOADER_H_
+#define MOBILEGLUES_GLES_LOADER_H_
 
 #include <stdbool.h>
 #include "../gl/log.h"
@@ -14,7 +14,6 @@
 extern "C" {
 #endif
 
-extern void *(*gles_getProcAddress)(const char *name);
 void *proc_address(void *lib, const char *name);
 extern void *gles, *egl;
 
@@ -129,8 +128,7 @@ static name##_PTR egl_##name = NULL; \
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
 GLAPI GLAPIENTRY type name##ARB(__VA_ARGS__) __attribute__((alias(#name))); \
 GLAPI GLAPIENTRY type name(__VA_ARGS__)  {                                  \
-typedef type (*name##_PTR)(__VA_ARGS__);                                    \
-name##_PTR gles_##name = NULL;
+LOAD_GLES_FUNC(name)
 
 #if GLOBAL_DEBUG
 #define NATIVE_FUNCTION_END(type,name,...)                                  \
@@ -180,4 +178,4 @@ GLAPI GLAPIENTRY type name(__VA_ARGS__) {
     LOG_W("No function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);         \
 }
 
-#endif // _MOBILEGLUES_LOADER_H_
+#endif // MOBILEGLUES_GLES_LOADER_H_

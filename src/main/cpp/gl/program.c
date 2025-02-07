@@ -120,3 +120,18 @@ void glLinkProgram(GLuint program) {
 
     CHECK_GL_ERROR
 }
+
+void glGetProgramiv(GLuint program, GLenum pname, GLint *params) {
+    LOG()
+    LOAD_GLES_FUNC(glGetProgramiv)
+    gles_glGetProgramiv(program, pname, params);
+    if(config_get_int("no_error") >= 1 && (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS) && !*params) {
+        GLchar infoLog[512];
+        LOAD_GLES_FUNC(glGetShaderInfoLog)
+        gles_glGetShaderInfoLog(program, 512, NULL, infoLog);
+        LOG_W_FORCE("Program %d linking failed: \n%s", program, infoLog);
+        LOG_W_FORCE("Now try to cheat.");
+        *params = GL_TRUE;
+    }
+    CHECK_GL_ERROR
+}

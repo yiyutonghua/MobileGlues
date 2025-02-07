@@ -13,8 +13,6 @@ FUNC_GL_STATE_SIZEI(proxy_width)
 FUNC_GL_STATE_SIZEI(proxy_height)
 FUNC_GL_STATE_ENUM(proxy_intformat)
 
-#define LOG_FILE_PATH "/sdcard/FCL/log/mg.log"
-
 FILE* file;
 
 void start_log() {

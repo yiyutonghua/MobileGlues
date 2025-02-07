@@ -16,6 +16,7 @@
 #include "../gles/loader.h"
 #include "../includes.h"
 #include "glsl/glsl_for_es.h"
+#include "../config/config.h"
 
 #ifdef __cplusplus
 extern "C" {

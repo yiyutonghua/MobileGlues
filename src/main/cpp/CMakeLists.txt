@@ -41,6 +41,8 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         egl/egl.c
         egl/loader.c
         gles/loader.c
+        config/cJSON.c
+        config/config.c
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ./includes)

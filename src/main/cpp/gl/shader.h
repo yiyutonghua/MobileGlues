@@ -15,5 +15,6 @@ struct shader_t {
 extern struct shader_t shaderInfo;
 
 GLAPI GLAPIENTRY void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, const GLint *length);
+GLAPI GLAPIENTRY void glGetShaderiv(GLuint shader, GLenum pname, GLint *params);
 
 #endif //FOLD_CRAFT_LAUNCHER_GL_LOADER_H

@@ -3,6 +3,8 @@
 //
 
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include "includes.h"
 #include "gl/gl.h"
 #include "egl/egl.h"
@@ -18,17 +20,7 @@ extern "C" {
 #endif
 
 extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
-void load_libs();
-
-void proc_init() {
-    LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    clear_log();
-    start_log();
-
-    load_libs();
-    init_target_egl();
-    init_target_gles();
-
+void init_libshaderconv() {
     const char *shaderconv_lib = "libshaderconv";
     const char *func_name = "MesaConvertShader";
     const char *glslconv_name[] = {shaderconv_lib, NULL};
@@ -44,6 +36,29 @@ void proc_init() {
             LOG_D("failed to load %s\n", shaderconv_lib);
         }
     }
+}
+
+void init_config() {
+    if(mkdir(MG_DIRECTORY_PATH, 0755) != 0 && errno != EEXIST) {
+        LOG_E("Error creating MG directory.\n")
+        return;
+    }
+    config_refresh();
+}
+
+void load_libs();
+void proc_init() {
+    init_config();
+    clear_log();
+    start_log();
+    LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
+
+    load_libs();
+    init_target_egl();
+    init_target_gles();
+
+    init_libshaderconv();
+    
 
     g_initialized = 1;
 }
