@@ -29,7 +29,7 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
         char *result = NULL;
 
         if (regcomp(&regex, targetPattern, REG_EXTENDED) != 0) {
-            fprintf(stderr, "Failed to compile regex\n");
+            LOG_E("Failed to compile regex\n");
             return;
         }
 
@@ -38,7 +38,7 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
             size_t matchLen = pmatch[0].rm_eo - pmatch[0].rm_so;
             origin = (char *)malloc(matchLen + 1);
             if (!origin) {
-                fprintf(stderr, "Memory allocation failed\n");
+                LOG_E("Memory allocation failed\n");
                 break;
             }
             strncpy(origin, searchStart + pmatch[0].rm_so, matchLen);
@@ -47,7 +47,7 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
             size_t resultLen = strlen(origin) + 30; // "layout (location = )" + colorNumber + null terminator
             result = (char *)malloc(resultLen);
             if (!result) {
-                fprintf(stderr, "Memory allocation failed\n");
+                LOG_E("Memory allocation failed\n");
                 free(origin);
                 break;
             }
@@ -61,7 +61,7 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
 
                 char *newConverted = (char *)malloc(newLen);
                 if (!newConverted) {
-                    fprintf(stderr, "Memory allocation failed\n");
+                    LOG_E("Memory allocation failed\n");
                     free(origin);
                     free(result);
                     break;

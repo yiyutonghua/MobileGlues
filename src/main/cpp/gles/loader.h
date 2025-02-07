@@ -116,9 +116,9 @@ static name##_PTR egl_##name = NULL; \
         ERR = gles_glGetError();                                           \
     }
 #else
-#define CHECK_GL_ERROR
-#define INIT_CHECK_GL_ERROR
-#define CHECK_GL_ERROR_NO_INIT
+#define CHECK_GL_ERROR {}
+#define INIT_CHECK_GL_ERROR  {}
+#define CHECK_GL_ERROR_NO_INIT {}
 #endif
 
 #define INIT_CHECK_GL_ERROR_FORCE                                           \
