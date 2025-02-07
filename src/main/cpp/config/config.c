@@ -6,6 +6,8 @@
 #include "cJSON.h"
 #include "../gl/log.h"
 
+#define DEBUG 0
+
 static cJSON *config_json = NULL;
 
 void config_refresh() {
