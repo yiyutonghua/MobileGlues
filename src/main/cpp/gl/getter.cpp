@@ -163,7 +163,7 @@ const GLubyte * glGetString( GLenum name ) {
                 std::string realVersion = " " + std::to_string(MAJOR) + "." +
                                       std::to_string(MINOR) + "." +
                                       std::to_string(REVISION);
-                std::string suffix = version_type == VERSION_ALPHA ? " | §4§l您如果在公开平台看到这一提示, 则发布者已违规!§r" :
+                std::string suffix = version_type == VERSION_ALPHA ? " | §4§l如果您在公开平台看到这一提示, 则发布者已违规!§r" :
                                      realVersion + std::string(version_type == VERSION_DEVELOPMENT?".Dev":"");
                 versionString += suffix;
             }
