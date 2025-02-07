@@ -131,6 +131,7 @@ void InitGLESCapabilities() {
     InitGLESBaseExtensions();
 
     int has_GL_EXT_buffer_storage = 0;
+    int has_GL_ARB_timer_query = 0;
     LOAD_GLES_FUNC(glGetStringi)
     LOAD_GLES_FUNC(glGetIntegerv)
 
@@ -143,6 +144,8 @@ void InitGLESCapabilities() {
             LOG_I("%s", (const char*)extension);
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
                 has_GL_EXT_buffer_storage = 1;
+            } else if (strcmp(extension, "GL_EXT_disjoint_timer_query") == 0) {
+                has_GL_ARB_timer_query = 1;
             }
         } else {
             LOG_I("(null)");
@@ -151,6 +154,11 @@ void InitGLESCapabilities() {
 
     if (has_GL_EXT_buffer_storage) {
         AppendExtension("GL_ARB_buffer_storage");
+    }
+
+    if (has_GL_ARB_timer_query) {
+        AppendExtension("GL_ARB_timer_query");
+        AppendExtension("GL_EXT_timer_query");
     }
 }
 
