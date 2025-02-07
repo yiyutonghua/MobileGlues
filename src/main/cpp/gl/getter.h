@@ -9,6 +9,7 @@
 #include "loader.h"
 #include "../gles/loader.h"
 #include "mg.h"
+#include "../version.h"
 
 #ifndef MOBILEGLUES_GETTER_H
 #define MOBILEGLUES_GETTER_H

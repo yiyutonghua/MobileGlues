@@ -136,6 +136,7 @@ const char* getGLESName() {
 }
 
 static std::string rendererString;
+static std::string versionString;
 const GLubyte * glGetString( GLenum name ) {
     LOG();
     LOAD_GLES_FUNC(glGetString);
@@ -156,9 +157,19 @@ const GLubyte * glGetString( GLenum name ) {
     */
     switch (name) {
         case GL_VENDOR:
-            return (const GLubyte *) "Swung0x48, BZLZHH, Tungsten";
+            return (const GLubyte *)(std::string("Swung0x48, BZLZHH, Tungsten") + 
+            std::string(version_type == VERSION_ALPHA ? " | §c§l内测版本, 严禁任何外传!§r" : "")).c_str();
         case GL_VERSION:
-            return (const GLubyte *) "4.0.0 MobileGlues";
+            if (versionString == std::string("")) {
+                versionString = "4.0.0 MobileGlues";
+                std::string realVersion = " " + std::to_string(MAJOR) + "." +
+                                      std::to_string(MINOR) + "." +
+                                      std::to_string(REVISION);
+                std::string suffix = version_type == VERSION_ALPHA ? " | §4§l您如果在公开平台看到这一提示, 则发布者已违规!§r" :
+                                     realVersion + std::string(version_type == VERSION_DEVELOPMENT?".Dev":"");
+                versionString += suffix;
+            }
+            return (const GLubyte *)versionString.c_str();
         case GL_RENDERER: 
         {
             if (rendererString == std::string("")) {
