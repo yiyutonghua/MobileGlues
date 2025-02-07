@@ -374,6 +374,8 @@ GL_FUNC_TYPEDEF(void, glTexBufferRange, GLenum target, GLenum internalformat, GL
 GL_FUNC_TYPEDEF(void, glTexStorage3DMultisample, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth, GLboolean fixedsamplelocations)
 GL_FUNC_TYPEDEF(void*, glMapBufferRange, GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)
 GL_FUNC_TYPEDEF(void, glBufferStorageEXT, GLenum target, GLsizeiptr size, const void* data, GLbitfield flags)
+GL_FUNC_TYPEDEF(void, glGetQueryObjectivEXT, GLuint id, GLenum pname, GLint *params)
+GL_FUNC_TYPEDEF(void, glGetQueryObjecti64vEXT, GLuint id, GLenum pname, GLint64 *params)
 
 #define GL_FUNC_DECL(name) \
 name##_PTR name;
@@ -741,6 +743,8 @@ struct gles_func_t {
     GL_FUNC_DECL(glTexStorage3DMultisample)
     GL_FUNC_DECL(glMapBufferRange)
     GL_FUNC_DECL(glBufferStorageEXT)
+    GL_FUNC_DECL(glGetQueryObjectivEXT)
+    GL_FUNC_DECL(glGetQueryObjecti64vEXT)
 };
 
 extern struct gles_func_t g_gles_func;

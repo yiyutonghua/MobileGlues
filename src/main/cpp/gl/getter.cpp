@@ -69,6 +69,7 @@ void InitGLESBaseExtensions() {
              "GL_ARB_shading_language_100 "
              "ARB_imaging "
              "GL_ARB_draw_buffers_blend "
+             "OpenGL15 "
              "OpenGL30 "
              "OpenGL31 "
              "OpenGL32 "
@@ -76,7 +77,9 @@ void InitGLESBaseExtensions() {
              "OpenGL40 "
              //"OpenGL43 "
              //"ARB_compute_shader "
-             "GL_ARB_get_program_binary ";
+             "GL_ARB_get_program_binary "
+             "GL_ARB_timer_query "
+             "GL_EXT_timer_query ";
 }
 
 void AppendExtension(const char* ext) {
@@ -238,4 +241,18 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
     }
 
     return nullptr;
+}
+
+void glGetQueryObjectiv(GLuint id, GLenum pname, GLint* params) {
+    LOG()
+    LOAD_GLES_FUNC(glGetQueryObjectivEXT)
+
+    gles_glGetQueryObjectivEXT(id, pname, params);
+}
+
+void glGetQueryObjecti64v(GLuint id, GLenum pname, GLint64* params) {
+    LOG()
+    LOAD_GLES_FUNC(glGetQueryObjecti64vEXT)
+
+    gles_glGetQueryObjecti64vEXT(id, pname, params);
 }

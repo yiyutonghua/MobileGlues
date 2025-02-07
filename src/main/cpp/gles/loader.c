@@ -523,7 +523,9 @@ void init_target_gles() {
     INIT_GLES_FUNC(glTexStorage3DMultisample)
     INIT_GLES_FUNC(glMapBufferRange)
     INIT_GLES_FUNC(glBufferStorageEXT)
-    
+    INIT_GLES_FUNC(glGetQueryObjectivEXT)
+    INIT_GLES_FUNC(glGetQueryObjecti64vEXT)
+
     LOG_D("Initializing %s @ hardware", RENDERERNAME);
     set_hardware();
 
