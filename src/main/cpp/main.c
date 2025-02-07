@@ -9,6 +9,9 @@
 #include "egl/loader.h"
 #include "gles/loader.h"
 #include "gl/envvars.h"
+#include "gl/log.h"
+
+#define DEBUG 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,14 +34,14 @@ void proc_init() {
     const char *glslconv_name[] = {shaderconv_lib, NULL};
     void* glslconv = open_lib(glslconv_name, shaderconv_lib);
     if (glslconv == NULL) {
-        printf("%s not found\n", shaderconv_lib);
+        LOG_D("%s not found\n", shaderconv_lib);
     }
     else {
         MesaConvertShader = dlsym(glslconv, func_name);
         if (MesaConvertShader) {
-            printf("%s loaded\n", shaderconv_lib);
+            LOG_D("%s loaded\n", shaderconv_lib);
         } else {
-            printf("failed to load %s\n", shaderconv_lib);
+            LOG_D("failed to load %s\n", shaderconv_lib);
         }
     }
 

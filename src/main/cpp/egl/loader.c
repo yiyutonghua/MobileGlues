@@ -13,7 +13,7 @@
 #define DEBUG 0
 
 void init_target_egl() {
-    LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
+    LOG_D("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
     EGLDisplay eglDisplay = EGL_NO_DISPLAY;
     EGLSurface eglSurface = EGL_NO_SURFACE;
     EGLContext eglContext = EGL_NO_CONTEXT;

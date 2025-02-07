@@ -157,13 +157,13 @@ void InitGLESCapabilities() {
 }
 
 void init_target_gles() {
-    LOG_I("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    LOG_I("Initializing %s @ hard_ext", RENDERERNAME);
+    LOG_D("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
+    LOG_D("Initializing %s @ hard_ext", RENDERERNAME);
     set_hard_ext();
-    LOG_I("Initializing %s @ gl_state", RENDERERNAME);
+    LOG_D("Initializing %s @ gl_state", RENDERERNAME);
     init_gl_state();
 
-    LOG_I("Initializing %s @ init_gles_func", RENDERERNAME);
+    LOG_D("Initializing %s @ init_gles_func", RENDERERNAME);
     memset(&g_gles_func, 0, sizeof(g_gles_func));
     INIT_GLES_FUNC(glActiveTexture)
     INIT_GLES_FUNC(glAttachShader)

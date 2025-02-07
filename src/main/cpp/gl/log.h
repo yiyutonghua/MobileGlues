@@ -6,7 +6,7 @@
 
 #include "mg.h"
 
-#define GLOBAL_DEBUG 1
+#define GLOBAL_DEBUG 0
 
 #define LOG() if(DEBUG||GLOBAL_DEBUG) {__android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, "Use function: %s", __FUNCTION__);printf("Use function: %s\n", __FUNCTION__);write_log("Use function: %s\n", __FUNCTION__);}
 #define LOG_D(...) if(DEBUG||GLOBAL_DEBUG) {__android_log_print(ANDROID_LOG_DEBUG, RENDERERNAME, __VA_ARGS__);printf(__VA_ARGS__);printf("\n\n");write_log(__VA_ARGS__);}
