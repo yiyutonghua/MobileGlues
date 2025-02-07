@@ -77,9 +77,7 @@ void InitGLESBaseExtensions() {
              "OpenGL40 "
              //"OpenGL43 "
              //"ARB_compute_shader "
-             "GL_ARB_get_program_binary "
-             "GL_ARB_timer_query "
-             "GL_EXT_timer_query ";
+             "GL_ARB_get_program_binary ";
 }
 
 void AppendExtension(const char* ext) {
