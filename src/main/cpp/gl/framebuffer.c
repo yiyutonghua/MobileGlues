@@ -41,13 +41,18 @@ void rebind_framebuffer(GLenum old_attachment, GLenum target_attachment) {
 void glBindFramebuffer(GLenum target, GLuint framebuffer) {
     LOG()
 
+    INIT_CHECK_GL_ERROR
+
     LOG_D("glBindFramebuffer(0x%x, %d)", target, framebuffer)
 
     LOAD_GLES(glBindFramebuffer, void, GLenum target, GLuint framebuffer)
     gles_glBindFramebuffer(target, framebuffer);
+    CHECK_GL_ERROR_NO_INIT
 
-    if (!bound_framebuffer)
+    if (!bound_framebuffer) {
         bound_framebuffer = malloc(sizeof(struct framebuffer_t));
+        memset(bound_framebuffer, 0, sizeof(struct framebuffer_t));
+    }
 
     switch (target) {
         case GL_DRAW_FRAMEBUFFER:
@@ -68,7 +73,7 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
             break;
     }
 
-    CHECK_GL_ERROR
+    CHECK_GL_ERROR_NO_INIT
 }
 
 void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
