@@ -295,7 +295,7 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     }
     LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
     gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
-    if (tex.format == GL_BGRA && internalFormat == GL_RGBA8) {
+    if (tex.format == GL_BGRA && internalFormat == GL_RGBA8 && width <= 128 && height <= 128) {  // xaero has 64x64 tiles...hack here
         LOG_D("Detected GL_BGRA format @ tex = %d, do swizzle", bound_texture);
         if (tex.swizzle_param[0] == 0) { // assert this as never called glTexParameteri(..., GL_TEXTURE_SWIZZLE_R, ...)
             tex.swizzle_param[0] = GL_RED;
