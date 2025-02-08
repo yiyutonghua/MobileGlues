@@ -75,8 +75,8 @@ void InitGLESBaseExtensions() {
              "OpenGL32 "
              "OpenGL33 "
              "OpenGL40 "
-             //"OpenGL43 "
-             //"ARB_compute_shader "
+             "GL_ARB_shader_storage_buffer_object "
+             "GL_ARB_shader_image_load_store "
              "GL_ARB_get_program_binary ";
 }
 

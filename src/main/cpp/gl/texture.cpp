@@ -243,8 +243,6 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
 void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
     LOG();
     pname = pname_convert(pname);
-    if(pname == GL_TEXTURE_LOD_BIAS)
-        return;
     LOG_D("glTexParameterf, target: %d, pname: %d, param: %f",target, pname, param);
     LOAD_GLES(glTexParameterf, void, GLenum target, GLenum pname, GLfloat param);
     gles_glTexParameterf(target,pname, param);
@@ -780,5 +778,14 @@ void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format
     LOG_D("glReadPixels converted, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
           x, y, width, height, format, type, pixels)
     gles_glReadPixels(x, y, width, height, format, type, pixels);
+    CHECK_GL_ERROR
+}
+
+void glTexParameteri(GLenum target, GLenum pname, GLint param) {
+    LOG()
+    pname = pname_convert(pname);
+    LOG_D("glTexParameterfv, pname: %d", pname)
+    LOAD_GLES_FUNC(glTexParameteri)
+    gles_glTexParameteri(target,pname,param);
     CHECK_GL_ERROR
 }

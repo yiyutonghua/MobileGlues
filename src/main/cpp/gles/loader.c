@@ -160,6 +160,14 @@ void InitGLESCapabilities() {
         AppendExtension("GL_ARB_timer_query");
         AppendExtension("GL_EXT_timer_query");
     }
+
+    if(config_get_int("enable_OpenGL43_extension") == 1) {
+        AppendExtension("OpenGL43");
+    }
+    
+    if(config_get_int("enable_compute_shader_extension") == 1) {
+        AppendExtension("GL_ARB_compute_shader");
+    }
 }
 
 void init_target_gles() {

@@ -19,6 +19,8 @@
 extern "C" {
 #endif
 
+__attribute__((used)) const char* copyright = "Copyright (C) 2025 Swung0x48, BZLZHH, Tungsten. All rights reserved.";
+
 extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
 void init_libshaderconv() {
     const char *shaderconv_lib = "libshaderconv";
@@ -46,11 +48,16 @@ void init_config() {
     config_refresh();
 }
 
+void show_copyright() {
+    LOG_V("%s", copyright);
+}
+
 void load_libs();
 void proc_init() {
     init_config();
     clear_log();
     start_log();
+    show_copyright();
     LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
 
     load_libs();

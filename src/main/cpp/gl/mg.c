@@ -42,7 +42,9 @@ void clear_log() {
 
 GLenum pname_convert(GLenum pname){
     switch (pname) {
-        //useless now
+        // TODO: Realize GL_TEXTURE_LOD_BIAS for other devices.
+        case GL_TEXTURE_LOD_BIAS:
+            return GL_TEXTURE_LOD_BIAS_QCOM;
     }
     return pname;
 }
