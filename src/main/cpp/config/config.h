@@ -8,8 +8,10 @@ extern "C" {
 #define MG_DIRECTORY_PATH "/sdcard/MG"
 #define CONFIG_FILE_PATH MG_DIRECTORY_PATH "/config.json"
 #define LOG_FILE_PATH MG_DIRECTORY_PATH "/latest.log"
+
+extern int initialized;
     
-void config_refresh();
+int config_refresh();
 int config_get_int(char* name);
 char* config_get_string(char* name);
 void config_cleanup();

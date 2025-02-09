@@ -6,6 +6,7 @@
 #include "log.h"
 #include "shader.h"
 #include "program.h"
+#include "../config/settings.h"
 
 #define DEBUG 0
 
@@ -125,7 +126,7 @@ void glGetProgramiv(GLuint program, GLenum pname, GLint *params) {
     LOG()
     LOAD_GLES_FUNC(glGetProgramiv)
     gles_glGetProgramiv(program, pname, params);
-    if(config_get_int("enableNoError") >= 1 && (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS) && !*params) {
+    if(global_settings.ignore_error >= 1 && (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS) && !*params) {
         GLchar infoLog[512];
         LOAD_GLES_FUNC(glGetShaderInfoLog)
         gles_glGetShaderInfoLog(program, 512, NULL, infoLog);

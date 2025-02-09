@@ -12,6 +12,7 @@
 #include "gles/loader.h"
 #include "gl/envvars.h"
 #include "gl/log.h"
+#include "config/settings.h"
 
 #define DEBUG 0
 
@@ -56,6 +57,8 @@ void show_copyright() {
 void load_libs();
 void proc_init() {
     init_config();
+    init_settings();
+
     clear_log();
     start_log();
     LOG_V("Initializing %s ...", RENDERERNAME);
@@ -66,7 +69,6 @@ void proc_init() {
     init_target_gles();
 
     init_libshaderconv();
-    
 
     g_initialized = 1;
 }

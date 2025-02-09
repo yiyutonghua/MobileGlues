@@ -10,6 +10,7 @@
 #include "../gles/loader.h"
 #include "../includes.h"
 #include "glsl/glsl_for_es.h"
+#include "../config/settings.h"
 
 #define DEBUG 0
 
@@ -246,7 +247,7 @@ void glGetShaderiv(GLuint shader, GLenum pname, GLint *params) {
     LOG()
     LOAD_GLES_FUNC(glGetShaderiv);
     gles_glGetShaderiv(shader, pname, params);
-    if(config_get_int("enableNoError") >= 1 && pname == GL_COMPILE_STATUS && !*params) {
+    if(global_settings.ignore_error >= 1 && pname == GL_COMPILE_STATUS && !*params) {
         GLchar infoLog[512];
         LOAD_GLES_FUNC(glGetShaderInfoLog);
         gles_glGetShaderInfoLog(shader, 512, NULL, infoLog);

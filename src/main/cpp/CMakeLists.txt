@@ -43,6 +43,8 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gles/loader.c
         config/cJSON.c
         config/config.c
+        config/gpu_utils.c
+        config/settings.c
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ./includes)
@@ -53,6 +55,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libshaderconv.so
         android
         log
+        EGL
+        vulkan
 )
 
 target_include_directories(mobileglues PUBLIC

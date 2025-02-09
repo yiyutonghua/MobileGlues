@@ -15,6 +15,7 @@
 #include "../gl/mg.h"
 #include "../gl/buffer.h"
 #include "../gl/getter.h"
+#include "../config/settings.h"
 
 #define DEBUG 0
 
@@ -56,6 +57,9 @@ static const char *egl_lib[] = {
         NULL
 };
 
+const char* GLES_ANGLE = "libGLESv2_angle.so";
+const char* EGL_ANGLE = "libEGL_angle.so";
+
 void *open_lib(const char **names, const char *override) {
     void *lib = NULL;
 
@@ -87,8 +91,8 @@ void load_libs() {
     static int first = 1;
     if (! first) return;
     first = 0;
-    const char *gles_override = GetEnvVar("LIBGL_GLES");
-    const char *egl_override = GetEnvVar("LIBGL_EGL");
+    const char *gles_override = global_settings.angle ? GLES_ANGLE : NULL;
+    const char *egl_override = global_settings.angle ? EGL_ANGLE : NULL;
     gles = open_lib(gles3_lib, gles_override);
     egl = open_lib(egl_lib, egl_override);
 }
@@ -161,11 +165,11 @@ void InitGLESCapabilities() {
         AppendExtension("GL_EXT_timer_query");
     }
 
-    if(config_get_int("enableExtGL43") == 1) {
+    if(global_settings.ext_gl43) {
         AppendExtension("OpenGL43");
     }
     
-    if(config_get_int("enableExtComputeShader") == 1) {
+    if(global_settings.ext_compute_shader) {
         AppendExtension("GL_ARB_compute_shader");
     }
 }
