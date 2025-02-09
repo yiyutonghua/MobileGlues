@@ -57,8 +57,8 @@ void proc_init() {
     init_config();
     clear_log();
     start_log();
+    LOG_V("Initializing %s ...", RENDERERNAME);
     show_copyright();
-    LOG_V("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
 
     load_libs();
     init_target_egl();

@@ -7,7 +7,6 @@
 #include "mg.h"
 
 #define GLOBAL_DEBUG 0
-#define GLOBAL_DEBUG_FORCE_OFF 0
 
 #if GLOBAL_DEBUG_FORCE_OFF
 #define LOG()  {}

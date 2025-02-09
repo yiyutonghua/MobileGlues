@@ -171,11 +171,8 @@ void InitGLESCapabilities() {
 }
 
 void init_target_gles() {
-    LOG_D("Initializing %s @ %s", RENDERERNAME, __FUNCTION__);
-    LOG_D("Initializing %s @ gl_state", RENDERERNAME);
     init_gl_state();
 
-    LOG_D("Initializing %s @ init_gles_func", RENDERERNAME);
     memset(&g_gles_func, 0, sizeof(g_gles_func));
     INIT_GLES_FUNC(glActiveTexture)
     INIT_GLES_FUNC(glAttachShader)
