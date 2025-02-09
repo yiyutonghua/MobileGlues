@@ -5,7 +5,6 @@
 #include "../gl.h"
 #include "../glcorearb.h"
 #include "../log.h"
-#include "../loader.h"
 #include "../gles/loader.h"
 
 #include <string.h>
