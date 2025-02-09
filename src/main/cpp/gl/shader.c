@@ -246,7 +246,7 @@ void glGetShaderiv(GLuint shader, GLenum pname, GLint *params) {
     LOG()
     LOAD_GLES_FUNC(glGetShaderiv);
     gles_glGetShaderiv(shader, pname, params);
-    if(config_get_int("no_error") >= 1 && pname == GL_COMPILE_STATUS && !*params) {
+    if(config_get_int("enableNoError") >= 1 && pname == GL_COMPILE_STATUS && !*params) {
         GLchar infoLog[512];
         LOAD_GLES_FUNC(glGetShaderInfoLog);
         gles_glGetShaderInfoLog(shader, 512, NULL, infoLog);

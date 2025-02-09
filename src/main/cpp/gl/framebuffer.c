@@ -174,7 +174,7 @@ GLenum glCheckFramebufferStatus(GLenum target) {
     LOG()
     LOAD_GLES_FUNC(glCheckFramebufferStatus)
     GLenum status = gles_glCheckFramebufferStatus(target);
-    if(config_get_int("no_error") >= 2 && status != GL_FRAMEBUFFER_COMPLETE) {
+    if(config_get_int("enableNoError") >= 2 && status != GL_FRAMEBUFFER_COMPLETE) {
         LOG_W_FORCE("Framebuffer %d isn't GL_FRAMEBUFFER_COMPLETE: %d", target, status);
         LOG_W_FORCE("Now try to cheat.");
         return GL_FRAMEBUFFER_COMPLETE;

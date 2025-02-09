@@ -137,18 +137,18 @@ void InitGLESCapabilities() {
 
     GLint num_es_extensions = 0;
     gles_glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
-    LOG_I("Detected %d OpenGL ES extensions.", num_es_extensions);
+    LOG_D("Detected %d OpenGL ES extensions.", num_es_extensions);
     for (GLint i = 0; i < num_es_extensions; ++i) {
         const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
-            LOG_I("%s", (const char*)extension);
+            LOG_D("%s", (const char*)extension);
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
                 has_GL_EXT_buffer_storage = 1;
             } else if (strcmp(extension, "GL_EXT_disjoint_timer_query") == 0) {
                 has_GL_ARB_timer_query = 1;
             }
         } else {
-            LOG_I("(null)");
+            LOG_D("(null)");
         }
     }
 

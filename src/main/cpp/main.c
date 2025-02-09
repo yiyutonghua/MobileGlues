@@ -49,7 +49,8 @@ void init_config() {
 }
 
 void show_copyright() {
-    LOG_V("%s", copyright);
+    LOG_V("MobileGlues Copyright: ");
+    LOG_V("  %s", copyright);
 }
 
 void load_libs();
