@@ -53,12 +53,17 @@ void init_settings() {
         enableExtComputeShader = 0;
     }
 
+    const char* gpu = getGPUInfo();
+    LOG_D("GPU: %s", gpu);
+
     if (enableANGLE == 1) {
-        global_settings.angle = (isAdreno740() || !hasVulkan13()) ? 0 : 1;
+        global_settings.angle = (isAdreno740(gpu) || !hasVulkan13()) ? 0 : 1;
     } else if (enableANGLE == 2 || enableANGLE == 3) {
         global_settings.angle = enableANGLE - 2;
     } else {
-        global_settings.angle = isAdreno830() ? 1 : 0;
+        int is830 = isAdreno830(gpu);
+        LOG_D("Is Adreno 830? = %s", is830 ? "true" : "false")
+        global_settings.angle = is830 ? 1 : 0;
     }
     if (global_settings.angle) {
         setenv("LIBGL_GLES", "libGLESv2_angle.so", 1);

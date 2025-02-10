@@ -57,10 +57,12 @@ void show_copyright() {
 void load_libs();
 void proc_init() {
     init_config();
-    init_settings();
 
     clear_log();
     start_log();
+
+    init_settings();
+
     LOG_V("Initializing %s ...", RENDERERNAME);
     show_copyright();
 

@@ -66,15 +66,15 @@ const char* getGPUInfo() {
     return renderer;
 }
 
-int isAdreno740() {
-    const char* gpu = getGPUInfo();
+int isAdreno740(const char* gpu) {
+//    const char* gpu = getGPUInfo();
     if (!gpu)
         return 0;
     return strstr(gpu, "Adreno") && strstr(gpu, "740");
 }
 
-int isAdreno830() {
-    const char* gpu = getGPUInfo();
+int isAdreno830(const char* gpu) {
+//    const char* gpu = getGPUInfo();
     if (!gpu)
         return 0;
     return strstr(gpu, "Adreno") && strstr(gpu, "830");
