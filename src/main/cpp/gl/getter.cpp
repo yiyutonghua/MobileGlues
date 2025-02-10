@@ -3,6 +3,7 @@
 //
 
 #include "getter.h"
+#include "../config/settings.h"
 #include <string>
 
 #define DEBUG 0
@@ -45,7 +46,14 @@ GLenum glGetError() {
     LOAD_GLES_FUNC(glGetError);
     GLuint err = gles_glGetError();
     if (err != GL_NO_ERROR) {
-        LOG_E(" -> %d", err);
+        if(global_settings.ignore_error >= 2) {
+            // no logging without DEBUG
+            LOG_W("glGetError\n -> %d", err)
+            LOG_W("Now try to cheat.")
+            return GL_NO_ERROR;
+        } else {
+            LOG_E(" -> %d", err)
+        }
     }
     return err;
 }
