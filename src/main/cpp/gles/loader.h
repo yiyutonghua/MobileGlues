@@ -178,4 +178,12 @@ GLAPI GLAPIENTRY type name(__VA_ARGS__) {
     LOG_W("No function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);         \
 }
 
+struct gles_caps_t {
+    int GL_EXT_buffer_storage;
+    int GL_EXT_disjoint_timer_query;
+    int GL_QCOM_texture_lod_bias;
+};
+
+extern struct gles_caps_t g_gles_caps;
+
 #endif // MOBILEGLUES_GLES_LOADER_H_

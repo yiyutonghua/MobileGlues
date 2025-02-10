@@ -244,6 +244,12 @@ void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
     LOG();
     pname = pname_convert(pname);
     LOG_D("glTexParameterf, target: %d, pname: %d, param: %f",target, pname, param);
+
+    if (pname == GL_TEXTURE_LOD_BIAS_QCOM && !g_gles_caps.GL_QCOM_texture_lod_bias) {
+        LOG_D("Does not support GL_QCOM_texture_lod_bias, skipped!")
+        return;
+    }
+
     LOAD_GLES(glTexParameterf, void, GLenum target, GLenum pname, GLfloat param);
     gles_glTexParameterf(target,pname, param);
     CHECK_GL_ERROR
@@ -785,6 +791,12 @@ void glTexParameteri(GLenum target, GLenum pname, GLint param) {
     LOG()
     pname = pname_convert(pname);
     LOG_D("glTexParameterfv, pname: %d", pname)
+
+    if (pname == GL_TEXTURE_LOD_BIAS_QCOM && !g_gles_caps.GL_QCOM_texture_lod_bias) {
+        LOG_D("Does not support GL_QCOM_texture_lod_bias, skipped!")
+        return;
+    }
+
     LOAD_GLES_FUNC(glTexParameteri)
     gles_glTexParameteri(target,pname,param);
     CHECK_GL_ERROR
