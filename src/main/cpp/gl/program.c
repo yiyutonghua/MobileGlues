@@ -12,81 +12,86 @@
 
 void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
     LOG()
-
     LOG_D("glBindFragDataLocation(%d, %d, %s)", program, color, name)
-
-    if (shaderInfo.converted) {
-        int len = strlen(name);
-        int tlen = len + 32;
-        char *targetPattern = malloc(sizeof(char) * tlen);
-        if (!targetPattern) {
-            LOG_E("Memory allocation failed for targetPattern")
-            return;
-        }
-        sprintf(targetPattern, "out[ ]+[A-Za-z0-9 ]+[ ]+%s", name);
-        regex_t regex;
-        regmatch_t pmatch[1];
-        char *origin = NULL;
-        char *result = NULL;
-
-        if (regcomp(&regex, targetPattern, REG_EXTENDED) != 0) {
-            LOG_E("Failed to compile regex\n");
-            return;
-        }
-
-        char *searchStart = shaderInfo.converted;
-        while (regexec(&regex, searchStart, 1, pmatch, 0) == 0) {
-            size_t matchLen = pmatch[0].rm_eo - pmatch[0].rm_so;
-            origin = (char *)malloc(matchLen + 1);
-            if (!origin) {
-                LOG_E("Memory allocation failed\n");
-                break;
-            }
-            strncpy(origin, searchStart + pmatch[0].rm_so, matchLen);
-            origin[matchLen] = '\0';
-
-            size_t resultLen = strlen(origin) + 30; // "layout (location = )" + colorNumber + null terminator
-            result = (char *)malloc(resultLen);
-            if (!result) {
-                LOG_E("Memory allocation failed\n");
-                free(origin);
-                break;
-            }
-            snprintf(result, resultLen, "layout (location = %d) %s", color, origin);
-
-            char *temp = strstr(searchStart, origin);
-            if (temp) {
-                size_t prefixLen = temp - shaderInfo.converted;
-                size_t suffixLen = strlen(temp + matchLen);
-                size_t newLen = prefixLen + strlen(result) + suffixLen + 1;
-
-                char *newConverted = (char *)malloc(newLen);
-                if (!newConverted) {
-                    LOG_E("Memory allocation failed\n");
-                    free(origin);
-                    free(result);
-                    break;
-                }
-
-                strncpy(newConverted, shaderInfo.converted, prefixLen);
-                newConverted[prefixLen] = '\0';
-                strcat(newConverted, result);
-                strcat(newConverted, temp + matchLen);
-
-                strcpy(shaderInfo.converted, newConverted);
-                free(newConverted);
-            }
-
-            free(origin);
-            free(result);
-
-            searchStart += pmatch[0].rm_eo;
-        }
-
-        regfree(&regex);
-        //LOG_D("Patched shader:\n%s", shaderInfo.converted)
-        shaderInfo.frag_data_changed = 1;
+    if (g_gles_caps.GL_EXT_blend_func_extended) {
+        LOAD_GLES_FUNC(glBindFragDataLocationEXT)
+        gles_glBindFragDataLocationEXT(program, color, name);
+    } else {
+        LOG_W("Warning: No GL_EXT_blend_func_extended, skipping glBindFragDataLocation...");
     }
+    
+    //if (shaderInfo.converted) {
+    //    int len = strlen(name);
+    //    int tlen = len + 32;
+    //    char *targetPattern = malloc(sizeof(char) * tlen);
+    //    if (!targetPattern) {
+    //        LOG_E("Memory allocation failed for targetPattern")
+    //        return;
+    //    }
+    //    sprintf(targetPattern, "out[ ]+[A-Za-z0-9 ]+[ ]+%s", name);
+    //    regex_t regex;
+    //    regmatch_t pmatch[1];
+    //    char *origin = NULL;
+    //    char *result = NULL;
+    //
+    //    if (regcomp(&regex, targetPattern, REG_EXTENDED) != 0) {
+    //        LOG_E("Failed to compile regex\n");
+    //        return;
+    //    }
+    //
+    //    char *searchStart = shaderInfo.converted;
+    //    while (regexec(&regex, searchStart, 1, pmatch, 0) == 0) {
+    //        size_t matchLen = pmatch[0].rm_eo - pmatch[0].rm_so;
+    //        origin = (char *)malloc(matchLen + 1);
+    //        if (!origin) {
+    //            LOG_E("Memory allocation failed\n");
+    //            break;
+    //        }
+    //        strncpy(origin, searchStart + pmatch[0].rm_so, matchLen);
+    //        origin[matchLen] = '\0';
+    //
+    //        size_t resultLen = strlen(origin) + 30; // "layout (location = )" + colorNumber + null terminator
+    //        result = (char *)malloc(resultLen);
+    //        if (!result) {
+    //            LOG_E("Memory allocation failed\n");
+    //            free(origin);
+    //            break;
+    //        }
+    //        snprintf(result, resultLen, "layout (location = %d) %s", color, origin);
+    //
+    //        char *temp = strstr(searchStart, origin);
+    //        if (temp) {
+    //            size_t prefixLen = temp - shaderInfo.converted;
+    //            size_t suffixLen = strlen(temp + matchLen);
+    //            size_t newLen = prefixLen + strlen(result) + suffixLen + 1;
+    //
+    //            char *newConverted = (char *)malloc(newLen);
+    //            if (!newConverted) {
+    //                LOG_E("Memory allocation failed\n");
+    //                free(origin);
+    //                free(result);
+    //                break;
+    //            }
+    //
+    //            strncpy(newConverted, shaderInfo.converted, prefixLen);
+    //            newConverted[prefixLen] = '\0';
+    //            strcat(newConverted, result);
+    //            strcat(newConverted, temp + matchLen);
+    //
+    //            strcpy(shaderInfo.converted, newConverted);
+    //            free(newConverted);
+    //        }
+    //
+    //        free(origin);
+    //        free(result);
+    //
+    //        searchStart += pmatch[0].rm_eo;
+    //    }
+    //
+    //    regfree(&regex);
+    //    //LOG_D("Patched shader:\n%s", shaderInfo.converted)
+    //    shaderInfo.frag_data_changed = 1;
+    //}
 }
 
 void glLinkProgram(GLuint program) {

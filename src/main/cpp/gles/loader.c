@@ -157,7 +157,10 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_EXT_disjoint_timer_query = 1;
             } else if (strcmp(extension, "GL_QCOM_texture_lod_bias") == 0) {
                 g_gles_caps.GL_QCOM_texture_lod_bias = 1;
+            } else if (strcmp(extension, "GL_EXT_blend_func_extended") == 0) {
+                g_gles_caps.GL_EXT_blend_func_extended = 1;
             }
+            
         } else {
             LOG_D("(null)");
         }
@@ -549,6 +552,7 @@ void init_target_gles() {
     INIT_GLES_FUNC(glBufferStorageEXT)
     INIT_GLES_FUNC(glGetQueryObjectivEXT)
     INIT_GLES_FUNC(glGetQueryObjecti64vEXT)
+    INIT_GLES_FUNC(glBindFragDataLocationEXT)
 
     LOG_D("Initializing %s @ hardware", RENDERERNAME);
     set_hardware();

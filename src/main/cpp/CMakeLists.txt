@@ -37,6 +37,8 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         gl/buffer.cpp
         gl/getter.cpp
         gl/glsl/glsl_for_es.cpp
+        gl/glsl/cache.cpp
+        gl/glsl/preConvertedGlsl.cpp
         glx/lookup.c
         egl/egl.c
         egl/loader.c
@@ -53,6 +55,18 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libspirv-cross-c-shared.so
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libshaderconv.so
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libGenericCodeGen.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang-default-resource-limits.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libMachineIndependent.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libOSDependent.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools-diff.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools-link.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools-lint.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools-opt.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools-reduce.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV-Tools.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPIRV.a
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libSPVRemapper.a
         android
         log
         EGL

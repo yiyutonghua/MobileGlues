@@ -85,6 +85,7 @@ void InitGLESBaseExtensions() {
              "OpenGL40 "
              "GL_ARB_shader_storage_buffer_object "
              "GL_ARB_shader_image_load_store "
+             "GL_ARB_clear_texture "
              "GL_ARB_get_program_binary ";
 }
 
@@ -171,8 +172,8 @@ const GLubyte * glGetString( GLenum name ) {
                 std::string realVersion = " " + std::to_string(MAJOR) + "." +
                                       std::to_string(MINOR) + "." +
                                       std::to_string(REVISION);
-                std::string suffix = version_type == VERSION_ALPHA ? " | §4§l如果您在公开平台看到这一提示, 则发布者已违规!§r" :
-                                     realVersion + std::string(version_type == VERSION_DEVELOPMENT?".Dev":"");
+                std::string suffix = realVersion + (version_type == VERSION_ALPHA ? " | §4§l如果您在公开平台看到这一提示, 则发布者已违规!§r" :
+                                     std::string(version_type == VERSION_DEVELOPMENT?".Dev":""));
                 versionString += suffix;
             }
             return (const GLubyte *)versionString.c_str();

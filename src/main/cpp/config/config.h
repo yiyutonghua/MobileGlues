@@ -8,6 +8,7 @@ extern "C" {
 #define MG_DIRECTORY_PATH "/sdcard/MG"
 #define CONFIG_FILE_PATH MG_DIRECTORY_PATH "/config.json"
 #define LOG_FILE_PATH MG_DIRECTORY_PATH "/latest.log"
+#define GLSL_CACHE_FILE_PATH MG_DIRECTORY_PATH "/glsl_cache.tmp"
 
 extern int initialized;
     

@@ -25,6 +25,7 @@ void init_settings() {
     int enableNoError = success ? config_get_int("enableNoError") : 0;
     int enableExtGL43 = success ? config_get_int("enableExtGL43") : 0;
     int enableExtComputeShader = success ? config_get_int("enableExtComputeShader") : 0;
+    int maxGlslCacheSize = success ? config_get_int("maxGlslCacheSize") * 1024 * 1024 : 0;
 
     if (enableANGLE < 0 || enableANGLE > 3)
         enableANGLE = 0;
@@ -51,6 +52,7 @@ void init_settings() {
         enableNoError = 0;
         enableExtGL43 = 0;
         enableExtComputeShader = 0;
+        maxGlslCacheSize = 0;
     }
 
     const char* gpu = getGPUInfo();
@@ -79,4 +81,6 @@ void init_settings() {
     global_settings.ext_gl43 = enableExtGL43;
 
     global_settings.ext_compute_shader = enableExtComputeShader;
+    
+    global_settings.maxGlslCacheSize = maxGlslCacheSize;
 }

@@ -182,6 +182,7 @@ struct gles_caps_t {
     int GL_EXT_buffer_storage;
     int GL_EXT_disjoint_timer_query;
     int GL_QCOM_texture_lod_bias;
+    int GL_EXT_blend_func_extended;
 };
 
 extern struct gles_caps_t g_gles_caps;

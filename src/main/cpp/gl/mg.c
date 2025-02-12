@@ -1,7 +1,8 @@
 //
-// Created by Administrator on 2025/1/27.
+// Created by BZLZHH on 2025/1/27.
 //
 
+#include <unistd.h>
 #include "mg.h"
 
 #define DEBUG 0
@@ -28,6 +29,9 @@ void write_log(const char* format, ...) {
     vfprintf(file, format, args);
     va_end(args);
     fprintf(file, "\n");
+    fflush(file);
+    int fd = fileno(file);
+    fsync(fd);
     // Todo: close file
     //fclose(file);
 }
