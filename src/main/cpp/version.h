@@ -10,7 +10,7 @@
 
 #define MAJOR 1
 #define MINOR 0
-#define REVISION 2
+#define REVISION 3
 
 const int version_type = VERSION_RELEASE;
 

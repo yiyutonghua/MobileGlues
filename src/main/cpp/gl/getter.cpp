@@ -5,6 +5,7 @@
 #include "getter.h"
 #include "../config/settings.h"
 #include <string>
+#include <vector>
 
 #define DEBUG 0
 
@@ -112,11 +113,35 @@ const char* getBeforeThirdSpace(const char* str) {
     return buffer;
 }
 
-
 const char* getGpuName() {
     LOAD_GLES_FUNC(glGetString);
     const char *gpuName = (const char *) gles_glGetString(GL_RENDERER);
-    return gpuName ? gpuName : "<unknown>";
+
+    if (!gpuName) {
+        return "<unknown>";
+    }
+
+    if (strncmp(gpuName, "ANGLE", 5) == 0) {
+        std::string gpuStr(gpuName);
+
+        size_t firstParen = gpuStr.find('(');
+        size_t secondParen = gpuStr.find('(', firstParen + 1);
+        size_t lastParen = gpuStr.rfind('(');
+
+        std::string gpu = gpuStr.substr(secondParen + 1, lastParen - secondParen - 2);
+
+        size_t vulkanStart = gpuStr.find("Vulkan ");
+        size_t vulkanEnd = gpuStr.find(' ', vulkanStart + 7);
+        std::string vulkanVersion = gpuStr.substr(vulkanStart + 7, vulkanEnd - (vulkanStart + 7));
+
+        std::string formattedGpuName = gpu + " | ANGLE | Vulkan " + vulkanVersion;
+
+        char* result = new char[formattedGpuName.size() + 1];
+        std::strcpy(result, formattedGpuName.c_str());
+        return result;
+    }
+
+    return gpuName;
 }
 
 void set_es_version() {
