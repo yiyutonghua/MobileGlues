@@ -157,9 +157,9 @@ void glGetProgramiv(GLuint program, GLenum pname, GLint *params) {
     LOAD_GLES_FUNC(glGetProgramiv)
     gles_glGetProgramiv(program, pname, params);
     if(global_settings.ignore_error >= 1 && (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS) && !*params) {
-        GLchar* infoLog;
+        GLchar infoLog[512];
         LOAD_GLES_FUNC(glGetShaderInfoLog)
-        gles_glGetShaderInfoLog(program, (GLsizei) NULL, NULL, infoLog);
+        gles_glGetShaderInfoLog(program, 512, NULL, infoLog);
         LOG_W_FORCE("Program %d linking failed: \n%s", program, infoLog);
         LOG_W_FORCE("Now try to cheat.");
         *params = GL_TRUE;
