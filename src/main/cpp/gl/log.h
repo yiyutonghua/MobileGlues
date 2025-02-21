@@ -8,6 +8,16 @@
 
 #define GLOBAL_DEBUG 0
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+const char *glEnumToString(GLenum e);
+
+#ifdef __cplusplus
+}
+#endif
+
 #if GLOBAL_DEBUG_FORCE_OFF
 #define LOG()  {}
 #define LOG_D(...) {}

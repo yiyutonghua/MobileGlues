@@ -287,9 +287,13 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     auto& tex = g_textures[bound_texture];
     tex.internal_format = internalFormat;
     tex.format = format;
-    LOG_D("mg_glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
+    LOG_D("mg_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s",
+          glEnumToString(target),level,glEnumToString(internalFormat),glEnumToString(internalFormat),
+          width,height,border,glEnumToString(format),glEnumToString(type));
     internal_convert(reinterpret_cast<GLenum *>(&internalFormat), &type, &format);
-    LOG_D("gles_glTexImage2D,target: 0x%x,level: %d,internalFormat: 0x%x->0x%x,width: %d,height: %d,border: %d,format: 0x%x,type: 0x%x",target,level,internalFormat,internalFormat,width,height,border,format,type);
+    LOG_D("gles_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s",
+          glEnumToString(target),level,glEnumToString(internalFormat),glEnumToString(internalFormat),
+          width,height,border,glEnumToString(format),glEnumToString(type));
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
         int max1 = 4096;
@@ -647,8 +651,8 @@ void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *pa
 }
 
 void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
-    LOG_D("glTexParameteriv, target: %d, pname: %d, params[0]: %d",
-          target, pname, params ? params[0] : 0);
+    LOG_D("glTexParameteriv, target: %s, pname: %s, params[0]: %s",
+          params, glEnumToString(pname), params ? glEnumToString(params[0]) : "0");
     LOAD_GLES_FUNC(glTexParameteriv);
     LOAD_GLES_FUNC(glTexParameteri);
 
@@ -793,7 +797,7 @@ void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format
 void glTexParameteri(GLenum target, GLenum pname, GLint param) {
     LOG()
     pname = pname_convert(pname);
-    LOG_D("glTexParameterfv, pname: %d", pname)
+    LOG_D("glTexParameteri, pname: 0x%x", pname)
 
     if (pname == GL_TEXTURE_LOD_BIAS_QCOM && !g_gles_caps.GL_QCOM_texture_lod_bias) {
         LOG_D("Does not support GL_QCOM_texture_lod_bias, skipped!")
@@ -916,4 +920,11 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &fbo);
     CHECK_GL_ERROR_NO_INIT
+}
+
+void glPixelStorei(GLenum pname, GLint param) {
+    LOG_D("glPixelStorei, pname = %s, param = %s", glEnumToString(pname), glEnumToString(param))
+    LOAD_GLES_FUNC(glPixelStorei)
+
+    gles_glPixelStorei(pname, param);
 }

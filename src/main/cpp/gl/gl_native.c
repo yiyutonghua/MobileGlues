@@ -101,7 +101,7 @@ NATIVE_FUNCTION_HEAD(GLboolean, glIsShader, GLuint shader) NATIVE_FUNCTION_END(G
 NATIVE_FUNCTION_HEAD(GLboolean, glIsTexture, GLuint texture) NATIVE_FUNCTION_END(GLboolean, glIsTexture, texture)
 NATIVE_FUNCTION_HEAD(void, glLineWidth, GLfloat width) NATIVE_FUNCTION_END_NO_RETURN(void, glLineWidth, width)
 //NATIVE_FUNCTION_HEAD(void, glLinkProgram, GLuint program) NATIVE_FUNCTION_END_NO_RETURN(void, glLinkProgram, program)
-NATIVE_FUNCTION_HEAD(void, glPixelStorei, GLenum pname, GLint param) NATIVE_FUNCTION_END_NO_RETURN(void, glPixelStorei, pname,param)
+//NATIVE_FUNCTION_HEAD(void, glPixelStorei, GLenum pname, GLint param) NATIVE_FUNCTION_END_NO_RETURN(void, glPixelStorei, pname,param)
 NATIVE_FUNCTION_HEAD(void, glPolygonOffset, GLfloat factor, GLfloat units) NATIVE_FUNCTION_END_NO_RETURN(void, glPolygonOffset, factor,units)
 //NATIVE_FUNCTION_HEAD(void, glReadPixels, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels) NATIVE_FUNCTION_END_NO_RETURN(void, glReadPixels, x,y,width,height,format,type,pixels)
 NATIVE_FUNCTION_HEAD(void, glReleaseShaderCompiler) NATIVE_FUNCTION_END_NO_RETURN(void, glReleaseShaderCompiler)
