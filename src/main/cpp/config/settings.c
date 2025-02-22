@@ -55,18 +55,44 @@ void init_settings() {
         maxGlslCacheSize = 0;
     }
 
-    const char* gpu = getGPUInfo();
-    LOG_D("GPU: %s", gpu);
+    const char* gpuString = getGPUInfo();
+    LOG_D("GPU: %s", gpuString);
 
-    if (enableANGLE == 1) {
-        global_settings.angle = (isAdreno740(gpu) || !hasVulkan13()) ? 0 : 1;
-    } else if (enableANGLE == 2 || enableANGLE == 3) {
+    if (enableANGLE == 2 || enableANGLE == 3) {
+        // Force enable / disable
         global_settings.angle = enableANGLE - 2;
     } else {
-        int is830 = isAdreno830(gpu);
+        int isQcom = isAdreno(gpuString);
+        int is740 = isAdreno740(gpuString);
+        int is830 = isAdreno830(gpuString);
+        int hasVk13 = hasVulkan13();
+
+        LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
         LOG_D("Is Adreno 830? = %s", is830 ? "true" : "false")
-        global_settings.angle = is830 ? 1 : 0;
+        LOG_D("Is Adreno 740? = %s", is740 ? "true" : "false")
+        LOG_D("Has Vulkan 1.3? = %s", hasVk13 ? "true" : "false")
+
+        if (is830)
+            global_settings.angle = 1;
+        if (is740)
+            global_settings.angle = 0;
+        else
+            global_settings.angle = hasVk13;
     }
+    LOG_D("enableANGLE = %d", enableANGLE)
+    LOG_D("global_settings.angle = %d", global_settings.angle)
+
+//    if (enableANGLE == 1) {
+//        global_settings.angle = (isAdreno740(gpuString) || !hasVulkan13()) ? 0 : 1;
+//    } else if (enableANGLE == 2 || enableANGLE == 3) {
+//        global_settings.angle = enableANGLE - 2;
+//    } else {
+//        int is830 = isAdreno830(gpuString);
+//        LOG_D("Is Adreno 830? = %s", is830 ? "true" : "false")
+//        global_settings.angle = is830 ? 1 : 0;
+//    }
+
+
     if (global_settings.angle) {
         setenv("LIBGL_GLES", "libGLESv2_angle.so", 1);
         setenv("LIBGL_EGL", "libEGL_angle.so", 1);

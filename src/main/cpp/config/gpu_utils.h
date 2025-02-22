@@ -5,7 +5,11 @@
 #ifndef MOBILEGLUES_PLUGIN_GPU_UTILS_H
 #define MOBILEGLUES_PLUGIN_GPU_UTILS_H
 
+#include <string.h>
+
 const char* getGPUInfo();
+
+int isAdreno(const char* gpu);
 
 int isAdreno740(const char* gpu);
 
