@@ -18,6 +18,8 @@ set(CMAKE_ANDROID_STL_TYPE c++_static)
 
 set(CMAKE_BUILD_TYPE Release)
 
+set(PROFILING ON)
+
 find_library(GLSLANG_LIB glslang PATHS ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
@@ -56,6 +58,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libspirv-cross-c-shared.so
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libshaderconv.so
+        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libc++_shared.so
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libGenericCodeGen.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang-default-resource-limits.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libMachineIndependent.a
@@ -77,3 +80,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 target_include_directories(mobileglues PUBLIC
         ${CMAKE_SOURCE_DIR}/include
         )
+
+if (PROFILING)
+        find_package(Threads)
+        include_directories(${CMAKE_SOURCE_DIR}/3rdparty/perfetto/sdk)
+        add_library(perfetto STATIC ${CMAKE_SOURCE_DIR}/3rdparty/perfetto/sdk/perfetto.cc)
+        target_link_libraries(mobileglues perfetto ${CMAKE_THREAD_LIBS_INIT})
+        target_compile_definitions(mobileglues PUBLIC PROFILING=1)
+endif()
