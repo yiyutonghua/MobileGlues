@@ -15,14 +15,14 @@
 #include "egl/egl.h"
 #include "egl/loader.h"
 
+#if PROFILING
 #include <perfetto.h>
-
 PERFETTO_DEFINE_CATEGORIES(
-        perfetto::Category("GLCalls")
+        perfetto::Category("glcalls")
                 .SetDescription("Calls from OpenGL"),
-        perfetto::Category("Internal")
+        perfetto::Category("internal")
                 .SetDescription("Internal calls"));
-
+#endif
 
 #ifdef __cplusplus
 extern "C" {

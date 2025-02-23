@@ -16,10 +16,6 @@
 
 #define DEBUG 0
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 __attribute__((used)) const char* copyright = "Copyright (C) 2025 Swung0x48, BZLZHH, Tungsten. All rights reserved. Logo artwork kindly provided by Aou156.";
 
 extern char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
@@ -54,6 +50,20 @@ void show_copyright() {
     LOG_V("  %s", copyright);
 }
 
+#if PROFILING
+
+PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+
+void init_perfetto() {
+    perfetto::TracingInitArgs args;
+
+    args.backends |= perfetto::kSystemBackend;
+
+    perfetto::Tracing::Initialize(args);
+    perfetto::TrackEvent::Register();
+}
+#endif
+
 void proc_init() {
     init_config();
 
@@ -71,9 +81,9 @@ void proc_init() {
 
     init_libshaderconv();
 
+#if PROFILING
+    init_perfetto();
+#endif
+
     g_initialized = 1;
 }
-
-#ifdef __cplusplus
-}
-#endif
