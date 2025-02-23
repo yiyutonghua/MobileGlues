@@ -51,24 +51,24 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
     CHECK_GL_ERROR_NO_INIT
 
     if (!bound_framebuffer) {
-        bound_framebuffer = malloc(sizeof(struct framebuffer_t));
+        bound_framebuffer = (struct framebuffer_t*)malloc(sizeof(struct framebuffer_t));
         memset(bound_framebuffer, 0, sizeof(struct framebuffer_t));
     }
 
     switch (target) {
         case GL_DRAW_FRAMEBUFFER:
             free(bound_framebuffer->draw_attachment);
-            bound_framebuffer->draw_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            bound_framebuffer->draw_attachment = (struct attachment_t*)malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
             break;
         case GL_READ_FRAMEBUFFER:
             free(bound_framebuffer->read_attachment);
-            bound_framebuffer->read_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            bound_framebuffer->read_attachment = (struct attachment_t*)malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
             break;
         case GL_FRAMEBUFFER:
             free(bound_framebuffer->draw_attachment);
-            bound_framebuffer->draw_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            bound_framebuffer->draw_attachment = (struct attachment_t*)malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
             free(bound_framebuffer->read_attachment);
-            bound_framebuffer->read_attachment = malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
+            bound_framebuffer->read_attachment = (struct attachment_t*)malloc(getMaxDrawBuffers() * sizeof(struct attachment_t));
             break;
         default:
             break;

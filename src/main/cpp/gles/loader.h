@@ -17,12 +17,9 @@ extern "C" {
 void *proc_address(void *lib, const char *name);
 extern void *gles, *egl;
 
-
-#ifdef __cplusplus
-}
-#endif
-
 void init_target_gles();
+
+void load_libs();
 
 #define WARN_NULL(name) if (name == NULL) { LOG_W("%s line %d function %s: " #name " is NULL\n", __FILE__, __LINE__, __func__); }
 
@@ -186,5 +183,9 @@ struct gles_caps_t {
 };
 
 extern struct gles_caps_t g_gles_caps;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // MOBILEGLUES_GLES_LOADER_H_

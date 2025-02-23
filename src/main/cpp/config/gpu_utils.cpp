@@ -53,7 +53,7 @@ const char* getGPUInfo() {
     const char* renderer = NULL;
     void* lib = open_lib(gles3_lib, NULL);
     if (lib) {
-        gles_glGetString = dlsym(lib, "glGetString");
+        gles_glGetString = (const GLubyte * (*)( GLenum ))dlsym(lib, "glGetString");
         if (gles_glGetString) {
             renderer = (const char*)gles_glGetString(GL_RENDERER);
         }
@@ -128,7 +128,7 @@ int hasVulkan13() {
         return 0;
     }
 
-    VkPhysicalDevice* physicalDevices = malloc(sizeof(VkPhysicalDevice) * gpuCount);
+    VkPhysicalDevice* physicalDevices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * gpuCount);
     //VkPhysicalDevice physicalDevices[gpuCount];
     vkEnumeratePhysicalDevices(instance, &gpuCount, physicalDevices);
 

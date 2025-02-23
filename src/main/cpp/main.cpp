@@ -32,7 +32,7 @@ void init_libshaderconv() {
         LOG_D("%s not found\n", shaderconv_lib);
     }
     else {
-        MesaConvertShader = dlsym(glslconv, func_name);
+        MesaConvertShader = (char * (*)(const char *,unsigned int,unsigned int,unsigned int))dlsym(glslconv, func_name);
         if (MesaConvertShader) {
             LOG_D("%s loaded\n", shaderconv_lib);
         } else {
@@ -54,7 +54,6 @@ void show_copyright() {
     LOG_V("  %s", copyright);
 }
 
-void load_libs();
 void proc_init() {
     init_config();
 

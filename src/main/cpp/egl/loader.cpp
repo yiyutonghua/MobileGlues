@@ -31,6 +31,24 @@ void init_target_egl() {
     LOAD_EGL(eglTerminate);
     LOAD_EGL(eglGetError);
 
+
+    EGLint configAttribs[] = {
+            EGL_RED_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_BLUE_SIZE, 8,
+            EGL_ALPHA_SIZE, 8,
+            EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+            EGL_NONE
+    };
+
+    EGLint ctxAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+
+    EGLint pbAttribs[] = { EGL_WIDTH, 32, EGL_HEIGHT, 32, EGL_NONE };
+
+    EGLConfig pbufConfig;
+    EGLint configsFound = 0;
+
     eglDisplay = egl_eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (eglDisplay == EGL_NO_DISPLAY) {
         LOG_E("eglGetDisplay failed (0x%x)", egl_eglGetError());
@@ -47,18 +65,6 @@ void init_target_egl() {
         goto cleanup;
     }
 
-    EGLint configAttribs[] = {
-            EGL_RED_SIZE, 8,
-            EGL_GREEN_SIZE, 8,
-            EGL_BLUE_SIZE, 8,
-            EGL_ALPHA_SIZE, 8,
-            EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-            EGL_NONE
-    };
-
-    EGLConfig pbufConfig;
-    EGLint configsFound = 0;
     if (egl_eglChooseConfig(eglDisplay, configAttribs, &pbufConfig, 1, &configsFound) != EGL_TRUE) {
         LOG_E("eglChooseConfig failed (0x%x)", egl_eglGetError());
         goto cleanup;
@@ -78,14 +84,12 @@ void init_target_egl() {
         }
     }
 
-    EGLint ctxAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
     eglContext = egl_eglCreateContext(eglDisplay, pbufConfig, EGL_NO_CONTEXT, ctxAttribs);
     if (eglContext == EGL_NO_CONTEXT) {
         LOG_E("eglCreateContext failed (0x%x)", egl_eglGetError());
         goto cleanup;
     }
 
-    EGLint pbAttribs[] = { EGL_WIDTH, 32, EGL_HEIGHT, 32, EGL_NONE };
     eglSurface = egl_eglCreatePbufferSurface(eglDisplay, pbufConfig, pbAttribs);
     if (eglSurface == EGL_NO_SURFACE) {
         LOG_E("eglCreatePbufferSurface failed (0x%x)", egl_eglGetError());

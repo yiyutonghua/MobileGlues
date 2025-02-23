@@ -5,6 +5,10 @@
 #ifndef MOBILEGLUES_PLUGIN_SETTINGS_H
 #define MOBILEGLUES_PLUGIN_SETTINGS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <__stddef_size_t.h>
 
 struct global_settings_t {
@@ -18,5 +22,10 @@ struct global_settings_t {
 extern struct global_settings_t global_settings;
 
 void init_settings();
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //MOBILEGLUES_PLUGIN_SETTINGS_H

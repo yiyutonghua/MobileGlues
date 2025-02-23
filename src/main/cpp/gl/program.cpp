@@ -41,7 +41,7 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
 
     int len = strlen(name);
     int tlen = len + 32;
-    char *targetPattern = malloc(sizeof(char) * tlen);
+    char *targetPattern = (char*)malloc(sizeof(char) * tlen);
     if (!targetPattern) {
         LOG_E("Memory allocation failed for targetPattern")
         return;
