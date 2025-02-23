@@ -7,6 +7,10 @@
 
 #include "gl.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct attachment_t {
     GLenum textarget;
     GLuint texture;
@@ -30,5 +34,9 @@ GLAPI GLAPIENTRY void glDrawBuffer(GLenum buf);
 GLAPI GLAPIENTRY void glDrawBuffers(GLsizei n, const GLenum *bufs);
 
 GLAPI GLAPIENTRY GLenum glCheckFramebufferStatus(GLenum target);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //MOBILEGLUES_FRAMEBUFFER_H

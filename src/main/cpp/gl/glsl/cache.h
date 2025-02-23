@@ -5,15 +5,9 @@
 #ifndef MOBILEGLUES_PLUGIN_CACHE_H
 #define MOBILEGLUES_PLUGIN_CACHE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 #include "../mg.h"
 #include "../../config/config.h"
 #include "../../config/settings.h"
-#ifdef __cplusplus
-}
-#endif
 
 #include <list>
 #include <unordered_map>

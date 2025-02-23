@@ -57,8 +57,8 @@ static const char *egl_lib[] = {
         NULL
 };
 
-const char* GLES_ANGLE = "libGLESv2_angle.so";
-const char* EGL_ANGLE = "libEGL_angle.so";
+const char *GLES_ANGLE = "libGLESv2_angle.so";
+const char *EGL_ANGLE = "libEGL_angle.so";
 
 void *open_lib(const char **names, const char *override) {
     void *lib = NULL;
@@ -89,7 +89,7 @@ void *open_lib(const char **names, const char *override) {
 
 void load_libs() {
     static int first = 1;
-    if (! first) return;
+    if (!first) return;
     first = 0;
     const char *gles_override = global_settings.angle ? GLES_ANGLE : NULL;
     const char *egl_override = global_settings.angle ? EGL_ANGLE : NULL;
@@ -103,12 +103,12 @@ void *proc_address(void *lib, const char *name) {
 }
 
 void set_hardware() {
-    hardware = (hardware_t)calloc(1, sizeof(struct hardware_s));
+    hardware = (hardware_t) calloc(1, sizeof(struct hardware_s));
     set_es_version();
 }
 
 void init_gl_state() {
-    gl_state = (gl_state_t)calloc(1, sizeof(struct gl_state_s));
+    gl_state = (gl_state_t) calloc(1, sizeof(struct gl_state_s));
     set_gl_state_proxy_height(0);
     set_gl_state_proxy_width(0);
     set_gl_state_proxy_intformat(0);
@@ -116,15 +116,16 @@ void init_gl_state() {
 
 
 void LogOpenGLExtensions() {
-    const GLubyte* raw_extensions = glGetString(GL_EXTENSIONS);
-    LOG_D("Extensions list using glGetString:\n%s", raw_extensions ? (const char*)raw_extensions : "(null)");
+    const GLubyte *raw_extensions = glGetString(GL_EXTENSIONS);
+    LOG_D("Extensions list using glGetString:\n%s",
+          raw_extensions ? (const char *) raw_extensions : "(null)");
     GLint num_extensions = 0;
     glGetIntegerv(GL_NUM_EXTENSIONS, &num_extensions);
     LOG_D("Extensions list using glGetStringi:\n");
     for (GLint i = 0; i < num_extensions; ++i) {
-        const GLubyte* extension = glGetStringi(GL_EXTENSIONS, i);
+        const GLubyte *extension = glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
-            LOG_D("%s", (const char*)extension);
+            LOG_D("%s", (const char *) extension);
         } else {
             LOG_D("(null)");
         }
@@ -148,9 +149,9 @@ void InitGLESCapabilities() {
     gles_glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
     LOG_D("Detected %d OpenGL ES extensions.", num_es_extensions);
     for (GLint i = 0; i < num_es_extensions; ++i) {
-        const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
+        const char *extension = (const char *) gles_glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
-            LOG_D("%s", (const char*)extension);
+            LOG_D("%s", (const char *) extension);
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
                 g_gles_caps.GL_EXT_buffer_storage = 1;
             } else if (strcmp(extension, "GL_EXT_disjoint_timer_query") == 0) {
@@ -160,7 +161,7 @@ void InitGLESCapabilities() {
             } else if (strcmp(extension, "GL_EXT_blend_func_extended") == 0) {
                 g_gles_caps.GL_EXT_blend_func_extended = 1;
             }
-            
+
         } else {
             LOG_D("(null)");
         }
@@ -175,11 +176,11 @@ void InitGLESCapabilities() {
         AppendExtension("GL_EXT_timer_query");
     }
 
-    if(global_settings.ext_gl43) {
+    if (global_settings.ext_gl43) {
         AppendExtension("OpenGL43");
     }
-    
-    if(global_settings.ext_compute_shader) {
+
+    if (global_settings.ext_compute_shader) {
         AppendExtension("GL_ARB_compute_shader");
     }
 }
