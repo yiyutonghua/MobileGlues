@@ -287,13 +287,13 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     auto& tex = g_textures[bound_texture];
     tex.internal_format = internalFormat;
     tex.format = format;
-    LOG_D("mg_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s",
+    LOG_D("mg_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s, pixels: 0x%x",
           glEnumToString(target),level,glEnumToString(internalFormat),glEnumToString(internalFormat),
-          width,height,border,glEnumToString(format),glEnumToString(type));
+          width,height,border,glEnumToString(format),glEnumToString(type), pixels);
     internal_convert(reinterpret_cast<GLenum *>(&internalFormat), &type, &format);
-    LOG_D("gles_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s",
+    LOG_D("gles_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s, pixels: 0x%x",
           glEnumToString(target),level,glEnumToString(internalFormat),glEnumToString(internalFormat),
-          width,height,border,glEnumToString(format),glEnumToString(type));
+          width,height,border,glEnumToString(format),glEnumToString(type), pixels);
     GLenum rtarget = map_tex_target(target);
     if(rtarget == GL_PROXY_TEXTURE_2D) {
         int max1 = 4096;
@@ -304,8 +304,7 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         set_gl_state_proxy_intformat(internalFormat);
         return;
     }
-    LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
-    gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
+
     if (tex.format == GL_BGRA && internalFormat == GL_RGBA8 && width <= 128 && height <= 128) {  // xaero has 64x64 tiles...hack here
         LOG_D("Detected GL_BGRA format @ tex = %d, do swizzle", bound_texture);
         if (tex.swizzle_param[0] == 0) { // assert this as never called glTexParameteri(..., GL_TEXTURE_SWIZZLE_R, ...)
@@ -332,6 +331,9 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, tex.swizzle_param[3]);
         CHECK_GL_ERROR
     }
+
+    LOAD_GLES(glTexImage2D, void, GLenum target, GLint level,GLint internalFormat,GLsizei width, GLsizei height,GLint border, GLenum format, GLenum type,const GLvoid* pixels);
+    gles_glTexImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
 
     CHECK_GL_ERROR
 }
@@ -924,7 +926,7 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
 
 void glPixelStorei(GLenum pname, GLint param) {
     LOG_D("glPixelStorei, pname = %s, param = %s", glEnumToString(pname), glEnumToString(param))
-    LOAD_GLES_FUNC(glPixelStorei)
 
+    LOAD_GLES_FUNC(glPixelStorei)
     gles_glPixelStorei(pname, param);
 }

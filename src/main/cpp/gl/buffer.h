@@ -35,6 +35,8 @@ GLAPI GLAPIENTRY void *glMapBuffer(GLenum target, GLenum access);
 
 GLAPI GLAPIENTRY void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags);
 
+GLAPI GLAPIENTRY void glBindBuffer(GLenum target, GLuint buffer);
+
 #ifdef __cplusplus
 }
 #endif

@@ -21,6 +21,7 @@ static GLenum get_binding_query(GLenum target) {
 
 void* glMapBuffer(GLenum target, GLenum access) {
     LOG()
+    LOG_D("glMapBuffer, target = %s, access = %s", glEnumToString(target), glEnumToString(access))
     if (get_binding_query(target) == 0) {
         return NULL;
     }
@@ -40,7 +41,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
     GLbitfield flags = 0;
     switch (access) {
         case GL_READ_ONLY:  flags = GL_MAP_READ_BIT; break;
-        case GL_WRITE_ONLY: flags = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT; break;
+        case GL_WRITE_ONLY: flags = GL_MAP_WRITE_BIT; /*| GL_MAP_INVALIDATE_BUFFER_BIT*/; break;
         case GL_READ_WRITE: flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT; break;
         default:  
             return NULL;
@@ -105,4 +106,12 @@ void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfiel
     LOAD_GLES_FUNC(glBufferStorageEXT)
     gles_glBufferStorageEXT(target,size,data,flags);
     CHECK_GL_ERROR
+}
+
+void glBindBuffer(GLenum target, GLuint buffer) {
+    LOG()
+    LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
+
+    LOAD_GLES_FUNC(glBindBuffer)
+    gles_glBindBuffer(target, buffer);
 }
