@@ -77,7 +77,7 @@ void init_settings() {
         if (is740)
             global_settings.angle = 0;
         else
-            global_settings.angle = hasVk13;
+            global_settings.angle = hasVk13 && enableANGLE;
     }
     LOG_D("enableANGLE = %d", enableANGLE)
     LOG_D("global_settings.angle = %d", global_settings.angle)
