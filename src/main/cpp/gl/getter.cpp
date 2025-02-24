@@ -11,7 +11,7 @@
 
 void glGetIntegerv(GLenum pname, GLint *params) {
     LOG();
-    LOG_D("glGetIntegerv, pname: 0x%x",pname);
+    LOG_D("glGetIntegerv, pname: %s", glEnumToString(pname));
     if (pname == GL_CONTEXT_PROFILE_MASK) {
         (*params) = GL_CONTEXT_CORE_PROFILE_BIT;
         return;

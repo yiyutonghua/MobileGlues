@@ -725,6 +725,7 @@ void glDeleteTextures(GLsizei n, const GLuint *textures) {
 }
 
 void glGenerateTextureMipmap(GLuint texture) {
+    LOG()
     GLint currentTexture;
     auto& tex = g_textures[bound_texture];
     GLenum target = tex.target;
@@ -737,55 +738,71 @@ void glGenerateTextureMipmap(GLuint texture) {
 }
 
 void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels) {
-    GLint prevFBO;
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-    GLenum bindingTarget = get_binding_for_target(target);
-    if (bindingTarget == 0) return;
-    GLint oldTexBinding;
-    glActiveTexture(GL_TEXTURE0);
-    glGetIntegerv(bindingTarget, &oldTexBinding);
-    GLuint texture = static_cast<GLuint>(oldTexBinding);
-    if (texture == 0) return;
-    GLint width, height;
-    glBindTexture(target, texture);
-    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
-    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
-    glBindTexture(target, oldTexBinding);
-    if (width <= 0 || height <= 0) return;
-    GLuint fbo;
-    glGenFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
-    } else {
-        glDeleteFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
-        return;
-    }
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        glDeleteFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
-        return;
-    }
-    GLint oldViewport[4];
-    glGetIntegerv(GL_VIEWPORT, oldViewport);
-    glViewport(0, 0, width, height);
-    GLint oldPackAlignment;
-    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadBuffer(GL_COLOR_ATTACHMENT0);
-    glReadPixels(0, 0, width, height, format, type, pixels);
-    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
-    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-    glDeleteFramebuffers(1, &fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    LOG()
+    LOG_D("glGetTexImage, target = %s, level = %d, format = %s, type = %s, pixel = 0x%x",
+          glEnumToString(target), level, glEnumToString(format), glEnumToString(type), pixels)
+
+    return;
+
+//    GLint prevFBO;
+//    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+//    GLenum bindingTarget = get_binding_for_target(target);
+//    if (bindingTarget == 0) return;
+//    GLint oldTexBinding;
+//    glActiveTexture(GL_TEXTURE0);
+//    glGetIntegerv(bindingTarget, &oldTexBinding);
+//    GLuint texture = static_cast<GLuint>(oldTexBinding);
+//    if (texture == 0) return;
+//    GLint width, height;
+//    glBindTexture(target, texture);
+//    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
+//    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
+//    glBindTexture(target, oldTexBinding);
+//    if (width <= 0 || height <= 0) return;
+//    GLuint fbo;
+//    glGenFramebuffers(1, &fbo);
+//    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+//    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
+//        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
+//    } else {
+//        glDeleteFramebuffers(1, &fbo);
+//        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+//        return;
+//    }
+//    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//        glDeleteFramebuffers(1, &fbo);
+//        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+//        return;
+//    }
+//    GLint oldViewport[4];
+//    glGetIntegerv(GL_VIEWPORT, oldViewport);
+//    glViewport(0, 0, width, height);
+//    GLint oldPackAlignment;
+//    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
+//    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+//    glReadBuffer(GL_COLOR_ATTACHMENT0);
+//    glReadPixels(0, 0, width, height, format, type, pixels);
+//    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
+//    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+//    glDeleteFramebuffers(1, &fbo);
+//    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 }
+
+#if GLOBAL_DEBUG || DEBUG
+#include <fstream>
+#define PX_FILE_PREFIX "/sdcard/MG/readpixels/"
+#endif
 
 void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels) {
     LOG()
     LOAD_GLES_FUNC(glReadPixels)
     LOG_D("glReadPixels, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
           x, y, width, height, format, type, pixels)
+
+          static int count = 0;
+
+    GLenum prevFormat = format;
+
     if (format == GL_BGRA && type == GL_UNSIGNED_INT_8_8_8_8) {
         format = GL_RGBA;
         type = GL_UNSIGNED_BYTE;
@@ -793,6 +810,19 @@ void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format
     LOG_D("glReadPixels converted, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
           x, y, width, height, format, type, pixels)
     gles_glReadPixels(x, y, width, height, format, type, pixels);
+
+#if GLOBAL_DEBUG || DEBUG
+    if (prevFormat == GL_BGRA && type == GL_UNSIGNED_BYTE) {
+        std::vector<uint8_t> px(width * height * sizeof(uint8_t) * 4, 0);
+        LOAD_GLES_FUNC(glBindBuffer)
+        gles_glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        gles_glReadPixels(x, y, width, height, format, type, px.data());
+
+        std::fstream fs(std::string(PX_FILE_PREFIX) + std::to_string(count++) + ".bin", std::ios::out | std::ios::binary | std::ios::trunc);
+        fs.write((const char*)px.data(), px.size());
+        fs.close();
+    }
+#endif
     CHECK_GL_ERROR
 }
 

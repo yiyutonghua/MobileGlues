@@ -19,6 +19,14 @@ static GLenum get_binding_query(GLenum target) {
     }
 }
 
+void glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage) {
+    LOG()
+    LOG_D("glBufferData, target = %s, size = %d, data = 0x%x, usage = %s",
+          glEnumToString(target), size, data, glEnumToString(usage))
+    LOAD_GLES_FUNC(glBufferData)
+    gles_glBufferData(target, size, data, usage);
+}
+
 void* glMapBuffer(GLenum target, GLenum access) {
     LOG()
     LOG_D("glMapBuffer, target = %s, access = %s", glEnumToString(target), glEnumToString(access))
@@ -30,7 +38,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
     if (current_buffer == 0) {
         return NULL;
     }
-    if (g_active_mapping.mapped_ptr != NULL) {
+    if (g_active_mappings[current_buffer].mapped_ptr != NULL) {
         return NULL;
     }
     GLint buffer_size;
@@ -52,12 +60,23 @@ void* glMapBuffer(GLenum target, GLenum access) {
     mapping.target = target;
     mapping.buffer_id = (GLuint)current_buffer;
     mapping.mapped_ptr = ptr;
+//#if GLOBAL_DEBUG || DEBUG
+//    if (target == GL_PIXEL_UNPACK_BUFFER)
+//        mapping.client_buf.resize(buffer_size, 0xFF);
+//#endif
     mapping.size = buffer_size;
     mapping.flags = flags;
     mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
     g_active_mappings[current_buffer] = mapping;
     CHECK_GL_ERROR
+//#if GLOBAL_DEBUG || DEBUG
+//    if (target == GL_PIXEL_UNPACK_BUFFER)
+//        return mapping.client_buf.data();
+//    else
+//        return ptr;
+//#else
     return ptr;
+//#endif
 }
 
 GLboolean force_unmap() {
@@ -82,6 +101,11 @@ GLboolean force_unmap() {
     return GL_TRUE;
 }
 
+#if GLOBAL_DEBUG || DEBUG
+#include <fstream>
+#define BIN_FILE_PREFIX "/sdcard/MG/buf/"
+#endif
+
 GLboolean glUnmapBuffer(GLenum target) {
     LOG()
 
@@ -91,6 +115,20 @@ GLboolean glUnmapBuffer(GLenum target) {
 
     if (buffer == 0)
         return GL_FALSE;
+
+#if GLOBAL_DEBUG || DEBUG
+    // Blit data from client side to OpenGL here
+//    if (target == GL_PIXEL_UNPACK_BUFFER) {
+//        auto &mapping = g_active_mappings[buffer];
+//
+//        std::fstream fs(std::string(BIN_FILE_PREFIX) + "buf" + std::to_string(buffer) + ".bin", std::ios::out | std::ios::binary | std::ios::trunc);
+//        fs.write((const char*)mapping.client_buf.data(), mapping.size);
+//        fs.close();
+//
+////        memset(mapping.mapped_ptr, 0xFF, mapping.size);
+//        memcpy(mapping.mapped_ptr, mapping.client_buf.data(), mapping.size);
+//    }
+#endif
 
     LOAD_GLES(glUnmapBuffer, GLboolean, GLenum target);
     GLboolean result = gles_glUnmapBuffer(target);

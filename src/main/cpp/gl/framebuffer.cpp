@@ -171,6 +171,14 @@ void glDrawBuffers(GLsizei n, const GLenum *bufs) {
     CHECK_GL_ERROR
 }
 
+void glReadBuffer(GLenum src) {
+    LOG()
+    LOG_D("glReadBuffer, src = %s", glEnumToString(src))
+
+    LOAD_GLES_FUNC(glReadBuffer)
+    gles_glReadBuffer(src);
+}
+
 GLenum glCheckFramebufferStatus(GLenum target) {
     LOG()
     LOAD_GLES_FUNC(glCheckFramebufferStatus)
