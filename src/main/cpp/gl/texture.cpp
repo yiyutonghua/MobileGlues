@@ -925,7 +925,7 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
 }
 
 void glPixelStorei(GLenum pname, GLint param) {
-    LOG_D("glPixelStorei, pname = %s, param = %s", glEnumToString(pname), glEnumToString(param))
+    LOG_D("glPixelStorei, pname = %s, param = %d", glEnumToString(pname), param)
 
     LOAD_GLES_FUNC(glPixelStorei)
     gles_glPixelStorei(pname, param);

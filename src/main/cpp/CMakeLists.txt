@@ -18,7 +18,7 @@ set(CMAKE_ANDROID_STL_TYPE c++_static)
 
 set(CMAKE_BUILD_TYPE Release)
 
-set(PROFILING ON)
+set(PROFILING OFF)
 
 find_library(GLSLANG_LIB glslang PATHS ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/)
 

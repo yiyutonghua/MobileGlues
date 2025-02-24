@@ -30,8 +30,8 @@ void write_log(const char* format, ...) {
     va_end(args);
     fprintf(file, "\n");
     fflush(file);
-    int fd = fileno(file);
-    fsync(fd);
+//    int fd = fileno(file);
+//    fsync(fd);
     // Todo: close file
     //fclose(file);
 }

@@ -9,7 +9,7 @@
     case e: return #e;
 
 const char* glEnumToString(GLenum e) {
-    static char str[64];
+    static char str[128];
     switch (e) {
         /* Boolean values */
 
