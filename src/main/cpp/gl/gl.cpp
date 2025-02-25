@@ -18,4 +18,5 @@ GLAPI GLAPIENTRY void glClearDepth(GLclampd depth) {
 
 void glHint(GLenum target, GLenum mode) {
     LOG();
+    LOG_D("glHint, target = %s, mode = %s", glEnumToString(target), glEnumToString(mode))
 }

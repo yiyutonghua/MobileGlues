@@ -60,23 +60,25 @@ void* glMapBuffer(GLenum target, GLenum access) {
     mapping.target = target;
     mapping.buffer_id = (GLuint)current_buffer;
     mapping.mapped_ptr = ptr;
-//#if GLOBAL_DEBUG || DEBUG
-//    if (target == GL_PIXEL_UNPACK_BUFFER)
-//        mapping.client_buf.resize(buffer_size, 0xFF);
-//#endif
+#if GLOBAL_DEBUG || DEBUG
+    if (target == GL_PIXEL_UNPACK_BUFFER) {
+        mapping.client_ptr = malloc(buffer_size);
+        memset(mapping.client_ptr, 0xFF, buffer_size);
+    }
+#endif
     mapping.size = buffer_size;
     mapping.flags = flags;
     mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
     g_active_mappings[current_buffer] = mapping;
     CHECK_GL_ERROR
-//#if GLOBAL_DEBUG || DEBUG
-//    if (target == GL_PIXEL_UNPACK_BUFFER)
-//        return mapping.client_buf.data();
-//    else
-//        return ptr;
-//#else
+#if GLOBAL_DEBUG || DEBUG
+    if (target == GL_PIXEL_UNPACK_BUFFER)
+        return mapping.client_ptr;
+    else
+        return ptr;
+#else
     return ptr;
-//#endif
+#endif
 }
 
 GLboolean force_unmap() {
@@ -117,17 +119,19 @@ GLboolean glUnmapBuffer(GLenum target) {
         return GL_FALSE;
 
 #if GLOBAL_DEBUG || DEBUG
-    // Blit data from client side to OpenGL here
-//    if (target == GL_PIXEL_UNPACK_BUFFER) {
-//        auto &mapping = g_active_mappings[buffer];
-//
-//        std::fstream fs(std::string(BIN_FILE_PREFIX) + "buf" + std::to_string(buffer) + ".bin", std::ios::out | std::ios::binary | std::ios::trunc);
-//        fs.write((const char*)mapping.client_buf.data(), mapping.size);
-//        fs.close();
-//
-////        memset(mapping.mapped_ptr, 0xFF, mapping.size);
-//        memcpy(mapping.mapped_ptr, mapping.client_buf.data(), mapping.size);
-//    }
+//     Blit data from client side to OpenGL here
+    if (target == GL_PIXEL_UNPACK_BUFFER) {
+        auto &mapping = g_active_mappings[buffer];
+
+        std::fstream fs(std::string(BIN_FILE_PREFIX) + "buf" + std::to_string(buffer) + ".bin", std::ios::out | std::ios::binary | std::ios::trunc);
+        fs.write((const char*)mapping.client_ptr, mapping.size);
+        fs.close();
+
+//        memset(mapping.mapped_ptr, 0xFF, mapping.size);
+        memcpy(mapping.mapped_ptr, mapping.client_ptr, mapping.size);
+        free(mapping.client_ptr);
+        mapping.client_ptr = NULL;
+    }
 #endif
 
     LOAD_GLES(glUnmapBuffer, GLboolean, GLenum target);

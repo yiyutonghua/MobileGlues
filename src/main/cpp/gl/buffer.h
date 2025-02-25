@@ -18,7 +18,7 @@ typedef struct {
     GLuint buffer_id;
     void *mapped_ptr;
 #if GLOBAL_DEBUG || DEBUG
-    std::vector<uint8_t> client_buf;
+    void *client_ptr;
 #endif
     GLsizeiptr size;
     GLbitfield flags;
