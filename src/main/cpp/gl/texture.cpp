@@ -286,7 +286,8 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
     LOG();
     auto& tex = g_textures[bound_texture];
     tex.internal_format = internalFormat;
-    tex.format = format;
+    GLenum transfer_format = format;
+//    tex.format = format;
     LOG_D("mg_glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: %d,height: %d,border: %d,format: %s,type: %s, pixels: 0x%x",
           glEnumToString(target),level,glEnumToString(internalFormat),glEnumToString(internalFormat),
           width,height,border,glEnumToString(format),glEnumToString(type), pixels);
@@ -305,7 +306,8 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         return;
     }
 
-    if (tex.format == GL_BGRA && internalFormat == GL_RGBA8 && width <= 128 && height <= 128) {  // xaero has 64x64 tiles...hack here
+    if (transfer_format == GL_BGRA && tex.format != transfer_format && internalFormat == GL_RGBA8
+                    && width <= 128 && height <= 128) {  // xaero has 64x64 tiles...hack here
         LOG_D("Detected GL_BGRA format @ tex = %d, do swizzle", bound_texture);
         if (tex.swizzle_param[0] == 0) { // assert this as never called glTexParameteri(..., GL_TEXTURE_SWIZZLE_R, ...)
             tex.swizzle_param[0] = GL_RED;
@@ -322,7 +324,7 @@ void glTexImage2D(GLenum target, GLint level,GLint internalFormat,GLsizei width,
         tex.swizzle_param[1] = b;
         tex.swizzle_param[2] = a;
         tex.swizzle_param[3] = r;
-        tex.format = GL_RGBA;
+        tex.format = transfer_format;
 
         LOAD_GLES_FUNC(glTexParameteri);
         gles_glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, tex.swizzle_param[0]);
@@ -686,14 +688,24 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
 void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
     LOG();
     LOAD_GLES_FUNC(glTexSubImage2D)
+
+    LOG_D("glTexSubImage2D, target = %s, level = %d, xoffset = %d, yoffset = %d, width = %d, height = %d, format = %s, type = %s, pixels = 0x%x",
+            glEnumToString(target), level, xoffset, yoffset, width, height, glEnumToString(format),
+          glEnumToString(type), pixels)
+
+    if (format == GL_BGRA && type == GL_UNSIGNED_INT_8_8_8_8) {
+        format = GL_RGBA;
+        type = GL_UNSIGNED_BYTE;
+    }
+
     gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
 
-    CLEAR_GL_ERROR
+    CHECK_GL_ERROR
 }
 
 void glBindTexture(GLenum target, GLuint texture) {
     LOG();
-    LOG_D("glBindTexture(0x%x, %d)", target, texture);
+    LOG_D("glBindTexture(%s, %d)", glEnumToString(target), texture);
     LOAD_GLES_FUNC(glBindTexture)
     INIT_CHECK_GL_ERROR
     gles_glBindTexture(target, texture);
@@ -742,50 +754,48 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
     LOG_D("glGetTexImage, target = %s, level = %d, format = %s, type = %s, pixel = 0x%x",
           glEnumToString(target), level, glEnumToString(format), glEnumToString(type), pixels)
 
-    return;
-
-//    GLint prevFBO;
-//    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-//    GLenum bindingTarget = get_binding_for_target(target);
-//    if (bindingTarget == 0) return;
-//    GLint oldTexBinding;
-//    glActiveTexture(GL_TEXTURE0);
-//    glGetIntegerv(bindingTarget, &oldTexBinding);
-//    GLuint texture = static_cast<GLuint>(oldTexBinding);
-//    if (texture == 0) return;
-//    GLint width, height;
-//    glBindTexture(target, texture);
-//    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
-//    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
-//    glBindTexture(target, oldTexBinding);
-//    if (width <= 0 || height <= 0) return;
-//    GLuint fbo;
-//    glGenFramebuffers(1, &fbo);
-//    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-//    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
-//        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
-//    } else {
-//        glDeleteFramebuffers(1, &fbo);
-//        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
-//        return;
-//    }
-//    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-//        glDeleteFramebuffers(1, &fbo);
-//        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
-//        return;
-//    }
-//    GLint oldViewport[4];
-//    glGetIntegerv(GL_VIEWPORT, oldViewport);
-//    glViewport(0, 0, width, height);
-//    GLint oldPackAlignment;
-//    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
-//    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-//    glReadBuffer(GL_COLOR_ATTACHMENT0);
-//    glReadPixels(0, 0, width, height, format, type, pixels);
-//    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
-//    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-//    glDeleteFramebuffers(1, &fbo);
-//    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    GLint prevFBO;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+    GLenum bindingTarget = get_binding_for_target(target);
+    if (bindingTarget == 0) return;
+    GLint oldTexBinding;
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(bindingTarget, &oldTexBinding);
+    GLuint texture = static_cast<GLuint>(oldTexBinding);
+    if (texture == 0) return;
+    GLint width, height;
+    glBindTexture(target, texture);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
+    glBindTexture(target, oldTexBinding);
+    if (width <= 0 || height <= 0) return;
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    if (target == GL_TEXTURE_2D || (target >= GL_TEXTURE_CUBE_MAP_POSITIVE_X && target <= GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)) {
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, target, texture, level);
+    } else {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        glDeleteFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        return;
+    }
+    GLint oldViewport[4];
+    glGetIntegerv(GL_VIEWPORT, oldViewport);
+    glViewport(0, 0, width, height);
+    GLint oldPackAlignment;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &oldPackAlignment);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glReadPixels(0, 0, width, height, format, type, pixels);
+    glPixelStorei(GL_PACK_ALIGNMENT, oldPackAlignment);
+    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+    glDeleteFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 }
 
 #if GLOBAL_DEBUG || DEBUG
