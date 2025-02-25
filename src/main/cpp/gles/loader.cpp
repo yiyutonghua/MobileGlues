@@ -160,6 +160,10 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_QCOM_texture_lod_bias = 1;
             } else if (strcmp(extension, "GL_EXT_blend_func_extended") == 0) {
                 g_gles_caps.GL_EXT_blend_func_extended = 1;
+            } else if (strcmp(extension, "GL_EXT_texture_format_BGRA8888") == 0) {
+                g_gles_caps.GL_EXT_texture_format_BGRA8888 = 1;
+            } else if (strcmp(extension, "GL_EXT_read_format_bgra") == 0) {
+                g_gles_caps.GL_EXT_read_format_bgra = 1;
             }
 
         } else {
