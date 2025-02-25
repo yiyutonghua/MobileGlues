@@ -58,7 +58,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libspirv-cross-c-shared.so
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libshaderconv.so
-        ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libc++_shared.so
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libGenericCodeGen.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libglslang-default-resource-limits.a
         ${CMAKE_SOURCE_DIR}/libraries/arm64-v8a/libMachineIndependent.a
