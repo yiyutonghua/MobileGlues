@@ -79,9 +79,9 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_DEPTH_COMPONENT:
-            *internal_format = GL_DEPTH_COMPONENT32F;
+            LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format), glEnumToString(*format), glEnumToString(*type))
             if(type)
-                *type = GL_FLOAT;
+                *type = GL_UNSIGNED_INT;
             break;
 
         case GL_DEPTH_STENCIL:
