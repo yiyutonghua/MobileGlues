@@ -39,7 +39,7 @@ private:
     std::unordered_map<std::array<uint8_t, 32>, ListIterator, SHA256Hash> cacheMap;
     size_t cacheSize = 0;
 
-    std::array<uint8_t, 32> computeSHA256(const char* data);
+    static std::array<uint8_t, 32> computeSHA256(const char* data);
     void maintainCacheSize();
 };
 

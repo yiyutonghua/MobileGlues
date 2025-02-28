@@ -31,8 +31,6 @@ extern "C" {
 
 static GLenum get_binding_query(GLenum target);
 
-GLboolean force_unmap();
-
 GLAPI GLAPIENTRY GLboolean glUnmapBuffer(GLenum target);
 
 GLAPI GLAPIENTRY void *glMapBuffer(GLenum target, GLenum access);

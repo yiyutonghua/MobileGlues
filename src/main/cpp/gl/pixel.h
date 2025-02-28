@@ -29,11 +29,11 @@ typedef struct {
 
 #define widthalign(width, align) ((((uintptr_t)(width))+((uintptr_t)(align)-1))&(~((uintptr_t)(align)-1)))
 
-const GLsizei gl_sizeof(GLenum type);
+GLsizei gl_sizeof(GLenum type);
 
-const GLsizei pixel_sizeof(GLenum format, GLenum type);
+GLsizei pixel_sizeof(GLenum format, GLenum type);
 
-const GLboolean is_type_packed(GLenum type);
+GLboolean is_type_packed(GLenum type);
 
 bool pixel_convert(const GLvoid *src, GLvoid **dst,
                    GLuint width, GLuint height,

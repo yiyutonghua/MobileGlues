@@ -91,7 +91,7 @@ GL_FUNC_TYPEDEF(void, glGetBooleanv, GLenum pname, GLboolean *data)
 GL_FUNC_TYPEDEF(void, glGetBufferParameteriv, GLenum target, GLenum pname, GLint *params)
 GL_FUNC_TYPEDEF(GLenum, glGetError)
 GL_FUNC_TYPEDEF(const GLubyte *, glGetString, GLenum)
-GL_FUNC_TYPEDEF(const GLubyte *, glGetStringi, GLenum, GLuint) ;
+GL_FUNC_TYPEDEF(const GLubyte *, glGetStringi, GLenum, GLuint)
 GL_FUNC_TYPEDEF(void, glGetFloatv, GLenum pname, GLfloat *data)
 GL_FUNC_TYPEDEF(void, glGetFramebufferAttachmentParameteriv, GLenum target, GLenum attachment,
                 GLenum pname, GLint *params)
@@ -520,6 +520,7 @@ GL_FUNC_TYPEDEF(void, glGetQueryObjectivEXT, GLuint id, GLenum pname, GLint *par
 GL_FUNC_TYPEDEF(void, glGetQueryObjecti64vEXT, GLuint id, GLenum pname, GLint64 *params)
 GL_FUNC_TYPEDEF(void, glBindFragDataLocationEXT, GLuint program, GLuint colorNumber,
                 const GLchar *name)
+GL_FUNC_TYPEDEF(void*, glMapBufferOES, GLenum target, GLenum access)
 
 #define GL_FUNC_DECL(name) \
 name##_PTR name;
@@ -890,6 +891,7 @@ struct gles_func_t {
     GL_FUNC_DECL(glGetQueryObjectivEXT)
     GL_FUNC_DECL(glGetQueryObjecti64vEXT)
     GL_FUNC_DECL(glBindFragDataLocationEXT)
+    GL_FUNC_DECL(glMapBufferOES)
 };
 
 extern struct gles_func_t g_gles_func;

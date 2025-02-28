@@ -6,7 +6,7 @@
 
 #define DEBUG 0
 
-const GLsizei gl_sizeof(GLenum type) {
+GLsizei gl_sizeof(GLenum type) {
     // types
     switch (type) {
         case GL_DOUBLE:
@@ -44,13 +44,13 @@ const GLsizei gl_sizeof(GLenum type) {
         case GL_DEPTH_COMPONENT:
         case GL_COLOR_INDEX:
             return 1;
+        default:
+            LOG_D("Unsupported pixel data type: %s\n", glEnumToString(type))
+            return 0;
     }
-    // formats
-    LOG_D("Unsupported pixel data type: %s\n", glEnumToString(type));
-    return 0;
 }
 
-const GLboolean is_type_packed(GLenum type) {
+GLboolean is_type_packed(GLenum type) {
     switch (type) {
         case GL_4_BYTES:
         case GL_3_BYTES:
@@ -69,11 +69,12 @@ const GLboolean is_type_packed(GLenum type) {
         case GL_UNSIGNED_SHORT_5_6_5_REV:
         case GL_DEPTH_STENCIL:
             return true;
+        default:
+            return false;
     }
-    return false;
 }
 
-const GLsizei pixel_sizeof(GLenum format, GLenum type) {
+GLsizei pixel_sizeof(GLenum format, GLenum type) {
     GLsizei width = 0;
     switch (format) {
         case GL_R:
@@ -102,7 +103,7 @@ const GLsizei pixel_sizeof(GLenum format, GLenum type) {
             width = 4;
             break;
         default:
-            LOG_D("unsupported pixel format %s\n", glEnumToString(format));
+            LOG_D("unsupported pixel format %s\n", glEnumToString(format))
             return 0;
     }
 
@@ -118,20 +119,20 @@ static const colorlayout_t *get_color_map(GLenum format) {
         static colorlayout_t layout = {fmt, __VA_ARGS__}; \
         return &layout; }
     switch (format) {
-        map(GL_RED, 0, -1, -1, -1, 0);
-        map(GL_R,   0, -1, -1, -1, 0);
-        map(GL_RG,  0,  1, -1, -1, 0);
-        map(GL_RGBA,0,  1, 2, 3, 3);
-        map(GL_RGB, 0,  1, 2, -1, 2);
-        map(GL_BGRA,2,  1, 0, 3, 3);
-        map(GL_BGR, 2,  1, 0, -1, 2);
-        map(GL_LUMINANCE_ALPHA, 0, 0, 0, 1, 1);
-        map(GL_LUMINANCE, 0, 0, 0, -1, 0);
-        map(GL_ALPHA,-1, -1, -1, 0, 0);
-        map(GL_DEPTH_COMPONENT, 0, -1, -1, -1, 0);
-        map(GL_COLOR_INDEX, 0, 1, 2, 3, 3);
+        map(GL_RED, 0, -1, -1, -1, 0)
+        map(GL_R,   0, -1, -1, -1, 0)
+        map(GL_RG,  0,  1, -1, -1, 0)
+        map(GL_RGBA,0,  1, 2, 3, 3)
+        map(GL_RGB, 0,  1, 2, -1, 2)
+        map(GL_BGRA,2,  1, 0, 3, 3)
+        map(GL_BGR, 2,  1, 0, -1, 2)
+        map(GL_LUMINANCE_ALPHA, 0, 0, 0, 1, 1)
+        map(GL_LUMINANCE, 0, 0, 0, -1, 0)
+        map(GL_ALPHA,-1, -1, -1, 0, 0)
+        map(GL_DEPTH_COMPONENT, 0, -1, -1, -1, 0)
+        map(GL_COLOR_INDEX, 0, 1, 2, 3, 3)
         default:
-            LOG_D("get_color_map: unknown pixel format %s\n", glEnumToString(format));
+            LOG_D("get_color_map: unknown pixel format %s\n", glEnumToString(format))
             break;
     }
     static colorlayout_t null = {0};
@@ -159,10 +160,10 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         if (*dst == src)
             return true;
         if (!dst_size || !pixel_sizeof(src_format, src_type)) {
-            LOG_D("pixel_convert: pixel conversion, unknown format size, anticipated abort\n");
+            LOG_D("pixel_convert: pixel conversion, unknown format size, anticipated abort\n")
             return false;
         }
-        if (*dst == NULL)        // alloc dst only if dst==NULL
+        if (*dst == nullptr)        // alloc dst only if dst==NULL
             *dst = malloc(dst_size);
         if (stride)	// for in-place conversion
             for (int yy=0; yy<height; yy++)
@@ -175,12 +176,12 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
     dst_color = get_color_map(dst_format);
     if (!dst_size || !pixel_sizeof(src_format, src_type)
         || !src_color->type || !dst_color->type) {
-        LOG_D("pixel_convert: pixel conversion, anticipated abort\n");
+        LOG_D("pixel_convert: pixel conversion, anticipated abort\n")
         return false;
     }
     GLsizei src_stride = pixel_sizeof(src_format, src_type);
     GLsizei dst_stride = pixel_sizeof(dst_format, dst_type);
-    if (*dst == src || *dst == NULL)
+    if (*dst == src || *dst == nullptr)
         *dst = malloc(dst_size);
     uintptr_t src_pos = widthalign((uintptr_t)src, align);
     uintptr_t dst_pos = widthalign((uintptr_t)*dst, align);
@@ -261,7 +262,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_dst = (unsigned char*)dst_pos;
+                auto* byte_dst = (unsigned char*)dst_pos;
 #ifdef __BIG_ENDIAN__
                 byte_dst[1] = byte_dst[2] = byte_dst[3] = *(GLubyte*)src_pos;
                 byte_dst[0] = 255;
@@ -282,7 +283,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_dst = (unsigned char*)dst_pos;
+                auto* byte_dst = (unsigned char*)dst_pos;
                 byte_dst[0] = byte_dst[1] = byte_dst[2] = *(GLubyte*)src_pos;
                 src_pos += src_stride;
                 dst_pos += dst_stride;
@@ -297,7 +298,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_src = (unsigned char*)src_pos;
+                auto* byte_src = (unsigned char*)src_pos;
 #ifdef __BIG_ENDIAN__
                 *(GLushort*)dst_pos = ((((int)byte_src[3])*77 + ((int)byte_src[2])*151 + ((int)byte_src[1])*28)&0xff00)>>8 | (byte_src[0]<<8);
 #else
@@ -316,7 +317,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_src = (unsigned char*)src_pos;
+                auto* byte_src = (unsigned char*)src_pos;
 #ifdef __BIG_ENDIAN__
                 *(GLushort*)dst_pos = ((((int)byte_src[1])*77 + ((int)byte_src[2])*151 + ((int)byte_src[3])*28)&0xff00)>>8 | (byte_src[0]<<8);
 #else
@@ -335,7 +336,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_src = (unsigned char*)src_pos;
+                auto* byte_src = (unsigned char*)src_pos;
 #ifdef __BIG_ENDIAN__
                 *(unsigned char*)dst_pos = (((int)byte_src[3])*77 + ((int)byte_src[2])*151 + ((int)byte_src[1])*28)>>8;
 #else
@@ -354,7 +355,7 @@ bool pixel_convert(const GLvoid *src, GLvoid **dst,
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
                 //tmp = *(const GLuint*)src_pos;
-                unsigned char* byte_src = (unsigned char*)src_pos;
+                auto* byte_src = (unsigned char*)src_pos;
 #ifdef __BIG_ENDIAN__
                 *(unsigned char*)dst_pos = (((int)byte_src[1])*77 + ((int)byte_src[2])*151 + ((int)byte_src[3])*28)>>8;
 #else

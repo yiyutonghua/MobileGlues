@@ -11,12 +11,14 @@
 
 #define DEBUG 0
 
-GLAPI GLAPIENTRY void glClearDepth(GLclampd depth) {
-    LOG();
-    glClearDepthf(depth);
+void glClearDepth(GLclampd depth) {
+    LOG()
+    LOAD_GLES_FUNC(glClearDepthf)
+    gles_glClearDepthf((float)depth);
+    CHECK_GL_ERROR
 }
 
 void glHint(GLenum target, GLenum mode) {
-    LOG();
+    LOG()
     LOG_D("glHint, target = %s, mode = %s", glEnumToString(target), glEnumToString(mode))
 }

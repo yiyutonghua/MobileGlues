@@ -21,7 +21,7 @@ void start_log() {
 }
 
 void write_log(const char* format, ...) {
-    if (file == NULL) {
+    if (file == nullptr) {
         return;
     }
     va_list args;
@@ -29,16 +29,18 @@ void write_log(const char* format, ...) {
     vfprintf(file, format, args);
     va_end(args);
     fprintf(file, "\n");
+#if FORCE_SYNC_WITH_LOG_FILE == 1
     fflush(file);
-//    int fd = fileno(file);
-//    fsync(fd);
+    int fd = fileno(file);
+    fsync(fd);
+#endif
     // Todo: close file
     //fclose(file);
 }
 
 void clear_log() {
     file = fopen(LOG_FILE_PATH, "w");
-    if (file == NULL) {
+    if (file == nullptr) {
         return;
     }
     fclose(file);
@@ -58,13 +60,14 @@ GLenum map_tex_target(GLenum target) {
         case GL_TEXTURE_1D:
         case GL_TEXTURE_3D:
         case GL_TEXTURE_RECTANGLE_ARB:
-            target = GL_TEXTURE_2D;
-            break;
+            return GL_TEXTURE_2D;
+            
         case GL_PROXY_TEXTURE_1D:
         case GL_PROXY_TEXTURE_3D:
         case GL_PROXY_TEXTURE_RECTANGLE_ARB:
-            target = GL_PROXY_TEXTURE_2D;
-            break;
+            return GL_PROXY_TEXTURE_2D;
+            
+        default:
+            return target;
     }
-    return target;
 }

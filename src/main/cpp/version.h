@@ -13,7 +13,7 @@
 #define REVISION 5
 #define PATCH 0
 
-const int version_type = VERSION_RELEASE;
+#define VERSION_TYPE VERSION_DEVELOPMENT
 
 #define MOBILEGLUES_VERSION_H
 

@@ -164,7 +164,7 @@ bool Cache::load() {
         file.read(reinterpret_cast<char*>(&esslSize), sizeof(esslSize));
 
         string essl(esslSize, '\0');
-        file.read(essl.data(), esslSize);
+        file.read(essl.data(), (long)esslSize);
 
         if (cacheMap.count(hash)) continue;
 
@@ -190,9 +190,9 @@ void Cache::save() {
     file.write(reinterpret_cast<const char*>(&count), sizeof(count));
 
     for (const auto& entry : cacheList) {
-        file.write(reinterpret_cast<const char*>(entry.sha256.data()), entry.sha256.size());
+        file.write(reinterpret_cast<const char*>(entry.sha256.data()), (long)entry.sha256.size());
         size_t esslSize = entry.size;
         file.write(reinterpret_cast<const char*>(&esslSize), sizeof(esslSize));
-        file.write(entry.essl.data(), esslSize);
+        file.write(entry.essl.data(), (long)esslSize);
     }
 }

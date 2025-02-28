@@ -10,8 +10,8 @@
 #define DEBUG 0
 
 void glGetIntegerv(GLenum pname, GLint *params) {
-    LOG();
-    LOG_D("glGetIntegerv, pname: %s", glEnumToString(pname));
+    LOG()
+    LOG_D("glGetIntegerv, pname: %s", glEnumToString(pname))
     if (pname == GL_CONTEXT_PROFILE_MASK) {
         (*params) = GL_CONTEXT_CORE_PROFILE_BIT;
         return;
@@ -36,15 +36,15 @@ void glGetIntegerv(GLenum pname, GLint *params) {
         (*params) = num_extensions;
         return;
     }
-    LOAD_GLES_FUNC(glGetIntegerv);
+    LOAD_GLES_FUNC(glGetIntegerv)
     gles_glGetIntegerv(pname, params);
-    LOG_D("  -> %d",*params);
+    LOG_D("  -> %d",*params)
     CHECK_GL_ERROR
 }
 
 GLenum glGetError() {
-    LOG();
-    LOAD_GLES_FUNC(glGetError);
+    LOG()
+    LOAD_GLES_FUNC(glGetError)
     GLenum err = gles_glGetError();
     // just clear gles error, no reporting
     if (err != GL_NO_ERROR) {
@@ -102,7 +102,7 @@ const char* getBeforeThirdSpace(const char* str) {
         }
         str++;
     }
-    int len = str - start;
+    long len = str - start;
     if (len >= sizeof(buffer)) len = sizeof(buffer) - 1;
     strncpy(buffer, start, len);
     buffer[len] = '\0';
@@ -110,7 +110,7 @@ const char* getBeforeThirdSpace(const char* str) {
 }
 
 const char* getGpuName() {
-    LOAD_GLES_FUNC(glGetString);
+    LOAD_GLES_FUNC(glGetString)
     const char *gpuName = (const char *) gles_glGetString(GL_RENDERER);
 
     if (!gpuName) {
@@ -141,7 +141,7 @@ const char* getGpuName() {
 }
 
 void set_es_version() {
-    LOAD_GLES_FUNC(glGetString);
+    LOAD_GLES_FUNC(glGetString)
     const char* ESVersion = getBeforeThirdSpace((const char*)gles_glGetString(GL_VERSION));
     int major, minor;
 
@@ -150,15 +150,14 @@ void set_es_version() {
     } else {
         hardware->es_version = 300;
     }
-    LOG_I("OpenGL ES Version: %s (%d)", ESVersion, hardware->es_version);
+    LOG_I("OpenGL ES Version: %s (%d)", ESVersion, hardware->es_version)
     if (hardware->es_version < 300) {
-        LOG_I("OpenGL ES version is lower than 3.0! This version is not supported!");
-        LOG_I("Disable glslang and SPIRV-Cross. Using vgpu to process all shaders!");
+        LOG_I("OpenGL ES version is lower than 3.0! This version is not supported!")
     }
 }
 
 const char* getGLESName() {
-    LOAD_GLES_FUNC(glGetString);
+    LOAD_GLES_FUNC(glGetString)
     char* ESVersion = (char*)gles_glGetString(GL_VERSION);
     return getBeforeThirdSpace(ESVersion);
 }
@@ -166,8 +165,8 @@ const char* getGLESName() {
 static std::string rendererString;
 static std::string versionString;
 const GLubyte * glGetString( GLenum name ) {
-    LOG();
-    LOAD_GLES_FUNC(glGetString);
+    LOG()
+    LOAD_GLES_FUNC(glGetString)
     /* Feature in the Future
      * Advanced OpenGL driver: NV renderer.
     switch (name) {
@@ -184,23 +183,37 @@ const GLubyte * glGetString( GLenum name ) {
     }
     */
     switch (name) {
-        case GL_VENDOR:
-            return (const GLubyte *)(std::string("Swung0x48, BZLZHH, Tungsten") + 
-            std::string(version_type == VERSION_ALPHA ? " | §c§l内测版本, 严禁任何外传!§r" : "")).c_str();
-        case GL_VERSION:
-            if (versionString == std::string("")) {
-                versionString = "4.0.0 MobileGlues";
-                std::string realVersion = " " + std::to_string(MAJOR) + "." +
-                                      std::to_string(MINOR) + "." +
-                                      std::to_string(REVISION);
-                if (PATCH) {
-                    realVersion += "." + std::to_string(PATCH);
-                }
-                std::string suffix = realVersion + (version_type == VERSION_ALPHA ? " | §4§l如果您在公开平台看到这一提示, 则发布者已违规!§r" :
-                                     std::string(version_type == VERSION_DEVELOPMENT?".Dev":""));
-                versionString += suffix;
+        case GL_VENDOR: {
+            if(versionString.empty()) {
+                std::string vendor = "Swung0x48, BZLZHH, Tungsten";
+#if defined(VERSION_TYPE) && (VERSION_TYPE == VERSION_ALPHA)
+                vendor += " | §c§l内测版本, 严禁任何外传!§r";
+#endif
+                versionString = vendor;
             }
             return (const GLubyte *)versionString.c_str();
+        }
+        case GL_VERSION: {
+            static std::string versionCache;
+            if (versionCache.empty()) {
+                versionCache = "4.0.0 MobileGlues ";
+                versionCache += std::to_string(MAJOR) + "."
+                                +  std::to_string(MINOR) + "."
+                                +  std::to_string(REVISION);
+#if PATCH != 0
+                versionCache += "." + std::to_string(PATCH);
+#endif
+#if defined(VERSION_TYPE)
+#if VERSION_TYPE == VERSION_ALPHA
+                versionCache += " | §4§l如果您在公开平台看到这一提示, 则发布者已违规!§r";
+#elif VERSION_TYPE == VERSION_DEVELOPMENT
+                versionCache += ".Dev";
+#endif
+#endif
+            }
+            return (const GLubyte *)versionCache.c_str();
+        }
+
         case GL_RENDERER: 
         {
             if (rendererString == std::string("")) {
@@ -220,8 +233,8 @@ const GLubyte * glGetString( GLenum name ) {
 }
 
 const GLubyte * glGetStringi(GLenum name, GLuint index) {
-    LOG();
-    LOAD_GLES_FUNC(glGetStringi);
+    LOG()
+    LOAD_GLES_FUNC(glGetStringi)
     typedef struct {
         GLenum name;
         const char** parts;
@@ -288,13 +301,13 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
 void glGetQueryObjectiv(GLuint id, GLenum pname, GLint* params) {
     LOG()
     LOAD_GLES_FUNC(glGetQueryObjectivEXT)
-
     gles_glGetQueryObjectivEXT(id, pname, params);
+    CHECK_GL_ERROR
 }
 
 void glGetQueryObjecti64v(GLuint id, GLenum pname, GLint64* params) {
     LOG()
     LOAD_GLES_FUNC(glGetQueryObjecti64vEXT)
-
     gles_glGetQueryObjecti64vEXT(id, pname, params);
+    CHECK_GL_ERROR
 }

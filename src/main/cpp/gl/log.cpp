@@ -11,7 +11,7 @@
 const char* glEnumToString(GLenum e) {
     static char str[128];
     switch (e) {
-        /* Boolean values */
+/* Boolean values */
 
 /* Data types */
         CASE(GL_BYTE)

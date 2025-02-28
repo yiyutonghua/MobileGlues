@@ -20,11 +20,26 @@
 
 char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
 
-typedef std::vector<uint32_t> Spirv;
+void trim(char* str) {
+    char* end;
+    while (isspace((unsigned char)*str)) str++;
+    if (*str == 0) return;
+    end = str + strlen(str) - 1;
+    while (end > str && isspace((unsigned char)*end)) end--;
+    *(end + 1) = 0;
+}
+
+int startsWith(const char *str, const char *prefix) {
+    if (!str || !prefix) return 0;
+    while (*prefix) {
+        if (*str++ != *prefix++) return 0;
+    }
+    return 1;
+}
 
 static TBuiltInResource InitResources()
 {
-    TBuiltInResource Resources;
+    TBuiltInResource Resources{};
 
     Resources.maxLights                                 = 32;
     Resources.maxClipPlanes                             = 6;
@@ -119,15 +134,15 @@ static TBuiltInResource InitResources()
     Resources.maxTaskWorkGroupSizeZ_NV                  = 1;
     Resources.maxMeshViewCountNV                        = 4;
 
-    Resources.limits.nonInductiveForLoops                 = 1;
-    Resources.limits.whileLoops                           = 1;
-    Resources.limits.doWhileLoops                         = 1;
-    Resources.limits.generalUniformIndexing               = 1;
-    Resources.limits.generalAttributeMatrixVectorIndexing = 1;
-    Resources.limits.generalVaryingIndexing               = 1;
-    Resources.limits.generalSamplerIndexing               = 1;
-    Resources.limits.generalVariableIndexing              = 1;
-    Resources.limits.generalConstantMatrixVectorIndexing  = 1;
+    Resources.limits.nonInductiveForLoops                 = true;
+    Resources.limits.whileLoops                           = true;
+    Resources.limits.doWhileLoops                         = true;
+    Resources.limits.generalUniformIndexing               = true;
+    Resources.limits.generalAttributeMatrixVectorIndexing = true;
+    Resources.limits.generalVaryingIndexing               = true;
+    Resources.limits.generalSamplerIndexing               = true;
+    Resources.limits.generalVariableIndexing              = true;
+    Resources.limits.generalConstantMatrixVectorIndexing  = true;
 
     return Resources;
 }
@@ -248,8 +263,8 @@ vec4 GI_TemporalFilter() {
 )";
 
     char *mainPos = strstr(glslCode, "\nvoid main()");
-    if (mainPos == NULL) {
-        LOG_E("Error: 'void main()' not found in GLSL code.");
+    if (mainPos == nullptr) {
+        LOG_E("Error: 'void main()' not found in GLSL code.")
         return glslCode;
     }
 
@@ -258,8 +273,8 @@ vec4 GI_TemporalFilter() {
     size_t insertLength = strlen(GI_TemporalFilter);
 
     char *modifiedCode = (char *)malloc(originalLength + insertLength + 2);
-    if (modifiedCode == NULL) {
-        LOG_E("Memory allocation failed.");
+    if (modifiedCode == nullptr) {
+        LOG_E("Memory allocation failed.")
         return glslCode;
     }
 
@@ -320,7 +335,7 @@ std::string removeLayoutBinding(const std::string& glslCode) {
 }
 
 // TODO
-std::string makeRGBWriteonly(const std::string& input) {
+[[maybe_unused]] std::string makeRGBWriteonly(const std::string& input) {
     std::regex pattern(R"(.*layout\([^)]*rgba[^)]*\).*?)");
     std::string result;
     std::string::size_type start = 0;
@@ -344,18 +359,12 @@ std::string makeRGBWriteonly(const std::string& input) {
     return result;
 }
 
-std::string removeLocationBinding(const std::string& glslCode) {
-    std::regex locationRegex(R"(layout\s*\(\s*location\s*=\s*\d+\s*\)\s*)");
-    std::string result = std::regex_replace(glslCode, locationRegex, "");
-    return result;
-}
-
 char* removeLineDirective(char* glslCode) {
     char* cursor = glslCode;
     int modifiedCodeIndex = 0;
     size_t maxLength = 1024 * 10;
     char* modifiedGlslCode = (char*)malloc(maxLength * sizeof(char));
-    if (!modifiedGlslCode) return NULL;
+    if (!modifiedGlslCode) return nullptr;
 
     while (*cursor) {
         if (strncmp(cursor, "\n#", 2) == 0) {
@@ -409,48 +418,12 @@ char* removeLineDirective(char* glslCode) {
         if (modifiedCodeIndex >= maxLength - 1) {
             maxLength *= 2;
             modifiedGlslCode = (char*)realloc(modifiedGlslCode, maxLength);
-            if (!modifiedGlslCode) return NULL;
+            if (!modifiedGlslCode) return nullptr;
         }
     }
 
     modifiedGlslCode[modifiedCodeIndex] = '\0';
     return modifiedGlslCode;
-}
-
-std::string replaceText(const std::string& input, const std::string& from, const std::string& to) {
-    std::string result = input;
-    size_t pos = 0;
-    while ((pos = result.find(from, pos)) != std::string::npos) {
-        result.replace(pos, from.length(), to);
-        pos += to.length();
-    }
-    return result;
-}
-
-std::string addPrecisionToSampler2DShadow(const std::string& glslCode) {
-    std::string result = glslCode;
-    result = replaceText(result, " sampler2DShadow ", " highp sampler2DShadow ");
-    result = replaceText(result, " mediump highp ", " mediump ");
-    result = replaceText(result, " lowp highp ", " lowp ");
-    result = replaceText(result, " highp highp ", " highp ");
-    return result;
-}
-
-void trim(char* str) {
-    char* end;
-    while (isspace((unsigned char)*str)) str++;
-    if (*str == 0) return;
-    end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) end--;
-    *(end + 1) = 0;
-}
-
-int startsWith(const char *str, const char *prefix) {
-    if (!str || !prefix) return 0;
-    while (*prefix) {
-        if (*str++ != *prefix++) return 0;
-    }
-    return 1;
 }
 
 char* process_uniform_declarations(char* glslCode) {
@@ -539,7 +512,7 @@ char* process_uniform_declarations(char* glslCode) {
 
             char* cursor_end = cursor;
 
-            int spaceLeft = maxLength - modifiedCodeIndex;
+            size_t spaceLeft = maxLength - modifiedCodeIndex;
             int len = 0;
 
             if (*initial_value) {
@@ -633,7 +606,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
             shader_language = EShLanguage::EShLangGeometry;
             break;
         default:
-            LOG_D("GLSL type not supported!");
+            LOG_D("GLSL type not supported!")
             return nullptr;
     }
 
@@ -653,7 +626,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
         std::strcpy(shader_source, shader_str.c_str());
 
     }
-    LOG_D("GLSL version: %d",glsl_version);
+    LOG_D("GLSL version: %d",glsl_version)
 
     shader.setStrings(&shader_source, 1);
 
@@ -667,22 +640,22 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     TBuiltInResource TBuiltInResource_resources = InitResources();
 
     if (!shader.parse(&TBuiltInResource_resources, glsl_version, true, EShMsgDefault)) {
-        LOG_D("GLSL Compiling ERROR: \n%s",shader.getInfoLog());
-        return NULL;
+        LOG_D("GLSL Compiling ERROR: \n%s",shader.getInfoLog())
+        return nullptr;
     }
-    LOG_D("GLSL Compiled.");
+    LOG_D("GLSL Compiled.")
 
     glslang::TProgram program;
     program.addShader(&shader);
 
     if (!program.link(EShMsgDefault)) {
-        LOG_D("Shader Linking ERROR: %s",program.getInfoLog());
+        LOG_D("Shader Linking ERROR: %s",program.getInfoLog())
         return nullptr;
     }
-    LOG_D("Shader Linked." );
+    LOG_D("Shader Linked." )
     std::vector<unsigned int> spirv_code;
     glslang::SpvOptions spvOptions;
-    spvOptions.disableOptimizer = true;
+    spvOptions.disableOptimizer = false;
     glslang::GlslangToSpv(*program.getIntermediate(shader_language), spirv_code, &spvOptions);
 
     std::string essl;
@@ -690,17 +663,16 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     const SpvId *spirv = spirv_code.data();
     size_t word_count = spirv_code.size();
 
-    spvc_context context = NULL;
-    spvc_parsed_ir ir = NULL;
-    spvc_compiler compiler_glsl = NULL;
-    spvc_compiler_options options = NULL;
-    spvc_resources resources = NULL;
-    const spvc_reflected_resource *list = NULL;
-    const char *result = NULL;
+    spvc_context context = nullptr;
+    spvc_parsed_ir ir = nullptr;
+    spvc_compiler compiler_glsl = nullptr;
+    spvc_compiler_options options = nullptr;
+    spvc_resources resources = nullptr;
+    const spvc_reflected_resource *list = nullptr;
+    const char *result = nullptr;
     size_t count;
-    size_t i;
 
-    LOG_D("spirv_code.size(): %d",spirv_code.size() );
+    LOG_D("spirv_code.size(): %d",spirv_code.size())
     spvc_context_create(&context);
     spvc_context_parse_spirv(context, spirv, word_count, &ir);
     spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &compiler_glsl);
@@ -711,17 +683,15 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
     spvc_compiler_install_compiler_options(compiler_glsl, options);
     spvc_compiler_compile(compiler_glsl, &result);
-    LOG_D("Shader Linked.4" );
+
     if (!result) {
-        LOG_D("Error: unexpected error in spirv-cross.");
+        LOG_D("Error: unexpected error in spirv-cross.")
         return glsl_code;
     }
     essl=result;
     spvc_context_destroy(context);
 
     essl = removeLayoutBinding(essl);
-    //essl = removeLocationBinding(essl);
-    //essl = addPrecisionToSampler2DShadow(essl);
     essl = forceSupporterOutput(essl);
     //essl = makeRGBWriteonly(essl);
 
