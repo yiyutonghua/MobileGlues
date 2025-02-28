@@ -45,18 +45,14 @@ void glGetIntegerv(GLenum pname, GLint *params) {
 GLenum glGetError() {
     LOG();
     LOAD_GLES_FUNC(glGetError);
-    GLuint err = gles_glGetError();
+    GLenum err = gles_glGetError();
+    // just clear gles error, no reporting
     if (err != GL_NO_ERROR) {
-        if(global_settings.ignore_error >= 2) {
-            // no logging without DEBUG
-            LOG_W("glGetError\n -> %d", err)
-            LOG_W("Now try to cheat.")
-            return GL_NO_ERROR;
-        } else {
-            LOG_E(" -> %d", err)
-        }
+        // no logging without DEBUG
+        LOG_W("glGetError\n -> %d", err)
+        LOG_W("Now try to cheat.")
     }
-    return err;
+    return GL_NO_ERROR;
 }
 
 static std::string es_ext;
