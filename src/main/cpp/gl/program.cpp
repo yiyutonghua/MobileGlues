@@ -6,9 +6,21 @@
 #include "log.h"
 #include "shader.h"
 #include "program.h"
+#include <regex>
+#include <cstring>
+#include <iostream>
 #include "../config/settings.h"
 
 #define DEBUG 0
+
+char* removeLayoutLocations(const char* input) {
+    std::string code(input);
+    std::regex pattern(R"(layout\s*\(\s*location\s*=\s*\d+\s*\))");
+    std::string result = std::regex_replace(code, pattern, "");
+    char* output = new char[result.length() + 1];
+    strcpy(output, result.c_str());
+    return output;
+}
 
 void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
     LOG()
@@ -19,8 +31,28 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
 //    } else {
 //        LOG_W("Warning: No GL_EXT_blend_func_extended, skipping glBindFragDataLocation...");
 //    }
-    char* origin_glsl = nullptr;
+    
+    if (strlen(name) > 8 && strncmp(name, "outColor", 8) == 0) {
+        const char* numberStr = name + 8;
+        bool isNumber = true;
+        for (int i = 0; numberStr[i] != '\0'; ++i) {
+            if (!isdigit(numberStr[i])) {
+                isNumber = false;
+                break;
+            }
+        }
 
+        if (isNumber) {
+            unsigned int extractedColor = static_cast<unsigned int>(std::stoul(numberStr));
+            if (extractedColor == color) {
+                // outColor was bound in glsl process. exit now
+                LOG_D("Find outColor* with color *, skipping")
+                return;
+            }
+        }
+    }
+
+    char* origin_glsl = nullptr;
     if (shaderInfo.frag_data_changed) {
         size_t glslLen  = strlen(shaderInfo.frag_data_changed_converted) + 1;
         origin_glsl = (char *)malloc(glslLen);
@@ -39,8 +71,8 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
         strcpy(origin_glsl, shaderInfo.converted);
     }
 
-    size_t len = strlen(name);
-    size_t tlen = len + 32;
+    int len = strlen(name);
+    int tlen = len + 32;
     char *targetPattern = (char*)malloc(sizeof(char) * tlen);
     if (!targetPattern) {
         LOG_E("Memory allocation failed for targetPattern")
@@ -67,13 +99,16 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
         origin[matchLen] = '\0';
 
         size_t resultLen =
-                strlen(origin) + 30; // "layout (location = )" + colorNumber + nullptr terminator
+                strlen(origin) + 30; // "layout (location = )" + colorNumber + null terminator
         result = (char *) malloc(resultLen);
         if (!result) {
             LOG_E("Memory allocation failed\n")
             free(origin);
             break;
         }
+
+        origin = removeLayoutLocations(origin);
+        
         snprintf(result, resultLen, "layout (location = %d) %s", color, origin);
 
         char *temp = strstr(searchStart, origin);
@@ -103,7 +138,6 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
                 return;
             }
             strcpy(shaderInfo.frag_data_changed_converted, newConverted);
-
             free(newConverted);
         }
 

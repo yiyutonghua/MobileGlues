@@ -13,6 +13,7 @@
 #include <regex>
 #include <strstream>
 #include "cache.h"
+#include "../../version.h"
 
 //#define FEATURE_PRE_CONVERTED_GLSL
 
@@ -556,10 +557,18 @@ char* process_uniform_declarations(char* glslCode) {
     return modifiedGlslCode;
 }
 
+std::string processOutColorLocations(const std::string& glslCode) {
+    const std::regex pattern(R"(\n(out highp vec4 outColor)(\d+);)");
+    const std::string replacement = "\nlayout(location=$2) $1$2;";
+    return std::regex_replace(glslCode, pattern, replacement);
+}
+
 static Cache glslCache;
 static bool isGlslConvertedSuccessfully;
 char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint glsl_version) {
-    const char* cachedESSL = glslCache.get(glsl_code);
+    std::string sha256_string(glsl_code);
+    sha256_string += "\n" + std::to_string(MAJOR) + "." + std::to_string(MINOR) + "." + std::to_string(REVISION) + "|" + std::to_string(essl_version);
+    const char* cachedESSL = glslCache.get(sha256_string.c_str());
     if (cachedESSL) {
         LOG_D("GLSL Hit Cache:\n%s\n-->\n%s", glsl_code, cachedESSL)
         return (char*)cachedESSL;
@@ -569,7 +578,7 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint gl
     char* converted = glsl_version<140?GLSLtoGLSLES_1(glsl_code, glsl_type, essl_version):GLSLtoGLSLES_2(glsl_code, glsl_type, essl_version);
     if (converted && isGlslConvertedSuccessfully) {
         converted = process_uniform_declarations(converted);
-        glslCache.put(glsl_code, converted);
+       glslCache.put(sha256_string.c_str(), converted);
     }
     return converted ? converted : glsl_code;
 }
@@ -685,13 +694,14 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     spvc_compiler_compile(compiler_glsl, &result);
 
     if (!result) {
-        LOG_D("Error: unexpected error in spirv-cross.")
+        LOG_E("Error: unexpected error in spirv-cross.")
         return glsl_code;
     }
     essl=result;
     spvc_context_destroy(context);
 
     essl = removeLayoutBinding(essl);
+    essl = processOutColorLocations(essl);
     essl = forceSupporterOutput(essl);
     //essl = makeRGBWriteonly(essl);
 
