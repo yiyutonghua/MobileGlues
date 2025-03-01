@@ -578,7 +578,7 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint gl
     char* converted = glsl_version<140?GLSLtoGLSLES_1(glsl_code, glsl_type, essl_version):GLSLtoGLSLES_2(glsl_code, glsl_type, essl_version);
     if (converted && isGlslConvertedSuccessfully) {
         converted = process_uniform_declarations(converted);
-       glslCache.put(sha256_string.c_str(), converted);
+        glslCache.put(sha256_string.c_str(), converted);
     }
     return converted ? converted : glsl_code;
 }
