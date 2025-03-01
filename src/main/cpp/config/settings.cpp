@@ -25,7 +25,9 @@ void init_settings() {
     int enableNoError = success ? config_get_int("enableNoError") : 0;
     int enableExtGL43 = success ? config_get_int("enableExtGL43") : 0;
     int enableExtComputeShader = success ? config_get_int("enableExtComputeShader") : 0;
-    int maxGlslCacheSize = success ? config_get_int("maxGlslCacheSize") * 1024 * 1024 : 0;
+    size_t maxGlslCacheSize = 0;
+    if (config_get_int("maxGlslCacheSize") > 0)
+        maxGlslCacheSize = success ? config_get_int("maxGlslCacheSize") * 1024 * 1024 : 0;
 
     if (enableANGLE < 0 || enableANGLE > 3)
         enableANGLE = 0;
