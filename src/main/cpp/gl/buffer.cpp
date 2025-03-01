@@ -25,6 +25,7 @@ void glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage
           glEnumToString(target), size, data, glEnumToString(usage))
     LOAD_GLES_FUNC(glBufferData)
     gles_glBufferData(target, size, data, usage);
+    CHECK_GL_ERROR
 }
 
 void* glMapBuffer(GLenum target, GLenum access) {
