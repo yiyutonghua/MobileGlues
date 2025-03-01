@@ -80,8 +80,9 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
 
         case GL_DEPTH_COMPONENT:
             LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format), glEnumToString(*format), glEnumToString(*type))
-            if(type)
+            if(type) {
                 *type = GL_UNSIGNED_INT;
+            }
             break;
 
         case GL_DEPTH_STENCIL:
@@ -567,7 +568,7 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT24;
+        internalFormat = GL_DEPTH_COMPONENT;
 
     CLEAR_GL_ERROR_NO_INIT
 
@@ -594,7 +595,7 @@ void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum int
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT24;
+        internalFormat = GL_DEPTH_COMPONENT;
 
 
     LOG_D("glRenderbufferStorageMultisample, target: %d, samples: %d, internalFormat: %d, width: %d, height: %d",
@@ -826,7 +827,8 @@ void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format
           x, y, width, height, format, type, pixels)
           
     static int count = 0;
-
+    GLenum prevFormat = format;
+    
     if (format == GL_BGRA && type == GL_UNSIGNED_INT_8_8_8_8) {
         format = GL_RGBA;
         type = GL_UNSIGNED_BYTE;
