@@ -34,65 +34,69 @@ void glMultiDrawElements(GLenum mode, const GLsizei* count, GLenum type, const v
     }
 }
 
-_Thread_local static bool unexpected_error = false; // solve the crash error for ANGLE
+//_Thread_local static bool unexpected_error = false; // solve the crash error for ANGLE
 
 void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
     LOG_D("glDrawElements, mode: %d, count: %d, type: %d, indices: %p", mode, count, type, indices)
     LOAD_GLES_FUNC(glDrawElements)
-    LOAD_GLES_FUNC(glGetError)
-    GLenum pre_err = gles_glGetError();
-    if(pre_err != GL_NO_ERROR) {
-        LOG_D("Skipping due to prior error: 0x%04X", pre_err)
-        return;
-    }
-    if (!unexpected_error) {
-        LOG_D("es_glDrawElements, mode: %d, count: %d, type: %d, indices: %p", mode, count, type, indices)
-        gles_glDrawElements(mode, count, type, indices);
-    } else {
-        unexpected_error = false;
-    }
+    //LOAD_GLES_FUNC(glGetError)
+    //GLenum pre_err = gles_glGetError();
+    //if(pre_err != GL_NO_ERROR) {
+    //    LOG_D("Skipping due to prior error: 0x%04X", pre_err)
+    //    return;
+    //}
+    //if (!unexpected_error) {
+    //    LOG_D("es_glDrawElements, mode: %d, count: %d, type: %d, indices: %p", mode, count, type, indices)
+    gles_glDrawElements(mode, count, type, indices);
+    CHECK_GL_ERROR
+    //} else {
+    //    unexpected_error = false;
+    //}
 }
 
 void glBindImageTexture(GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format) {
     LOG_D("glBindImageTexture, unit: %d, texture: %d, level: %d, layered: %d, layer: %d, access: %d, format: %d",
           unit, texture, level, layered, layer, access, format)
     LOAD_GLES_FUNC(glBindImageTexture)
-    LOAD_GLES_FUNC(glGetError)
+    //LOAD_GLES_FUNC(glGetError)
     gles_glBindImageTexture(unit, texture, level, layered, layer, access, format);
-    GLenum err;
-    while((err = gles_glGetError()) != GL_NO_ERROR) {
-        LOG_D("GL Error: 0x%04X", err)
-        unexpected_error = true;
-    }
+    CHECK_GL_ERROR
+    //GLenum err;
+    //while((err = gles_glGetError()) != GL_NO_ERROR) {
+    //    LOG_D("GL Error: 0x%04X", err)
+    //    unexpected_error = true;
+    //}
 }
 
 void glUniform1i(GLint location, GLint v0) {
     LOG_D("glUniform1i, location: %d, v0: %d", location, v0)
     LOAD_GLES_FUNC(glUniform1i)
-    LOAD_GLES_FUNC(glGetError)
+    //LOAD_GLES_FUNC(glGetError)
     gles_glUniform1i(location, v0);
-    GLenum err;
-    while((err = gles_glGetError()) != GL_NO_ERROR) {
-        LOG_D("GL Error: 0x%04X", err)
-        unexpected_error = true;
-    }
+    CHECK_GL_ERROR
+    //GLenum err;
+    //while((err = gles_glGetError()) != GL_NO_ERROR) {
+    //    LOG_D("GL Error: 0x%04X", err)
+    //    unexpected_error = true;
+    //}
 }
 
 void glDispatchCompute(GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) {
     LOG_D("glDispatchCompute, num_groups_x: %d, num_groups_y: %d, num_groups_z: %d",
           num_groups_x, num_groups_y, num_groups_z)
     LOAD_GLES_FUNC(glDispatchCompute)
-    LOAD_GLES_FUNC(glGetError)
-    GLenum pre_err = gles_glGetError();
-    if(pre_err != GL_NO_ERROR) {
-        LOG_D("Skipping due to prior error: 0x%04X", pre_err)
-        return;
-    }
-    if (!unexpected_error) {
-        LOG_D("es_glDispatchCompute, num_groups_x: %d, num_groups_y: %d, num_groups_z: %d",
-              num_groups_x, num_groups_y, num_groups_z)
-        gles_glDispatchCompute(num_groups_x, num_groups_y, num_groups_z);
-    } else {
-        unexpected_error = false;
-    }
+    //LOAD_GLES_FUNC(glGetError)
+    //GLenum pre_err = gles_glGetError();
+    //if(pre_err != GL_NO_ERROR) {
+    //    LOG_D("Skipping due to prior error: 0x%04X", pre_err)
+    //    return;
+    //}
+    //if (!unexpected_error) {
+    //    LOG_D("es_glDispatchCompute, num_groups_x: %d, num_groups_y: %d, num_groups_z: %d",
+    //          num_groups_x, num_groups_y, num_groups_z)
+    gles_glDispatchCompute(num_groups_x, num_groups_y, num_groups_z);
+    CHECK_GL_ERROR
+    //} else {
+    //    unexpected_error = false;
+    //}
 }
