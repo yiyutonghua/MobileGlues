@@ -29,8 +29,8 @@ void write_log(const char* format, ...) {
     vfprintf(file, format, args);
     va_end(args);
     fprintf(file, "\n");
-#if FORCE_SYNC_WITH_LOG_FILE == 1
     fflush(file);
+#if FORCE_SYNC_WITH_LOG_FILE == 1
     int fd = fileno(file);
     fsync(fd);
 #endif
