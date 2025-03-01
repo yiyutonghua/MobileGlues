@@ -12,34 +12,49 @@
 void glGetIntegerv(GLenum pname, GLint *params) {
     LOG()
     LOG_D("glGetIntegerv, pname: %s", glEnumToString(pname))
-    if (pname == GL_CONTEXT_PROFILE_MASK) {
-        (*params) = GL_CONTEXT_CORE_PROFILE_BIT;
-        return;
-    } 
-    if (pname == GL_NUM_EXTENSIONS) {
-        static GLint num_extensions = -1;
-        if (num_extensions == -1) {
-            const GLubyte* ext_str = glGetString(GL_EXTENSIONS);
-            if (ext_str) {
-                char* copy = strdup((const char*)ext_str);
-                char* token = strtok(copy, " ");
-                num_extensions = 0;
-                while (token) {
-                    num_extensions++;
-                    token = strtok(nullptr, " ");
+    switch (pname) {
+        case GL_CONTEXT_PROFILE_MASK:
+            (*params) = GL_CONTEXT_CORE_PROFILE_BIT;
+            break;
+        case GL_NUM_EXTENSIONS:
+            static GLint num_extensions = -1;
+            if (num_extensions == -1) {
+                const GLubyte* ext_str = glGetString(GL_EXTENSIONS);
+                if (ext_str) {
+                    char* copy = strdup((const char*)ext_str);
+                    char* token = strtok(copy, " ");
+                    num_extensions = 0;
+                    while (token) {
+                        num_extensions++;
+                        token = strtok(nullptr, " ");
+                    }
+                    free(copy);
+                } else {
+                    num_extensions = 0;
                 }
-                free(copy);
-            } else {
-                num_extensions = 0;
             }
+            (*params) = num_extensions;
+            break;
+        case GL_MAJOR_VERSION:
+            (*params) = 4;
+            break;
+        case GL_MINOR_VERSION:
+            (*params) = 0;
+            break;
+        case GL_MAX_TEXTURE_IMAGE_UNITS: {
+            LOAD_GLES_FUNC(glGetIntegerv)
+            int es_params = 16;
+            gles_glGetIntegerv(pname, &es_params);
+            CHECK_GL_ERROR
+            (*params) = es_params * 2;
+            break;
         }
-        (*params) = num_extensions;
-        return;
+        default:
+            LOAD_GLES_FUNC(glGetIntegerv)
+            gles_glGetIntegerv(pname, params);
+            LOG_D("  -> %d",*params)
+            CHECK_GL_ERROR
     }
-    LOAD_GLES_FUNC(glGetIntegerv)
-    gles_glGetIntegerv(pname, params);
-    LOG_D("  -> %d",*params)
-    CHECK_GL_ERROR
 }
 
 GLenum glGetError() {
