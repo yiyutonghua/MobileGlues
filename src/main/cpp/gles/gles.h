@@ -896,6 +896,8 @@ struct gles_func_t {
 
 extern struct gles_func_t g_gles_func;
 
+#define GLES g_gles_func
+
 #ifdef __cplusplus
 }
 #endif
