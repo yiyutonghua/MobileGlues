@@ -561,6 +561,9 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
 
     CLEAR_GL_ERROR_NO_INIT
 
+    LOG_D("mg.glRenderbufferStorage, target: %s, internalFormat: %s, width: %d, height: %d",
+          glEnumToString(target), glEnumToString(internalFormat), width, height)
+
     LOAD_GLES_FUNC(glGetTexLevelParameteriv)
     GLint realInternalFormat;
     gles_glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &realInternalFormat);
@@ -568,12 +571,12 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT;
+        internalFormat = GL_DEPTH_COMPONENT24;
 
     CLEAR_GL_ERROR_NO_INIT
 
-    LOG_D("glRenderbufferStorage, target: 0x%x, internalFormat: 0x%x, width: %d, height: %d",
-          target, internalFormat, width, height)
+    LOG_D("es.glRenderbufferStorage, target: %s, internalFormat: %s, width: %d, height: %d",
+          glEnumToString(target), glEnumToString(internalFormat), width, height)
 
     LOAD_GLES_FUNC(glRenderbufferStorage)
     gles_glRenderbufferStorage(target, internalFormat, width, height);
@@ -633,7 +636,7 @@ void glGetTexLevelParameterfv(GLenum target, GLint level,GLenum pname, GLfloat *
 
 void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *params) {
     LOG()
-    LOG_D("glGetTexLevelParameteriv,target: %d, level: %d, pname: %d",target,level,pname)
+    LOG_D("glGetTexLevelParameteriv,target: %s, level: %d, pname: %s",glEnumToString(target),level,glEnumToString(pname))
     GLenum rtarget = map_tex_target(target);
     if (rtarget==GL_PROXY_TEXTURE_2D) {
         switch (pname) {
