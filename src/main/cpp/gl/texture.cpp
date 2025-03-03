@@ -79,6 +79,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_DEPTH_COMPONENT:
+            // TODO: Add enableCompatibleMode option
             LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format), glEnumToString(*format), glEnumToString(*type))
             if(type) {
                 *type = GL_UNSIGNED_INT;
@@ -598,7 +599,7 @@ void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum int
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT;
+        internalFormat = GL_DEPTH_COMPONENT24;
 
 
     LOG_D("glRenderbufferStorageMultisample, target: %d, samples: %d, internalFormat: %d, width: %d, height: %d",

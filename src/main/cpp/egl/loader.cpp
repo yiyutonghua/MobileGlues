@@ -12,10 +12,12 @@
 
 #define DEBUG 0
 
+
+static EGLDisplay eglDisplay = EGL_NO_DISPLAY;
+static EGLSurface eglSurface = EGL_NO_SURFACE;
+static EGLContext eglContext = EGL_NO_CONTEXT;
+
 void init_target_egl() {
-    EGLDisplay eglDisplay = EGL_NO_DISPLAY;
-    EGLSurface eglSurface = EGL_NO_SURFACE;
-    EGLContext eglContext = EGL_NO_CONTEXT;
 
     LOAD_EGL(eglGetProcAddress);
     LOAD_EGL(eglBindAPI);
@@ -115,4 +117,17 @@ cleanup:
         egl_eglTerminate(eglDisplay);
     }
     LOG_E("EGL initialization failed");
+}
+
+void destroy_temp_egl_ctx() {
+    LOAD_EGL(eglDestroySurface);
+    LOAD_EGL(eglDestroyContext);
+    LOAD_EGL(eglMakeCurrent);
+    LOAD_EGL(eglTerminate);
+
+    egl_eglMakeCurrent(eglDisplay, 0, 0, EGL_NO_CONTEXT);
+    egl_eglDestroySurface(eglDisplay, eglSurface);
+    egl_eglDestroyContext(eglDisplay, eglContext);
+
+    egl_eglTerminate(eglDisplay);
 }

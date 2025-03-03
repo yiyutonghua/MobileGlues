@@ -85,5 +85,7 @@ void proc_init() {
     init_perfetto();
 #endif
 
+    // Cleanup
+    destroy_temp_egl_ctx();
     g_initialized = 1;
 }

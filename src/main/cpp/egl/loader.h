@@ -173,6 +173,7 @@ EGLBoolean mglues_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface rea
 */
 
 void init_target_egl();
+void destroy_temp_egl_ctx();
 
 
 #ifdef __cplusplus
