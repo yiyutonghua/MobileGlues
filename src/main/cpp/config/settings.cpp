@@ -25,6 +25,7 @@ void init_settings() {
     int enableNoError = success ? config_get_int("enableNoError") : 0;
     int enableExtGL43 = success ? config_get_int("enableExtGL43") : 0;
     int enableExtComputeShader = success ? config_get_int("enableExtComputeShader") : 0;
+    int enableCompatibleMode = success ? config_get_int("enableCompatibleMode") : 0;
     size_t maxGlslCacheSize = 0;
     if (config_get_int("maxGlslCacheSize") > 0)
         maxGlslCacheSize = success ? config_get_int("maxGlslCacheSize") * 1024 * 1024 : 0;
@@ -37,6 +38,8 @@ void init_settings() {
         enableExtGL43 = 0;
     if (enableExtComputeShader < 0 || enableExtComputeShader > 1)
         enableExtComputeShader = 0;
+    if (enableCompatibleMode < 0 || enableCompatibleMode > 1)
+        enableCompatibleMode = 0;
 
     // 1205
     int fclVersion = 0;
@@ -55,6 +58,7 @@ void init_settings() {
         enableExtGL43 = 0;
         enableExtComputeShader = 0;
         maxGlslCacheSize = 0;
+        enableCompatibleMode = 0;
     }
 
     const char* gpuString = getGPUInfo();
@@ -111,4 +115,6 @@ void init_settings() {
     global_settings.ext_compute_shader = enableExtComputeShader;
     
     global_settings.maxGlslCacheSize = maxGlslCacheSize;
+
+    global_settings.enableCompatibleMode = enableCompatibleMode;
 }

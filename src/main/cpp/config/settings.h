@@ -17,6 +17,7 @@ struct global_settings_t {
     int ext_gl43; // 0, 1
     int ext_compute_shader; // 0, 1
     size_t maxGlslCacheSize; // 0~
+    int enableCompatibleMode; // 0, 1
 };
 
 extern struct global_settings_t global_settings;
