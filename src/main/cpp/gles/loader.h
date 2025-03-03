@@ -25,7 +25,8 @@ void load_libs();
     {                                                                       \
         LOG_D("INIT_GLES_FUNC(%s)", #name);                                 \
         g_gles_func.name = (name##_PTR)proc_address(gles, #name);           \
-        LOG_W("Error: GLES function " #name " is NULL\n"); \
+        if (g_gles_func.name == NULL)\
+            LOG_W("Error: GLES function " #name " is NULL\n"); \
     }
 #else
 #define INIT_GLES_FUNC(name)                                                \
@@ -48,6 +49,7 @@ static name##_PTR egl_##name = NULL;                                        \
         if (egl != NULL) {                                                  \
             egl_##name = (name##_PTR)proc_address(egl, #name);              \
         }                                                                   \
+        if (egl_##name == NULL)                                             \
         LOG_W("Error: " #name " is NULL\n");                                \
     }                                                                       \
 }
