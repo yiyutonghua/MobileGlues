@@ -9,7 +9,8 @@
 #define DEBUG 0
 
 static bool g_indirect_cmds_inited = false;
-std::vector<draw_elements_indirect_command_t> g_commands;
+//std::vector<draw_elements_indirect_command_t> g_commands;
+static GLsizei g_cmdbufsize = 0;
 GLuint g_indirectbuffer = 0;
 
 void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices, GLsizei primcount, const GLint* basevertex) {
@@ -27,13 +28,15 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
     if (!g_indirect_cmds_inited) {
         GLES.glGenBuffers(1, &g_indirectbuffer);
         GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_indirectbuffer);
-        g_commands.resize(1);
+        g_cmdbufsize = 1;
+        GLES.glBufferData(GL_DRAW_INDIRECT_BUFFER,
+                          g_cmdbufsize * sizeof(draw_elements_indirect_command_t), NULL, GL_DYNAMIC_DRAW);
 
         g_indirect_cmds_inited = true;
     }
 
-    if (g_commands.size() < primcount) {
-        size_t sz = g_commands.size();
+    if (g_cmdbufsize < primcount) {
+        size_t sz = g_cmdbufsize;
 
         LOG_D("Before resize: %d", sz)
 
@@ -41,26 +44,32 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
         while (sz < primcount)
             sz *= 2;
 
-        g_commands.resize(sz);
+//        g_commands.resize(sz);
         GLES.glBufferData(GL_DRAW_INDIRECT_BUFFER,
                           sz * sizeof(draw_elements_indirect_command_t), NULL, GL_DYNAMIC_DRAW);
+        g_cmdbufsize = sz;
     }
 
-    LOG_D("After resize: %d", g_commands.size())
+    LOG_D("After resize: %d", g_cmdbufsize)
 
-    for (GLsizei i = 0; i < primcount; ++i) {
-        g_commands[i].count = counts[i];
-        g_commands[i].instanceCount = 1;
-        g_commands[i].firstIndex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(indices[i]));
-        g_commands[i].baseVertex = basevertex[i];
-        g_commands[i].reservedMustBeZero = 0;
-    }
-
-    void* pcmds = GLES.glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,
+    draw_elements_indirect_command_t* pcmds = (draw_elements_indirect_command_t*)
+            GLES.glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,
                                         0, primcount * sizeof(draw_elements_indirect_command_t),
                                         GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 
-    memcpy(pcmds, g_commands.data(), primcount * sizeof(draw_elements_indirect_command_t));
+    for (GLsizei i = 0; i < primcount; ++i) {
+        pcmds[i].count = counts[i];
+        pcmds[i].instanceCount = 1;
+        pcmds[i].firstIndex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(indices[i]));
+        pcmds[i].baseVertex = basevertex[i];
+        pcmds[i].reservedMustBeZero = 0;
+    }
+
+//    void* pcmds = GLES.glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,
+//                                        0, primcount * sizeof(draw_elements_indirect_command_t),
+//                                        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+
+//    memcpy(pcmds, g_commands.data(), primcount * sizeof(draw_elements_indirect_command_t));
     GLES.glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
 
     // Draw indirect!
