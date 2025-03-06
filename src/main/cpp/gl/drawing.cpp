@@ -16,6 +16,9 @@ GLuint g_indirectbuffer = 0;
 void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices, GLsizei primcount, const GLint* basevertex) {
     LOG()
 
+    GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount, basevertex);
+    return;
+
 //    LOAD_GLES_FUNC(glDrawElementsBaseVertex)
 //
 //    for (GLsizei i = 0; i < primcount; ++i) {

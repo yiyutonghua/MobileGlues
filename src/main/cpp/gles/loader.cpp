@@ -167,6 +167,8 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_OES_mapbuffer = 1;
             } else if (strcmp(extension, "GL_EXT_multi_draw_indirect") == 0) {
                 g_gles_caps.GL_EXT_multi_draw_indirect = 1;
+            } else if (strcmp(extension, "GL_OES_draw_elements_base_vertex") == 0) {
+                g_gles_caps.GL_OES_draw_elements_base_vertex = 1;
             }
 
         } else {
@@ -567,10 +569,12 @@ void init_target_gles() {
 
     INIT_GLES_FUNC(glMultiDrawArraysIndirectEXT)
     INIT_GLES_FUNC(glMultiDrawElementsIndirectEXT)
+    INIT_GLES_FUNC(glMultiDrawElementsBaseVertexEXT)
     INIT_GLES_FUNC(glBruh)
 
     LOG_I("glMultiDrawArraysIndirectEXT() @ 0x%x", GLES.glMultiDrawArraysIndirectEXT)
     LOG_I("glMultiDrawElementsIndirectEXT() @ 0x%x", GLES.glMultiDrawElementsIndirectEXT)
+    LOG_I("glMultiDrawElementsBaseVertexEXT() @ 0x%x", GLES.glMultiDrawElementsBaseVertexEXT)
 
     LOG_I("glBruh() @ 0x%x", GLES.glBruh)
 
