@@ -30,28 +30,8 @@ int nlevel(int size, int level) {
     return size;
 }
 
-static bool support_rgba16 = false;
-static bool checked_rgba16 = false;
-
 std::unordered_map<GLuint, texture_t> g_textures;
 GLuint bound_texture = 0;
-
-bool check_rgba16() {
-    LOAD_GLES_FUNC(glGetStringi)
-    LOAD_GLES_FUNC(glGetIntegerv)
-
-    GLint numFormats = 0;
-    gles_glGetIntegerv(GL_NUM_EXTENSIONS, &numFormats);
-
-    for (int i = 0; i < numFormats; ++i) {
-        const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
-        if (strcmp((const char*)extension, "GL_EXT_texture_norm16") == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     if (format && *format == GL_BGRA)
@@ -149,11 +129,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_RGBA16: {
-            if (!checked_rgba16) {
-                support_rgba16 = check_rgba16();
-                checked_rgba16 = true;
-            }
-            if (support_rgba16) {
+            if (g_gles_caps.GL_EXT_texture_norm16) {
                 if(type)
                     *type = GL_UNSIGNED_SHORT;
             } else {
@@ -654,6 +630,7 @@ void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *pa
                 return;
         }
     }
+    LOG_D("es.glGetTexLevelParameteriv,target: %s, level: %d, pname: %s",glEnumToString(target),level,glEnumToString(pname))
     LOAD_GLES_FUNC(glGetTexLevelParameteriv)
     gles_glGetTexLevelParameteriv(target,level,pname,params);
     CHECK_GL_ERROR

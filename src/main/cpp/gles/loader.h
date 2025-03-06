@@ -157,6 +157,8 @@ struct gles_caps_t {
     int GL_OES_mapbuffer;
     int GL_OES_depth24;
     int GL_OES_depth_texture_float;
+    int GL_EXT_texture_norm16;
+    int GL_EXT_texture_rg;
 };
 
 extern struct gles_caps_t g_gles_caps;

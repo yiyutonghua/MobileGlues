@@ -169,6 +169,10 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_OES_depth24 = 1;
             } else if (strcmp(extension, "GL_OES_depth_texture_float") == 0) {
                 g_gles_caps.GL_OES_depth_texture_float = 1;
+            } else if (strcmp(extension, "GL_EXT_texture_norm16") == 0) {
+                g_gles_caps.GL_EXT_texture_norm16 = 1;
+            } else if (strcmp(extension, "GL_EXT_texture_rg") == 0) {
+                g_gles_caps.GL_EXT_texture_rg = 1;
             }
         } else {
             LOG_D("(nullptr)")
