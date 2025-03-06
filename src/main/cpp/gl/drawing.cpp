@@ -16,17 +16,21 @@ GLuint g_indirectbuffer = 0;
 void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices, GLsizei primcount, const GLint* basevertex) {
     LOG()
 
-    GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount, basevertex);
-    return;
+    LOG_D("glMultiDrawElementsBaseVertexMG begin, counts = %d", counts)
+//    GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount, basevertex);
+//    return;
 
 //    LOAD_GLES_FUNC(glDrawElementsBaseVertex)
 //
-//    for (GLsizei i = 0; i < primcount; ++i) {
-//        const GLsizei count = counts[i];
-//        if (count > 0) {
+
+    for (GLsizei i = 0; i < primcount; ++i) {
+        const GLsizei count = counts[i];
+        if (count > 0) {
+            LOG_D("GLES.glDrawElementsBaseVertex, mode = %s, count = %d, type = %s, indices[i] = 0x%x, basevertex[i] = %d",
+                  glEnumToString(mode), count, glEnumToString(type), indices[i], basevertex[i])
 //            gles_glDrawElementsBaseVertex(mode, count, type, indices[i], basevertex[i]);
-//        }
-//    }
+        }
+    }
 
     if (!g_indirect_cmds_inited) {
         GLES.glGenBuffers(1, &g_indirectbuffer);
@@ -83,6 +87,8 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
 
 
     // Multidraw indirect!
+    LOG_D("GLES.glMultiDrawElementsIndirectEXT, mode = %s, type = %s, indirect = 0x%x, drawcount = %d, stride = %d",
+          glEnumToString(mode), glEnumToString(type), 0, primcount, 0)
     GLES.glMultiDrawElementsIndirectEXT(mode, type, (void*)0, primcount, 0);
 
     CHECK_GL_ERROR
