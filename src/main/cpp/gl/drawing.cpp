@@ -73,10 +73,14 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
     GLES.glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
 
     // Draw indirect!
-    for (GLsizei i = 0; i < primcount; ++i) {
-        const GLvoid* offset = reinterpret_cast<GLvoid*>(i * sizeof(draw_elements_indirect_command_t));
-        GLES.glDrawElementsIndirect(mode, type, offset);
-    }
+//    for (GLsizei i = 0; i < primcount; ++i) {
+//        const GLvoid* offset = reinterpret_cast<GLvoid*>(i * sizeof(draw_elements_indirect_command_t));
+//        GLES.glDrawElementsIndirect(mode, type, offset);
+//    }
+
+
+    // Multidraw indirect!
+    GLES.glMultiDrawElementsIndirectEXT(mode, type, (void*)0, primcount, 0);
 
     CHECK_GL_ERROR
 }

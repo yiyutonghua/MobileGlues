@@ -165,12 +165,16 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_EXT_read_format_bgra = 1;
             } else if (strcmp(extension, "GL_OES_mapbuffer") == 0) {
                 g_gles_caps.GL_OES_mapbuffer = 1;
+            } else if (strcmp(extension, "GL_EXT_multi_draw_indirect") == 0) {
+                g_gles_caps.GL_EXT_multi_draw_indirect = 1;
             }
 
         } else {
             LOG_D("(nullptr)")
         }
     }
+
+    LOG_I("%sDetected GL_EXT_multi_draw_indirect!", g_gles_caps.GL_EXT_multi_draw_indirect ? "" : "Not ")
 
     if (g_gles_caps.GL_EXT_buffer_storage) {
         AppendExtension("GL_ARB_buffer_storage");
@@ -560,6 +564,15 @@ void init_target_gles() {
     INIT_GLES_FUNC(glGetQueryObjecti64vEXT)
     INIT_GLES_FUNC(glBindFragDataLocationEXT)
     INIT_GLES_FUNC(glMapBufferOES)
+
+    INIT_GLES_FUNC(glMultiDrawArraysIndirectEXT)
+    INIT_GLES_FUNC(glMultiDrawElementsIndirectEXT)
+    INIT_GLES_FUNC(glBruh)
+
+    LOG_I("glMultiDrawArraysIndirectEXT() @ 0x%x", GLES.glMultiDrawArraysIndirectEXT)
+    LOG_I("glMultiDrawElementsIndirectEXT() @ 0x%x", GLES.glMultiDrawElementsIndirectEXT)
+
+    LOG_I("glBruh() @ 0x%x", GLES.glBruh)
 
     LOG_D("Initializing %s @ hardware", RENDERERNAME)
     set_hardware();
