@@ -225,6 +225,7 @@ const GLubyte * glGetString( GLenum name ) {
                 versionCache += ".Dev";
 #endif
 #endif
+                versionCache += VERSION_SUFFIX;
             }
             return (const GLubyte *)versionCache.c_str();
         }

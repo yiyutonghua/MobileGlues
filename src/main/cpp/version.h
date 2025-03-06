@@ -13,7 +13,9 @@
 #define REVISION 0
 #define PATCH 0
 
-#define VERSION_TYPE VERSION_RELEASE
+#define VERSION_TYPE VERSION_DEVELOPMENT
+
+#define VERSION_SUFFIX "-drawindirect"
 
 #define MOBILEGLUES_VERSION_H
 
