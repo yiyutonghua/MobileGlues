@@ -89,7 +89,9 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar *const* string, c
             GLint shaderType;
             LOAD_GLES_FUNC(glGetShaderiv)
             gles_glGetShaderiv(shader, GL_SHADER_TYPE, &shaderType);
-            essl_src = GLSLtoGLSLES(glsl_src.c_str(), shaderType, hardware->es_version, glsl_version);
+            essl_src = getCachedESSL(glsl_src.c_str(), hardware->es_version);
+            if (essl_src.empty())
+                essl_src = GLSLtoGLSLES(glsl_src.c_str(), shaderType, hardware->es_version, glsl_version);
             if (essl_src.empty()) {
                 LOG_E("Failed to convert shader %d.", shader)
                 return;

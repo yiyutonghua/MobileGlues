@@ -205,3 +205,8 @@ void Cache::save() {
         file.write(entry.essl.data(), (long)esslSize);
     }
 }
+
+Cache& Cache::get_instance() {
+    static Cache s_cache;
+    return s_cache;
+}
