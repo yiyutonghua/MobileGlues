@@ -12,6 +12,7 @@
 #include <string>
 #include <regex>
 #include <strstream>
+#include <algorithm>
 #include "cache.h"
 #include "../../version.h"
 
@@ -172,7 +173,7 @@ std::string removeSecondLine(std::string code) {
     return code;
 }
 
-char* disable_GL_ARB_derivative_control(char* glslCode) {
+char* disable_GL_ARB_derivative_control(const char* glslCode) {
     std::string code(glslCode);
     std::string target = "GL_ARB_derivative_control";
     size_t pos = code.find(target);
@@ -583,6 +584,125 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint gl
     return converted ? converted : glsl_code;
 }
 
+std::string replace_line_starting_with(const std::string& glslCode, const std::string& starting, const std::string& substitution = "") {
+    std::string result;
+    size_t length = glslCode.size();
+    size_t start = 0;  // 当前保留块的起始位置
+    size_t current = 0;
+
+    auto append_chunk = [&](size_t end) {
+        if (end > start) {
+            result.append(glslCode, start, end - start);
+        }
+    };
+
+    while (current < length) {
+        // Skip whitespace at line begin
+        size_t lineStart = current;
+        while (current < length && (glslCode[current] == ' ' || glslCode[current] == '\t')) {
+            current++;
+        }
+
+        // Check whether #line directive
+        bool isLineDirective = false;
+        if (current + 5 <= length && glslCode.compare(current, 5, "#line") == 0) {
+            isLineDirective = true;
+        }
+
+        // Move to line end
+        while (current < length && glslCode[current] != '\r' && glslCode[current] != '\n') {
+            current++;
+        }
+
+        // Handle carriage return
+        size_t newlineLength = 0;
+        if (current < length) {
+            if (glslCode[current] == '\r') {
+                newlineLength = (current + 1 < length && glslCode[current + 1] == '\n') ? 2 : 1;
+            }
+            else {
+                newlineLength = 1;
+            }
+        }
+
+        if (isLineDirective) {
+            // Find #line directive ->
+            //  1. Append chunk
+            append_chunk(lineStart); // from chunk_begin to before `#line`
+            // 2. Skip this line (incl. \n)
+            current += newlineLength;
+            start = current; // 3. Starting from next line
+
+            result += substitution;
+        }
+        else {
+            // move to a new line
+            current += newlineLength;
+        }
+    }
+
+    // append last block
+    append_chunk(current);
+    return result;
+}
+
+static inline void replace_all(std::string& str, const std::string& from, const std::string& to) {
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
+    }
+}
+
+static inline void inject_temporal_filter(std::string& glsl) {
+    const std::string temporalFilterCall = "deferredOutput2 = GI_TemporalFilter()";
+    const std::string temporalFilterDef = "vec4 GI_TemporalFilter()";
+    const std::string mainStart = "void main()";
+
+    // Already defined function
+    const auto def_loc = glsl.find(temporalFilterDef);
+    if (def_loc != std::string::npos)
+        return;
+
+    // Never called function
+    const auto call_loc = glsl.find(temporalFilterCall);
+    if (call_loc == std::string::npos)
+        return;
+
+
+    const auto main_loc = glsl.find(mainStart);
+    // No main(), no inject
+    if (main_loc == std::string::npos)
+        return;
+
+    const std::string GI_TemporalFilter = R"(
+vec4 GI_TemporalFilter() {
+    vec2 uv = gl_FragCoord.xy / screenSize;
+    uv += taaJitter * pixelSize;
+    vec4 currentGI = texture(colortex0, uv);
+    float depth = texture(depthtex0, uv).r;
+    vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    vec4 viewPos = gbufferProjectionInverse * clipPos;
+    viewPos /= viewPos.w;
+    vec4 worldPos = gbufferModelViewInverse * viewPos;
+    vec4 prevClipPos = gbufferPreviousProjection * (gbufferPreviousModelView * worldPos);
+    prevClipPos /= prevClipPos.w;
+    vec2 prevUV = prevClipPos.xy * 0.5 + 0.5;
+    vec4 historyGI = texture(colortex1, prevUV);
+    float difference = length(currentGI.rgb - historyGI.rgb);
+    float thresholdValue = 0.1;
+    float adaptiveBlend = mix(0.9, 0.0, smoothstep(thresholdValue, thresholdValue * 2.0, difference));
+    vec4 filteredGI = mix(currentGI, historyGI, adaptiveBlend);
+    if (difference > thresholdValue * 2.0) {
+        filteredGI = currentGI;
+    }
+    return filteredGI;
+}
+)";
+    // Do injection here
+    glsl.insert(main_loc, "\n" + GI_TemporalFilter + "\n");
+}
+
 char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
 #ifdef FEATURE_PRE_CONVERTED_GLSL
     if (getGLSLVersion(glsl_code) == 430) {
@@ -593,6 +713,30 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
         }
     }
 #endif
+//    char* correct_glsl = glsl_code;
+    std::string correct_glsl_str = glsl_code;
+    // Remove lines beginning with `#line`
+    correct_glsl_str = replace_line_starting_with(correct_glsl_str, "#line");
+    // Act as if disable_GL_ARB_derivative_control is false
+    replace_all(correct_glsl_str, "#ifdef GL_ARB_derivative_control", "#if 0");
+    replace_all(correct_glsl_str, "#ifndef GL_ARB_derivative_control", "#if 1");
+
+    // Polyfill transpose()
+    replace_all(correct_glsl_str,
+               "const mat3 rotInverse = transpose(rot);",
+               "const mat3 rotInverse = mat3(rot[0][0], rot[1][0], rot[2][0], rot[0][1], rot[1][1], rot[2][1], rot[0][2], rot[1][2], rot[2][2]);");
+
+    // GI_TemporalFilter injection
+    inject_temporal_filter(correct_glsl_str);
+
+    LOG_D("Firstly converted GLSL:\n%s",correct_glsl_str.c_str())
+    int glsl_version = getGLSLVersion(correct_glsl_str.c_str());
+    if (glsl_version == -1) {
+        glsl_version = 140;
+        correct_glsl_str.insert(0, "#version 140\n");
+    }
+    LOG_D("GLSL version: %d",glsl_version)
+
     glslang::InitializeProcess();
     EShLanguage shader_language;
     switch (glsl_type) {
@@ -620,24 +764,8 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     }
 
     glslang::TShader shader(shader_language);
-
-    char* correct_glsl = glsl_code;
-    correct_glsl = removeLineDirective(correct_glsl);
-    correct_glsl = disable_GL_ARB_derivative_control(correct_glsl);
-    correct_glsl = forceSupporterInput(correct_glsl);
-    LOG_D("Firstly converted GLSL:\n%s",correct_glsl)
-    char *shader_source = correct_glsl;
-    int glsl_version = getGLSLVersion(shader_source);
-    if (glsl_version == -1) {
-        glsl_version = 140;
-        std::string shader_str(shader_source);
-        shader_str.insert(0, "#version 140\n");
-        std::strcpy(shader_source, shader_str.c_str());
-
-    }
-    LOG_D("GLSL version: %d",glsl_version)
-
-    shader.setStrings(&shader_source, 1);
+    const char* s[] = { correct_glsl_str.c_str() };
+    shader.setStrings(s, 1);
 
     using namespace glslang;
     shader.setEnvInput(EShSourceGlsl, shader_language, EShClientVulkan, glsl_version);
@@ -710,7 +838,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
 
     LOG_D("Originally GLSL to GLSL ES Complete: \n%s",result_essl)
 
-    free(shader_source);
+//    free(shader_source);
     glslang::FinalizeProcess();
     isGlslConvertedSuccessfully = true;
     return result_essl;
