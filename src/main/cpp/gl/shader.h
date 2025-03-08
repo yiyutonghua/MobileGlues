@@ -5,18 +5,20 @@
 #define MOBILEGLUES_SHADER_H
 
 #include "gl.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <string>
 
 struct shader_t {
     GLuint id;
-    char *converted;
+    std::string converted;
     char *frag_data_changed_converted;
     int frag_data_changed;
 };
 
 extern struct shader_t shaderInfo;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 GLAPI GLAPIENTRY void
 glShaderSource(GLuint shader, GLsizei count, const GLchar *const *string, const GLint *length);

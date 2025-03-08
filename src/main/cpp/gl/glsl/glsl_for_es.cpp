@@ -428,134 +428,254 @@ char* removeLineDirective(char* glslCode) {
     return modifiedGlslCode;
 }
 
-char* process_uniform_declarations(char* glslCode) {
-    char* cursor = glslCode;
-    char name[256], type[256], initial_value[1024];
-    int modifiedCodeIndex = 0;
-    size_t maxLength = 1024 * 10;
-    char* modifiedGlslCode = (char*)malloc(maxLength * sizeof(char));
-    if (!modifiedGlslCode) return nullptr;
+//char* process_uniform_declarations(char* glslCode) {
+//    char* cursor = glslCode;
+//    char name[256], type[256], initial_value[1024];
+//    int modifiedCodeIndex = 0;
+//    size_t maxLength = 1024 * 10;
+//    char* modifiedGlslCode = (char*)malloc(maxLength * sizeof(char));
+//    if (!modifiedGlslCode) return nullptr;
+//
+//    while (*cursor) {
+//        if (strncmp(cursor, "uniform", 7) == 0) {
+//            char* cursor_start = cursor;
+//
+//            cursor += 7;
+//
+//            while (isspace((unsigned char)*cursor)) cursor++;
+//
+//            // may be precision qualifier
+//            char* precision = nullptr;
+//            if (startsWith(cursor, "highp")) {
+//                precision = " highp";
+//                cursor += 5;
+//                while (isspace((unsigned char)*cursor)) cursor++;
+//            } else if (startsWith(cursor, "lowp")) {
+//                precision = " lowp";
+//                cursor += 4;
+//                while (isspace((unsigned char)*cursor)) cursor++;
+//            } else if (startsWith(cursor, "mediump")) {
+//                precision = " mediump";
+//                cursor += 7;
+//                while (isspace((unsigned char)*cursor)) cursor++;
+//            }
+//
+//            int i = 0;
+//            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
+//                type[i++] = *cursor++;
+//            }
+//            type[i] = '\0';
+//
+//            while (isspace((unsigned char)*cursor)) cursor++;
+//
+//            // may be precision qualifier
+//            if(!precision)
+//            {
+//                if (startsWith(cursor, "highp")) {
+//                    precision = " highp";
+//                    cursor += 5;
+//                    while (isspace((unsigned char)*cursor)) cursor++;
+//                } else if (startsWith(cursor, "lowp")) {
+//                    precision = " lowp";
+//                    cursor += 4;
+//                    while (isspace((unsigned char)*cursor)) cursor++;
+//                } else if (startsWith(cursor, "mediump")) {
+//                    precision = " mediump";
+//                    cursor += 7;
+//                    while (isspace((unsigned char)*cursor)) cursor++;
+//                } else {
+//                    precision = "";
+//                }
+//            }
+//
+//            while (isspace((unsigned char)*cursor)) cursor++;
+//
+//            i = 0;
+//            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
+//                name[i++] = *cursor++;
+//            }
+//            name[i] = '\0';
+//            while (isspace((unsigned char)*cursor)) cursor++;
+//
+//            initial_value[0] = '\0';
+//            if (*cursor == '=') {
+//                cursor++;
+//                i = 0;
+//                while (*cursor && *cursor != ';') {
+//                    initial_value[i++] = *cursor++;
+//                }
+//                initial_value[i] = '\0';
+//                trim(initial_value);
+//            }
+//
+//            while (*cursor != ';' && *cursor) {
+//                cursor++;
+//            }
+//
+//            char* cursor_end = cursor;
+//
+//            size_t spaceLeft = maxLength - modifiedCodeIndex;
+//            int len = 0;
+//
+//            if (*initial_value) {
+//                len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
+//            } else {
+//                // use original declaration
+//                size_t length = cursor_end - cursor_start + 1;
+//                if (length < spaceLeft) {
+//                    memcpy(modifiedGlslCode + modifiedCodeIndex, cursor_start, length);
+//                    len = (int)length;
+//                } else {
+//                    fprintf(stderr, "Error: Not enough space in buffer\n");
+//                }
+//                // len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
+//            }
+//
+//            if (len < 0 || len >= spaceLeft) {
+//                free(modifiedGlslCode);
+//                return nullptr;
+//            }
+//            modifiedCodeIndex += len;
+//
+//            while (*cursor == ';') cursor++;
+//
+//        } else {
+//            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
+//        }
+//
+//        while (modifiedCodeIndex >= maxLength - 1) {
+//            maxLength *= 2;
+//            char* temp = (char*)realloc(modifiedGlslCode, maxLength);
+//            if (!temp) {
+//                free(modifiedGlslCode);
+//                return nullptr;
+//            }
+//            modifiedGlslCode = temp;
+//        }
+//    }
+//
+//    modifiedGlslCode[modifiedCodeIndex] = '\0';
+//    return modifiedGlslCode;
+//}
 
-    while (*cursor) {
-        if (strncmp(cursor, "uniform", 7) == 0) {
-            char* cursor_start = cursor;
+void trim(std::string& str) {
+    str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+    str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), str.end());
+}
 
-            cursor += 7;
+std::string process_uniform_declarations(const std::string& glslCode) {
+    std::string result;
+    size_t scan_pos = 0;
+    size_t chunk_start = 0;
+    const size_t length = glslCode.length();
+    const std::vector<std::string> precision_kws = {"highp", "lowp", "mediump"};
 
-            while (isspace((unsigned char)*cursor)) cursor++;
+    result.reserve(glslCode.length());
 
-            // may be precision qualifier
-            char* precision = nullptr;
-            if (startsWith(cursor, "highp")) {
-                precision = " highp";
-                cursor += 5;
-                while (isspace((unsigned char)*cursor)) cursor++;
-            } else if (startsWith(cursor, "lowp")) {
-                precision = " lowp";
-                cursor += 4;
-                while (isspace((unsigned char)*cursor)) cursor++;
-            } else if (startsWith(cursor, "mediump")) {
-                precision = " mediump";
-                cursor += 7;
-                while (isspace((unsigned char)*cursor)) cursor++;
+    while (scan_pos < length) {
+        if (glslCode.compare(scan_pos, 7, "uniform") == 0) {
+            if (scan_pos > chunk_start) {
+                result.append(glslCode, chunk_start, scan_pos - chunk_start);
             }
 
-            int i = 0;
-            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
-                type[i++] = *cursor++;
-            }
-            type[i] = '\0';
+            const size_t decl_start = scan_pos;
+            scan_pos += 7;  // Skip "uniform"
 
-            while (isspace((unsigned char)*cursor)) cursor++;
+            // 解析精度限定符和类型
+            std::string precision, type;
+            bool found_precision = false;
 
-            // may be precision qualifier
-            if(!precision)
-            {
-                if (startsWith(cursor, "highp")) {
-                    precision = " highp";
-                    cursor += 5;
-                    while (isspace((unsigned char)*cursor)) cursor++;
-                } else if (startsWith(cursor, "lowp")) {
-                    precision = " lowp";
-                    cursor += 4;
-                    while (isspace((unsigned char)*cursor)) cursor++;
-                } else if (startsWith(cursor, "mediump")) {
-                    precision = " mediump";
-                    cursor += 7;
-                    while (isspace((unsigned char)*cursor)) cursor++;
-                } else {
-                    precision = "";
+            // 第一轮解析：类型前的精度限定符
+            while (scan_pos < length) {
+                while (scan_pos < length && std::isspace(glslCode[scan_pos])) ++scan_pos;
+
+                // 检查精度限定符
+                for (const auto& kw : precision_kws) {
+                    if (glslCode.compare(scan_pos, kw.length(), kw) == 0) {
+                        precision = " " + kw;
+                        scan_pos += kw.length();
+                        found_precision = true;
+                        break;
+                    }
                 }
-            }
+                if (found_precision) break;
 
-            while (isspace((unsigned char)*cursor)) cursor++;
-
-            i = 0;
-            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
-                name[i++] = *cursor++;
-            }
-            name[i] = '\0';
-            while (isspace((unsigned char)*cursor)) cursor++;
-
-            initial_value[0] = '\0';
-            if (*cursor == '=') {
-                cursor++;
-                i = 0;
-                while (*cursor && *cursor != ';') {
-                    initial_value[i++] = *cursor++;
+                // 开始提取类型
+                const size_t type_start = scan_pos;
+                while (scan_pos < length && (std::isalnum(glslCode[scan_pos]) || glslCode[scan_pos] == '_')) {
+                    ++scan_pos;
                 }
-                initial_value[i] = '\0';
-                trim(initial_value);
+                type = glslCode.substr(type_start, scan_pos - type_start);
+                break;
             }
 
-            while (*cursor != ';' && *cursor) {
-                cursor++;
+            // 第二轮解析：类型后的精度限定符
+            while (scan_pos < length) {
+                while (scan_pos < length && std::isspace(glslCode[scan_pos])) ++scan_pos;
+
+                bool found = false;
+                for (const auto& kw : precision_kws) {
+                    if (glslCode.compare(scan_pos, kw.length(), kw) == 0) {
+                        if (precision.empty()) precision = " " + kw;
+                        scan_pos += kw.length();
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) break;
             }
 
-            char* cursor_end = cursor;
+            // 确保类型被正确提取
+            if (type.empty()) {
+                const size_t type_start = scan_pos;
+                while (scan_pos < length && (std::isalnum(glslCode[scan_pos]) || glslCode[scan_pos] == '_')) {
+                    ++scan_pos;
+                }
+                type = glslCode.substr(type_start, scan_pos - type_start);
+            }
 
-            size_t spaceLeft = maxLength - modifiedCodeIndex;
-            int len = 0;
+            // 提取变量名
+            while (scan_pos < length && std::isspace(glslCode[scan_pos])) ++scan_pos;
+            const size_t name_start = scan_pos;
+            while (scan_pos < length && (std::isalnum(glslCode[scan_pos]) || glslCode[scan_pos] == '_')) {
+                ++scan_pos;
+            }
+            const std::string name = glslCode.substr(name_start, scan_pos - name_start);
 
-            if (*initial_value) {
-                len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
+            // 定位声明结束
+            size_t decl_end = glslCode.find(';', scan_pos);
+            if (decl_end == std::string::npos) decl_end = length;
+            else ++decl_end;
+
+            // 处理初始化值
+            const bool has_initializer = (glslCode.find('=', scan_pos) < decl_end);
+            if (has_initializer) {
+                result.append("uniform")
+                        .append(precision)
+                        .append(" ")
+                        .append(type)
+                        .append(" ")
+                        .append(name)
+                        .append(";");
             } else {
-                // use original declaration
-                size_t length = cursor_end - cursor_start + 1;
-                if (length < spaceLeft) {
-                    memcpy(modifiedGlslCode + modifiedCodeIndex, cursor_start, length);
-                    len = (int)length;
-                } else {
-                    fprintf(stderr, "Error: Not enough space in buffer\n");
-                }
-                // len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
+                result.append(glslCode, decl_start, decl_end - decl_start);
             }
 
-            if (len < 0 || len >= spaceLeft) {
-                free(modifiedGlslCode);
-                return nullptr;
-            }
-            modifiedCodeIndex += len;
-
-            while (*cursor == ';') cursor++;
-
+            scan_pos = chunk_start = decl_end;
         } else {
-            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-        }
-
-        while (modifiedCodeIndex >= maxLength - 1) {
-            maxLength *= 2;
-            char* temp = (char*)realloc(modifiedGlslCode, maxLength);
-            if (!temp) {
-                free(modifiedGlslCode);
-                return nullptr;
-            }
-            modifiedGlslCode = temp;
+            ++scan_pos;
         }
     }
 
-    modifiedGlslCode[modifiedCodeIndex] = '\0';
-    return modifiedGlslCode;
+    if (chunk_start < length) {
+        result.append(glslCode, chunk_start, length - chunk_start);
+    }
+
+    return result;
 }
 
 std::string processOutColorLocations(const std::string& glslCode) {
@@ -566,7 +686,7 @@ std::string processOutColorLocations(const std::string& glslCode) {
 
 static Cache glslCache;
 static bool isGlslConvertedSuccessfully;
-char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint glsl_version) {
+std::string GLSLtoGLSLES(const char* glsl_code, GLenum glsl_type, uint essl_version, uint glsl_version) {
     std::string sha256_string(glsl_code);
     sha256_string += "\n" + std::to_string(MAJOR) + "." + std::to_string(MINOR) + "." + std::to_string(REVISION) + "|" + std::to_string(essl_version);
     const char* cachedESSL = glslCache.get(sha256_string.c_str());
@@ -576,12 +696,13 @@ char* GLSLtoGLSLES(char* glsl_code, GLenum glsl_type, uint essl_version, uint gl
     }
     
     isGlslConvertedSuccessfully = false;
-    char* converted = glsl_version<140?GLSLtoGLSLES_1(glsl_code, glsl_type, essl_version):GLSLtoGLSLES_2(glsl_code, glsl_type, essl_version);
-    if (converted && isGlslConvertedSuccessfully) {
+    std::string converted = glsl_version<140? GLSLtoGLSLES_1(glsl_code, glsl_type, essl_version):GLSLtoGLSLES_2(glsl_code, glsl_type, essl_version);
+    if (isGlslConvertedSuccessfully && !converted.empty()) {
         converted = process_uniform_declarations(converted);
-        glslCache.put(sha256_string.c_str(), converted);
+        glslCache.put(sha256_string.c_str(), converted.c_str());
     }
-    return converted ? converted : glsl_code;
+
+    return isGlslConvertedSuccessfully ? converted : glsl_code;
 }
 
 std::string replace_line_starting_with(const std::string& glslCode, const std::string& starting, const std::string& substitution = "") {
@@ -703,7 +824,7 @@ vec4 GI_TemporalFilter() {
     glsl.insert(main_loc, "\n" + GI_TemporalFilter + "\n");
 }
 
-char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
+std::string GLSLtoGLSLES_2(const char *glsl_code, GLenum glsl_type, uint essl_version) {
 #ifdef FEATURE_PRE_CONVERTED_GLSL
     if (getGLSLVersion(glsl_code) == 430) {
         char* converted = preConvertedGlsl(glsl_code);
@@ -795,8 +916,6 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     spvOptions.disableOptimizer = false;
     glslang::GlslangToSpv(*program.getIntermediate(shader_language), spirv_code, &spvOptions);
 
-    std::string essl;
-
     const SpvId *spirv = spirv_code.data();
     size_t word_count = spirv_code.size();
 
@@ -825,7 +944,7 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
         LOG_E("Error: unexpected error in spirv-cross.")
         return glsl_code;
     }
-    essl=result;
+    std::string essl = result;
     spvc_context_destroy(context);
 
     essl = removeLayoutBinding(essl);
@@ -833,23 +952,23 @@ char* GLSLtoGLSLES_2(char* glsl_code, GLenum glsl_type, uint essl_version) {
     essl = forceSupporterOutput(essl);
     //essl = makeRGBWriteonly(essl);
 
-    char* result_essl = new char[essl.length() + 1];
-    std::strcpy(result_essl, essl.c_str());
+//    char* result_essl = new char[essl.length() + 1];
+//    std::strcpy(result_essl, essl.c_str());
 
-    LOG_D("Originally GLSL to GLSL ES Complete: \n%s",result_essl)
+    LOG_D("Originally GLSL to GLSL ES Complete: \n%s", essl.c_str())
 
 //    free(shader_source);
     glslang::FinalizeProcess();
     isGlslConvertedSuccessfully = true;
-    return result_essl;
+    return essl;
 }
 
-char * GLSLtoGLSLES_1(char* glsl_code, GLenum glsl_type, unsigned int esversion) {
+std::string GLSLtoGLSLES_1(const char *glsl_code, GLenum glsl_type, uint esversion) {
     LOG_W("Warning: use glsl optimizer to convert shader.")
     if (esversion < 300) esversion = 300;
-    char * result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? 35633 : 35632, 460LL, esversion);
-    char * ret = (char*)malloc(sizeof(char) * strlen(result) + 1);
-    strcpy(ret, result);
+    std::string result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER, 460LL, esversion);
+//    char * ret = (char*)malloc(sizeof(char) * strlen(result) + 1);
+//    strcpy(ret, result);
     isGlslConvertedSuccessfully = true;
-    return ret;
+    return result;
 }
