@@ -146,11 +146,11 @@ void InitGLESCapabilities() {
 
     GLint num_es_extensions = 0;
     gles_glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
-    LOG_D("Detected %d OpenGL ES extensions.", num_es_extensions)
+    LOG_I("Detected %d OpenGL ES extensions.", num_es_extensions)
     for (GLint i = 0; i < num_es_extensions; ++i) {
         const char *extension = (const char *) gles_glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
-            LOG_D("%s", (const char *) extension)
+            LOG_I("%s", (const char *) extension)
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
                 g_gles_caps.GL_EXT_buffer_storage = 1;
             } else if (strcmp(extension, "GL_EXT_disjoint_timer_query") == 0) {
@@ -165,6 +165,8 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_EXT_read_format_bgra = 1;
             } else if (strcmp(extension, "GL_OES_mapbuffer") == 0) {
                 g_gles_caps.GL_OES_mapbuffer = 1;
+            } else if (strcmp(extension, "GL_OES_depth_texture") == 0) {
+                g_gles_caps.GL_OES_depth_texture = 1;
             } else if (strcmp(extension, "GL_OES_depth24") == 0) {
                 g_gles_caps.GL_OES_depth24 = 1;
             } else if (strcmp(extension, "GL_OES_depth_texture_float") == 0) {
@@ -175,7 +177,7 @@ void InitGLESCapabilities() {
                 g_gles_caps.GL_EXT_texture_rg = 1;
             }
         } else {
-            LOG_D("(nullptr)")
+            LOG_I("(nullptr)")
         }
     }
 

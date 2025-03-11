@@ -155,6 +155,7 @@ struct gles_caps_t {
     [[maybe_unused]] int GL_EXT_texture_format_BGRA8888;
     [[maybe_unused]] int GL_EXT_read_format_bgra;
     int GL_OES_mapbuffer;
+    int GL_OES_depth_texture;
     int GL_OES_depth24;
     int GL_OES_depth_texture_float;
     int GL_EXT_texture_norm16;
