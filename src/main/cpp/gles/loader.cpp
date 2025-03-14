@@ -144,11 +144,11 @@ void InitGLESCapabilities() {
 
     GLint num_es_extensions = 0;
     GLES.glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
-    LOG_I("Detected %d OpenGL ES extensions.", num_es_extensions)
+    LOG_D("Detected %d OpenGL ES extensions.", num_es_extensions)
     for (GLint i = 0; i < num_es_extensions; ++i) {
         const char *extension = (const char *) GLES.glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
-            LOG_I("%s", (const char *) extension)
+            LOG_D("%s", (const char *) extension)
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
                 g_gles_caps.GL_EXT_buffer_storage = 1;
             } else if (strcmp(extension, "GL_EXT_disjoint_timer_query") == 0) {
@@ -579,11 +579,11 @@ void init_target_gles() {
     INIT_GLES_FUNC(glMultiDrawElementsBaseVertexEXT)
     INIT_GLES_FUNC(glBruh)
 
-    LOG_I("glMultiDrawArraysIndirectEXT() @ 0x%x", GLES.glMultiDrawArraysIndirectEXT)
-    LOG_I("glMultiDrawElementsIndirectEXT() @ 0x%x", GLES.glMultiDrawElementsIndirectEXT)
-    LOG_I("glMultiDrawElementsBaseVertexEXT() @ 0x%x", GLES.glMultiDrawElementsBaseVertexEXT)
+    LOG_D("glMultiDrawArraysIndirectEXT() @ 0x%x", GLES.glMultiDrawArraysIndirectEXT)
+    LOG_D("glMultiDrawElementsIndirectEXT() @ 0x%x", GLES.glMultiDrawElementsIndirectEXT)
+    LOG_D("glMultiDrawElementsBaseVertexEXT() @ 0x%x", GLES.glMultiDrawElementsBaseVertexEXT)
 
-    LOG_I("glBruh() @ 0x%x", GLES.glBruh)
+    LOG_D("glBruh() @ 0x%x", GLES.glBruh)
 
     LOG_D("Initializing %s @ hardware", RENDERERNAME)
     set_hardware();
