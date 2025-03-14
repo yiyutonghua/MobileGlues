@@ -62,13 +62,13 @@ void glBindFragDataLocation(GLuint program, GLuint color, const GLchar *name) {
         }
         strcpy(origin_glsl, shaderInfo.frag_data_changed_converted);
     } else {
-        size_t glslLen  = strlen(shaderInfo.converted) + 1;
+        size_t glslLen  = shaderInfo.converted.length() + 1;
         origin_glsl = (char *)malloc(glslLen);
         if (origin_glsl == nullptr) {
             LOG_E("Memory reallocation failed for converted\n")
             return;
         }
-        strcpy(origin_glsl, shaderInfo.converted);
+        strcpy(origin_glsl, shaderInfo.converted.c_str());
     }
 
     int len = strlen(name);
@@ -156,7 +156,7 @@ void glLinkProgram(GLuint program) {
     LOG()
 
     LOG_D("glLinkProgram(%d)", program)
-    if (shaderInfo.converted && shaderInfo.frag_data_changed) {
+    if (!shaderInfo.converted.empty() && shaderInfo.frag_data_changed) {
         LOAD_GLES_FUNC(glShaderSource)
         LOAD_GLES_FUNC(glCompileShader)
         LOAD_GLES_FUNC(glDetachShader)
@@ -177,7 +177,7 @@ void glLinkProgram(GLuint program) {
         CHECK_GL_ERROR
     }
     shaderInfo.id = 0;
-    shaderInfo.converted = nullptr;
+    shaderInfo.converted = "";
     shaderInfo.frag_data_changed_converted = nullptr;
     shaderInfo.frag_data_changed = 0;
     LOAD_GLES_FUNC(glLinkProgram)

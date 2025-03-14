@@ -30,28 +30,8 @@ int nlevel(int size, int level) {
     return size;
 }
 
-static bool support_rgba16 = false;
-static bool checked_rgba16 = false;
-
 std::unordered_map<GLuint, texture_t> g_textures;
 GLuint bound_texture = 0;
-
-bool check_rgba16() {
-    LOAD_GLES_FUNC(glGetStringi)
-    LOAD_GLES_FUNC(glGetIntegerv)
-
-    GLint numFormats = 0;
-    gles_glGetIntegerv(GL_NUM_EXTENSIONS, &numFormats);
-
-    for (int i = 0; i < numFormats; ++i) {
-        const GLubyte* extension = gles_glGetStringi(GL_EXTENSIONS, i);
-        if (strcmp((const char*)extension, "GL_EXT_texture_norm16") == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     if (format && *format == GL_BGRA)
@@ -79,6 +59,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_DEPTH_COMPONENT:
+            // TODO: Add enableCompatibleMode option
             LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format), glEnumToString(*format), glEnumToString(*type))
             if(type) {
                 *type = GL_UNSIGNED_INT;
@@ -148,11 +129,7 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
             break;
 
         case GL_RGBA16: {
-            if (!checked_rgba16) {
-                support_rgba16 = check_rgba16();
-                checked_rgba16 = true;
-            }
-            if (support_rgba16) {
+            if (g_gles_caps.GL_EXT_texture_norm16) {
                 if(type)
                     *type = GL_UNSIGNED_SHORT;
             } else {
@@ -561,6 +538,9 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
 
     CLEAR_GL_ERROR_NO_INIT
 
+    LOG_D("mg.glRenderbufferStorage, target: %s, internalFormat: %s, width: %d, height: %d",
+          glEnumToString(target), glEnumToString(internalFormat), width, height)
+
     LOAD_GLES_FUNC(glGetTexLevelParameteriv)
     GLint realInternalFormat;
     gles_glGetTexLevelParameteriv(target, 0, GL_TEXTURE_INTERNAL_FORMAT, &realInternalFormat);
@@ -568,12 +548,12 @@ void glRenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width, 
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT;
+        internalFormat = GL_DEPTH_COMPONENT24;
 
     CLEAR_GL_ERROR_NO_INIT
 
-    LOG_D("glRenderbufferStorage, target: 0x%x, internalFormat: 0x%x, width: %d, height: %d",
-          target, internalFormat, width, height)
+    LOG_D("es.glRenderbufferStorage, target: %s, internalFormat: %s, width: %d, height: %d",
+          glEnumToString(target), glEnumToString(internalFormat), width, height)
 
     LOAD_GLES_FUNC(glRenderbufferStorage)
     gles_glRenderbufferStorage(target, internalFormat, width, height);
@@ -595,7 +575,7 @@ void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum int
     if (realInternalFormat != 0 && ERR == GL_NO_ERROR)
         internalFormat = (GLenum)realInternalFormat;
     else
-        internalFormat = GL_DEPTH_COMPONENT;
+        internalFormat = GL_DEPTH_COMPONENT24;
 
 
     LOG_D("glRenderbufferStorageMultisample, target: %d, samples: %d, internalFormat: %d, width: %d, height: %d",
@@ -633,7 +613,7 @@ void glGetTexLevelParameterfv(GLenum target, GLint level,GLenum pname, GLfloat *
 
 void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *params) {
     LOG()
-    LOG_D("glGetTexLevelParameteriv,target: %d, level: %d, pname: %d",target,level,pname)
+    LOG_D("glGetTexLevelParameteriv,target: %s, level: %d, pname: %s",glEnumToString(target),level,glEnumToString(pname))
     GLenum rtarget = map_tex_target(target);
     if (rtarget==GL_PROXY_TEXTURE_2D) {
         switch (pname) {
@@ -650,6 +630,7 @@ void glGetTexLevelParameteriv(GLenum target, GLint level,GLenum pname, GLint *pa
                 return;
         }
     }
+    LOG_D("es.glGetTexLevelParameteriv,target: %s, level: %d, pname: %s",glEnumToString(target),level,glEnumToString(pname))
     LOAD_GLES_FUNC(glGetTexLevelParameteriv)
     gles_glGetTexLevelParameteriv(target,level,pname,params);
     CHECK_GL_ERROR

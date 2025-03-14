@@ -23,6 +23,7 @@ public:
     bool load();
     void save();
 
+    static Cache& get_instance();
 private:
     struct CacheEntry {
         std::array<uint8_t, 32> sha256;

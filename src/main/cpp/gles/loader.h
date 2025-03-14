@@ -25,7 +25,8 @@ void load_libs();
     {                                                                       \
         LOG_D("INIT_GLES_FUNC(%s)", #name);                                 \
         g_gles_func.name = (name##_PTR)proc_address(gles, #name);           \
-        LOG_W("Error: GLES function " #name " is NULL\n"); \
+        if (g_gles_func.name == NULL)\
+            LOG_W("Error: GLES function " #name " is NULL\n"); \
     }
 #else
 #define INIT_GLES_FUNC(name)                                                \
@@ -48,6 +49,7 @@ static name##_PTR egl_##name = NULL;                                        \
         if (egl != NULL) {                                                  \
             egl_##name = (name##_PTR)proc_address(egl, #name);              \
         }                                                                   \
+        if (egl_##name == NULL)                                             \
         LOG_W("Error: " #name " is NULL\n");                                \
     }                                                                       \
 }
@@ -155,6 +157,11 @@ struct gles_caps_t {
     int GL_OES_mapbuffer;
     int GL_EXT_multi_draw_indirect;
     int GL_OES_draw_elements_base_vertex;
+    int GL_OES_depth_texture;
+    int GL_OES_depth24;
+    int GL_OES_depth_texture_float;
+    int GL_EXT_texture_norm16;
+    int GL_EXT_texture_rg;
 };
 
 extern struct gles_caps_t g_gles_caps;
