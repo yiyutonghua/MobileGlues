@@ -42,16 +42,14 @@ void glGetIntegerv(GLenum pname, GLint *params) {
             (*params) = 0;
             break;
         case GL_MAX_TEXTURE_IMAGE_UNITS: {
-            LOAD_GLES_FUNC(glGetIntegerv)
             int es_params = 16;
-            gles_glGetIntegerv(pname, &es_params);
+            GLES.glGetIntegerv(pname, &es_params);
             CHECK_GL_ERROR
             (*params) = es_params * 2;
             break;
         }
         default:
-            LOAD_GLES_FUNC(glGetIntegerv)
-            gles_glGetIntegerv(pname, params);
+            GLES.glGetIntegerv(pname, params);
             LOG_D("  -> %d",*params)
             CHECK_GL_ERROR
     }
@@ -59,8 +57,7 @@ void glGetIntegerv(GLenum pname, GLint *params) {
 
 GLenum glGetError() {
     LOG()
-    LOAD_GLES_FUNC(glGetError)
-    GLenum err = gles_glGetError();
+    GLenum err = GLES.glGetError();
     // just clear gles error, no reporting
     if (err != GL_NO_ERROR) {
         // no logging without DEBUG
@@ -125,8 +122,7 @@ const char* getBeforeThirdSpace(const char* str) {
 }
 
 const char* getGpuName() {
-    LOAD_GLES_FUNC(glGetString)
-    const char *gpuName = (const char *) gles_glGetString(GL_RENDERER);
+    const char *gpuName = (const char *) GLES.glGetString(GL_RENDERER);
 
     if (!gpuName) {
         return "<unknown>";
@@ -156,8 +152,7 @@ const char* getGpuName() {
 }
 
 void set_es_version() {
-    LOAD_GLES_FUNC(glGetString)
-    const char* ESVersion = getBeforeThirdSpace((const char*)gles_glGetString(GL_VERSION));
+    const char* ESVersion = getBeforeThirdSpace((const char*)GLES.glGetString(GL_VERSION));
     int major, minor;
 
     if (sscanf(ESVersion, "OpenGL ES %d.%d", &major, &minor) == 2) {
@@ -172,8 +167,7 @@ void set_es_version() {
 }
 
 const char* getGLESName() {
-    LOAD_GLES_FUNC(glGetString)
-    char* ESVersion = (char*)gles_glGetString(GL_VERSION);
+    char* ESVersion = (char*)GLES.glGetString(GL_VERSION);
     return getBeforeThirdSpace(ESVersion);
 }
 
@@ -181,7 +175,6 @@ static std::string rendererString;
 static std::string versionString;
 const GLubyte * glGetString( GLenum name ) {
     LOG()
-    LOAD_GLES_FUNC(glGetString)
     /* Feature in the Future
      * Advanced OpenGL driver: NV renderer.
     switch (name) {
@@ -244,13 +237,12 @@ const GLubyte * glGetString( GLenum name ) {
         case GL_EXTENSIONS:
             return (const GLubyte *) GetExtensionsList();
         default:
-            return gles_glGetString(name);
+            return GLES.glGetString(name);
     }
 }
 
 const GLubyte * glGetStringi(GLenum name, GLuint index) {
     LOG()
-    LOAD_GLES_FUNC(glGetStringi)
     typedef struct {
         GLenum name;
         const char** parts;
@@ -285,7 +277,7 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
                     str = glGetString(GL_EXTENSIONS);
                     break;
                 default:
-                    return gles_glGetStringi(name, index);
+                    return GLES.glGetStringi(name, index);
             }
 
             if (!str) continue;
@@ -316,14 +308,12 @@ const GLubyte * glGetStringi(GLenum name, GLuint index) {
 
 void glGetQueryObjectiv(GLuint id, GLenum pname, GLint* params) {
     LOG()
-    LOAD_GLES_FUNC(glGetQueryObjectivEXT)
-    gles_glGetQueryObjectivEXT(id, pname, params);
+    GLES.glGetQueryObjectivEXT(id, pname, params);
     CHECK_GL_ERROR
 }
 
 void glGetQueryObjecti64v(GLuint id, GLenum pname, GLint64* params) {
     LOG()
-    LOAD_GLES_FUNC(glGetQueryObjecti64vEXT)
-    gles_glGetQueryObjecti64vEXT(id, pname, params);
+    GLES.glGetQueryObjecti64vEXT(id, pname, params);
     CHECK_GL_ERROR
 }

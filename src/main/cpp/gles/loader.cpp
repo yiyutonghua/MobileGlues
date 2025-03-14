@@ -141,14 +141,12 @@ void InitGLESCapabilities() {
 //    int has_GL_EXT_buffer_storage = 0;
 //    int has_GL_ARB_timer_query = 0;
 //    int has_GL_QCOM_texture_lod_bias = 0;
-    LOAD_GLES_FUNC(glGetStringi)
-    LOAD_GLES_FUNC(glGetIntegerv)
 
     GLint num_es_extensions = 0;
-    gles_glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
+    GLES.glGetIntegerv(GL_NUM_EXTENSIONS, &num_es_extensions);
     LOG_I("Detected %d OpenGL ES extensions.", num_es_extensions)
     for (GLint i = 0; i < num_es_extensions; ++i) {
-        const char *extension = (const char *) gles_glGetStringi(GL_EXTENSIONS, i);
+        const char *extension = (const char *) GLES.glGetStringi(GL_EXTENSIONS, i);
         if (extension) {
             LOG_I("%s", (const char *) extension)
             if (strcmp(extension, "GL_EXT_buffer_storage") == 0) {
