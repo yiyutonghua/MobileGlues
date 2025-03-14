@@ -5,9 +5,9 @@
 #ifndef MOBILEGLUES_MG_H
 #define MOBILEGLUES_MG_H
 
-#include <string.h>
+#include <cstring>
 #include <malloc.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <android/log.h>
 
 #include "gl.h"
@@ -16,6 +16,7 @@
 #include "../gles/loader.h"
 #include "../includes.h"
 #include "glsl/glsl_for_es.h"
+#include "../config/config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,11 +41,11 @@ FUNC_GL_STATE_SIZEI_DECLARATION(proxy_height)
 
 FUNC_GL_STATE_ENUM_DECLARATION(proxy_intformat)
 
-struct hard_ext_s {
-    GLint maxsize;
+struct hardware_s {
+    unsigned int es_version;
 };
-typedef struct hard_ext_s *hard_ext_t;
-extern hard_ext_t hard_ext;
+typedef struct hardware_s *hardware_t;
+extern hardware_t hardware;
 
 struct gl_state_s {
     GLsizei proxy_width;

@@ -1,0 +1,22 @@
+//
+// Created by BZLZHH on 2025/2/8.
+//
+
+#ifndef MOBILEGLUES_VERSION_H
+
+#define VERSION_DEVELOPMENT 0
+#define VERSION_ALPHA 1
+#define VERSION_RELEASE 2
+
+#define MAJOR 1
+#define MINOR 1
+#define REVISION 0
+#define PATCH 2
+
+#define VERSION_TYPE VERSION_DEVELOPMENT
+
+#define VERSION_SUFFIX ""
+
+#define MOBILEGLUES_VERSION_H
+
+#endif //MOBILEGLUES_VERSION_H
