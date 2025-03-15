@@ -183,9 +183,10 @@ void glGetProgramiv(GLuint program, GLenum pname, GLint *params) {
     GLES.glGetProgramiv(program, pname, params);
     if(global_settings.ignore_error >= 1 && (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS) && !*params) {
         GLchar infoLog[512];
-        GLES.glGetShaderInfoLog(program, 512, nullptr, infoLog);
-        LOG_W_FORCE("Program %d linking failed: \n%s", program, infoLog)
-        LOG_W_FORCE("Now try to cheat.")
+        GLES.glGetProgramInfoLog(program, 512, nullptr, infoLog);
+
+        LOG_W_FORCE("Program %d linking failed: \n%s", program, infoLog);
+        LOG_W_FORCE("Now try to cheat.");
         *params = GL_TRUE;
     }
     CHECK_GL_ERROR
