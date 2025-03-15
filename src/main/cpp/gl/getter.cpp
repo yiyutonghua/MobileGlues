@@ -84,7 +84,7 @@ void InitGLESBaseExtensions() {
              "GL_EXT_depth_texture "
              "GL_ARB_depth_texture "
              "GL_ARB_shading_language_100 "
-             "ARB_imaging "
+             "GL_ARB_imaging "
              "GL_ARB_draw_buffers_blend "
              "OpenGL15 "
              "OpenGL30 "
@@ -95,7 +95,8 @@ void InitGLESBaseExtensions() {
              "GL_ARB_shader_storage_buffer_object "
              "GL_ARB_shader_image_load_store "
              "GL_ARB_clear_texture "
-             "GL_ARB_get_program_binary ";
+             "GL_ARB_get_program_binary "
+             "GL_ARB_separate_shader_objects ";
 }
 
 void AppendExtension(const char* ext) {
