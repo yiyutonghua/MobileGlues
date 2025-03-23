@@ -111,6 +111,11 @@ GLboolean glIsBuffer(GLuint buffer) {
 void glBindBuffer(GLenum target, GLuint buffer) {
     LOG()
     LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
+    if (buffer == 0) {
+        GLES.glBindBuffer(target, buffer);
+        CHECK_GL_ERROR
+        return;
+    }
     GLuint real_buffer = find_real_buffer(buffer);
     if (!real_buffer) {
         GLES.glGenBuffers(1, &real_buffer);
@@ -275,6 +280,11 @@ GLboolean glIsVertexArray(GLuint array) {
 void glBindVertexArray(GLuint array) {
     LOG()
     LOG_D("glBindVertexArray(%d)", array)
+    if (array == 0) {
+        GLES.glBindVertexArray(array);
+        CHECK_GL_ERROR
+        return;
+    }
     GLuint real_array = find_real_array(array);
     if (!real_array) {
         GLES.glGenVertexArrays(1, &real_array);
