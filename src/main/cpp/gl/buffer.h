@@ -45,6 +45,16 @@ GLuint find_buffer(GLenum target);
 
 void real_bind_buffer(GLenum target, GLuint buffer);
 
+GLuint gen_array();
+
+GLboolean has_array(GLuint key);
+
+void modify_array(GLuint key, GLuint value);
+
+void remove_array(GLuint key);
+
+GLuint find_real_array(GLuint key);
+
 static GLenum get_binding_query(GLenum target);
 
 GLAPI GLAPIENTRY void glGenBuffers(GLsizei n, GLuint *buffers);
@@ -64,6 +74,14 @@ GLAPI GLAPIENTRY void glBufferData(GLenum target, GLsizeiptr size, const void *d
 GLAPI GLAPIENTRY void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
 
 GLAPI GLAPIENTRY void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags);
+
+GLAPI GLAPIENTRY void glGenVertexArrays(GLsizei n, GLuint *arrays);
+
+GLAPI GLAPIENTRY void glDeleteVertexArrays(GLsizei n, const GLuint *arrays);
+
+GLAPI GLAPIENTRY GLboolean glIsVertexArray(GLuint array);
+
+GLAPI GLAPIENTRY void glBindVertexArray(GLuint array);
 
 #ifdef __cplusplus
 }

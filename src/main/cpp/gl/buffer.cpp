@@ -10,6 +10,8 @@
 std::unordered_map<GLuint, GLuint> g_gen_buffers;
 std::unordered_map<GLenum, GLuint> g_binded_buffers;
 
+std::unordered_map<GLuint, GLuint> g_gen_arrays;
+
 std::unordered_map<GLuint, BufferMapping> g_active_mappings;
 
 GLuint gen_buffer() {
@@ -66,6 +68,41 @@ void real_bind_buffer(GLenum target, GLuint buffer) {
     CHECK_GL_ERROR
 }
 
+GLuint gen_array() {
+    GLuint max_key = 0;
+    if (!g_gen_arrays.empty()) {
+        for (const auto& pair : g_gen_arrays) {
+            if (pair.first > max_key)
+                max_key = pair.first;
+        }
+    }
+    GLuint key = max_key + 1;
+    g_gen_arrays[key] = 0;
+    return key;
+}
+
+GLboolean has_array(GLuint key) {
+    auto it = g_gen_arrays.find(key);
+    return it != g_gen_arrays.end();
+}
+
+void modify_array(GLuint key, GLuint value) {
+    g_gen_arrays[key] = value;
+}
+
+void remove_array(GLuint key) {
+    if (g_gen_arrays.find(key) != g_gen_arrays.end())
+        g_gen_arrays.erase(key);
+}
+
+GLuint find_real_array(GLuint key) {
+    auto it = g_gen_arrays.find(key);
+    if (it != g_gen_arrays.end())
+        return it->second;
+    else
+        return 0;
+}
+
 static GLenum get_binding_query(GLenum target) {
     switch(target) {
         case GL_ARRAY_BUFFER:          return GL_ARRAY_BUFFER_BINDING;
@@ -98,6 +135,8 @@ void glDeleteBuffers(GLsizei n, const GLuint *buffers) {
 }
 
 GLboolean glIsBuffer(GLuint buffer) {
+    LOG()
+    LOG_D("glIsBuffer, buffer = %d", buffer)
     return has_buffer(buffer);
 }
 
@@ -255,5 +294,45 @@ void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfiel
     LOG()
     if(GLES.glBufferStorageEXT)
         GLES.glBufferStorageEXT(target,size,data,flags);
+    CHECK_GL_ERROR
+}
+
+void glGenVertexArrays(GLsizei n, GLuint *arrays) {
+    LOG()
+    LOG_D("glGenVertexArrays(%i, %p)", n, arrays)
+    for (int i = 0; i < n; ++i) {
+        arrays[i] = gen_array();
+    }
+}
+
+void glDeleteVertexArrays(GLsizei n, const GLuint *arrays) {
+    LOG()
+    LOG_D("glDeleteVertexArrays(%i, %p)", n, arrays)
+    for (int i = 0; i < n; ++i) {
+        if (find_real_array(arrays[i])) {
+            GLuint real_array = find_real_array(arrays[i]);
+            GLES.glDeleteVertexArrays(1, &real_array);
+            CHECK_GL_ERROR
+        }
+        remove_array(arrays[i]);
+    }
+}
+
+GLboolean glIsVertexArray(GLuint array) {
+    LOG()
+    LOG_D("glIsVertexArray(%d)", array)
+    return has_array(array);
+}
+
+void glBindVertexArray(GLuint array) {
+    LOG()
+    LOG_D("glBindVertexArray(%d)", array)
+    GLuint real_array = find_real_array(array);
+    if (!real_array) {
+        GLES.glGenVertexArrays(1, &real_array);
+        modify_array(array, real_array);
+        CHECK_GL_ERROR
+    }
+    GLES.glBindVertexArray(real_array);
     CHECK_GL_ERROR
 }
