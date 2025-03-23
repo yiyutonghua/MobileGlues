@@ -281,9 +281,20 @@ GLboolean glUnmapBuffer(GLenum target) {
 
 void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags) {
     LOG()
-    if(GLES.glBufferStorageEXT)
-        GLES.glBufferStorageEXT(target,size,data,flags);
-    CHECK_GL_ERROR
+    GLuint real_buff = find_real_buffer(find_buffer(target));
+    if (!real_buff) {
+        GLES.glGenBuffers(1, &real_buff);
+        modify_buffer(find_buffer(target), real_buff);
+        CHECK_GL_ERROR
+    }
+    if (real_buff) {
+        real_bind_buffer(target, real_buff);
+        if(GLES.glBufferStorageEXT)
+            GLES.glBufferStorageEXT(target,size,data,flags);
+        CHECK_GL_ERROR
+    } else {
+        LOG_E("real buffer is null!")
+    }
 }
 
 void glGenVertexArrays(GLsizei n, GLuint *arrays) {
