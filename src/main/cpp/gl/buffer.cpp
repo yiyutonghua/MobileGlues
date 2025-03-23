@@ -12,7 +12,7 @@ std::unordered_map<GLenum, GLuint> g_binded_buffers;
 
 std::unordered_map<GLuint, BufferMapping> g_active_mappings;
 
-static GLuint gen_buffer() {
+GLuint gen_buffer() {
     GLuint max_key = 0;
     if (!g_gen_buffers.empty()) {
         for (const auto& pair : g_gen_buffers) {
@@ -25,21 +25,21 @@ static GLuint gen_buffer() {
     return key;
 }
 
-static GLboolean has_buffer(GLuint key) {
+GLboolean has_buffer(GLuint key) {
     auto it = g_gen_buffers.find(key);
     return it != g_gen_buffers.end();
 }
 
-static void modify_buffer(GLuint key, GLuint value) {
+void modify_buffer(GLuint key, GLuint value) {
     g_gen_buffers[key] = value;
 }
 
-static void remove_buffer(GLuint key) {
+void remove_buffer(GLuint key) {
     if (g_gen_buffers.find(key) != g_gen_buffers.end())
         g_gen_buffers.erase(key);
 }
 
-static GLuint find_real_buffer(GLuint key) {
+GLuint find_real_buffer(GLuint key) {
     auto it = g_gen_buffers.find(key);
     if (it != g_gen_buffers.end())
         return it->second;
@@ -47,11 +47,11 @@ static GLuint find_real_buffer(GLuint key) {
         return 0;
 }
 
-static void bind_buffer(GLenum target, GLuint buffer) {
+void bind_buffer(GLenum target, GLuint buffer) {
     g_binded_buffers[target] = buffer;
 }
 
-static GLuint find_buffer(GLenum target) {
+GLuint find_buffer(GLenum target) {
     auto it = g_binded_buffers.find(target);
     if (it != g_binded_buffers.end())
         return it->second;
@@ -59,18 +59,7 @@ static GLuint find_buffer(GLenum target) {
         return 0;
 }
 
-static GLenum find_buffer_target(GLuint buffer) {
-    GLenum target;
-    if (!g_binded_buffers.empty()) {
-        for (const auto& pair : g_binded_buffers) {
-            if (pair.second == buffer)
-                target = pair.first;
-        }
-    }
-    return target;
-}
-
-static void real_bind_buffer(GLenum target, GLuint buffer) {
+void real_bind_buffer(GLenum target, GLuint buffer) {
     LOG()
     LOG_D("real_bind_buffer, target = %s, buffer = %d", glEnumToString(target), buffer)
     GLES.glBindBuffer(target, buffer);
@@ -116,10 +105,8 @@ void glBindBuffer(GLenum target, GLuint buffer) {
     LOG()
     LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
     bind_buffer(target, buffer);
-    if (find_real_buffer(buffer)) {
-        GLES.glBindBuffer(target, find_real_buffer(buffer));
-        CHECK_GL_ERROR
-    }
+    if (find_real_buffer(buffer))
+        real_bind_buffer(target, find_real_buffer(buffer));
 }
 
 void glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage) {

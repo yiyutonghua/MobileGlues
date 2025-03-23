@@ -29,6 +29,22 @@ typedef struct {
 extern "C" {
 #endif
 
+GLuint gen_buffer();
+
+GLboolean has_buffer(GLuint key);
+
+void modify_buffer(GLuint key, GLuint value);
+
+void remove_buffer(GLuint key);
+
+GLuint find_real_buffer(GLuint key);
+
+void bind_buffer(GLenum target, GLuint buffer);
+
+GLuint find_buffer(GLenum target);
+
+void real_bind_buffer(GLenum target, GLuint buffer);
+
 static GLenum get_binding_query(GLenum target);
 
 GLAPI GLAPIENTRY void glGenBuffers(GLsizei n, GLuint *buffers);
