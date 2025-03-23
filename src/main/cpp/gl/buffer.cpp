@@ -11,7 +11,7 @@ GLint maxBufferId = 0;
 GLint maxArrayId = 0;
 
 std::unordered_map<GLuint, GLuint> g_gen_buffers;
-std::unordered_map<GLenum, GLuint> g_binded_buffers;
+std::unordered_map<GLenum, GLuint> g_bound_buffers;
 
 std::unordered_map<GLuint, GLuint> g_gen_arrays;
 
@@ -46,12 +46,12 @@ GLuint find_real_buffer(GLuint key) {
 }
 
 void bind_buffer(GLenum target, GLuint buffer) {
-    g_binded_buffers[target] = buffer;
+    g_bound_buffers[target] = buffer;
 }
 
 GLuint find_buffer(GLenum target) {
-    auto it = g_binded_buffers.find(target);
-    if (it != g_binded_buffers.end())
+    auto it = g_bound_buffers.find(target);
+    if (it != g_bound_buffers.end())
         return it->second;
     else
         return 0;
