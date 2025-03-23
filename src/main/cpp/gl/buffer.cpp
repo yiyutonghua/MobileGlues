@@ -7,6 +7,9 @@
 
 #define DEBUG 0
 
+GLint maxBufferId = 0;
+GLint maxArrayId = 0;
+
 std::unordered_map<GLuint, GLuint> g_gen_buffers;
 std::unordered_map<GLenum, GLuint> g_binded_buffers;
 
@@ -15,16 +18,9 @@ std::unordered_map<GLuint, GLuint> g_gen_arrays;
 std::unordered_map<GLuint, BufferMapping> g_active_mappings;
 
 GLuint gen_buffer() {
-    GLuint max_key = 0;
-    if (!g_gen_buffers.empty()) {
-        for (const auto& pair : g_gen_buffers) {
-            if (pair.first > max_key)
-                max_key = pair.first;
-        }
-    }
-    GLuint key = max_key + 1;
-    g_gen_buffers[key] = 0;
-    return key;
+    maxBufferId++;
+    g_gen_buffers[maxBufferId] = 0;
+    return maxBufferId;
 }
 
 GLboolean has_buffer(GLuint key) {
@@ -69,16 +65,9 @@ void real_bind_buffer(GLenum target, GLuint buffer) {
 }
 
 GLuint gen_array() {
-    GLuint max_key = 0;
-    if (!g_gen_arrays.empty()) {
-        for (const auto& pair : g_gen_arrays) {
-            if (pair.first > max_key)
-                max_key = pair.first;
-        }
-    }
-    GLuint key = max_key + 1;
-    g_gen_arrays[key] = 0;
-    return key;
+    maxArrayId++;
+    g_gen_arrays[maxArrayId] = 0;
+    return maxArrayId;
 }
 
 GLboolean has_array(GLuint key) {
