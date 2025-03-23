@@ -7,7 +7,75 @@
 
 #define DEBUG 0
 
+std::unordered_map<GLuint, GLuint> g_gen_buffers;
+std::unordered_map<GLenum, GLuint> g_binded_buffers;
+
 std::unordered_map<GLuint, BufferMapping> g_active_mappings;
+
+static GLuint gen_buffer() {
+    GLuint max_key = 0;
+    if (!g_gen_buffers.empty()) {
+        for (const auto& pair : g_gen_buffers) {
+            if (pair.first > max_key)
+                max_key = pair.first;
+        }
+    }
+    GLuint key = max_key + 1;
+    g_gen_buffers[key] = 0;
+    return key;
+}
+
+static GLboolean has_buffer(GLuint key) {
+    auto it = g_gen_buffers.find(key);
+    return it != g_gen_buffers.end();
+}
+
+static void modify_buffer(GLuint key, GLuint value) {
+    g_gen_buffers[key] = value;
+}
+
+static void remove_buffer(GLuint key) {
+    if (g_gen_buffers.find(key) != g_gen_buffers.end())
+        g_gen_buffers.erase(key);
+}
+
+static GLuint find_real_buffer(GLuint key) {
+    auto it = g_gen_buffers.find(key);
+    if (it != g_gen_buffers.end())
+        return it->second;
+    else
+        return 0;
+}
+
+static void bind_buffer(GLenum target, GLuint buffer) {
+    g_binded_buffers[target] = buffer;
+}
+
+static GLuint find_buffer(GLenum target) {
+    auto it = g_binded_buffers.find(target);
+    if (it != g_binded_buffers.end())
+        return it->second;
+    else
+        return 0;
+}
+
+static GLenum find_buffer_target(GLuint buffer) {
+    GLenum target;
+    if (!g_binded_buffers.empty()) {
+        for (const auto& pair : g_binded_buffers) {
+            if (pair.second == buffer)
+                target = pair.first;
+        }
+    }
+    return target;
+}
+
+static void real_bind_buffer(GLenum target, GLuint buffer) {
+    LOG()
+    LOG_D("real_bind_buffer, target = %s, buffer = %d", glEnumToString(target), buffer)
+    GLES.glBindBuffer(target, buffer);
+    CHECK_GL_ERROR
+}
 
 static GLenum get_binding_query(GLenum target) {
     switch(target) {
@@ -19,12 +87,72 @@ static GLenum get_binding_query(GLenum target) {
     }
 }
 
+void glGenBuffers(GLsizei n, GLuint *buffers) {
+    LOG()
+    LOG_D("glGenBuffers(%i, %p)", n, buffers)
+    for (int i = 0; i < n; ++i) {
+        buffers[i] = gen_buffer();
+    }
+}
+
+void glDeleteBuffers(GLsizei n, const GLuint *buffers) {
+    LOG()
+    LOG_D("glDeleteBuffers(%i, %p)", n, buffers)
+    for (int i = 0; i < n; ++i) {
+        if (find_real_buffer(buffers[i])) {
+            GLuint real_buff = find_real_buffer(buffers[i]);
+            GLES.glDeleteBuffers(1, &real_buff);
+            CHECK_GL_ERROR
+        }
+        remove_buffer(buffers[i]);
+    }
+}
+
+GLboolean glIsBuffer(GLuint buffer) {
+    return has_buffer(buffer);
+}
+
+void glBindBuffer(GLenum target, GLuint buffer) {
+    LOG()
+    LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
+    bind_buffer(target, buffer);
+    if (find_real_buffer(buffer)) {
+        GLES.glBindBuffer(target, find_real_buffer(buffer));
+        CHECK_GL_ERROR
+    }
+}
+
 void glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage) {
     LOG()
     LOG_D("glBufferData, target = %s, size = %d, data = 0x%x, usage = %s",
           glEnumToString(target), size, data, glEnumToString(usage))
-    GLES.glBufferData(target, size, data, usage);
-    CHECK_GL_ERROR
+    GLuint real_buff = find_real_buffer(find_buffer(target));
+    if (!real_buff) {
+        GLES.glGenBuffers(1, &real_buff);
+        modify_buffer(find_buffer(target), real_buff);
+        CHECK_GL_ERROR
+    }
+    if (real_buff) {
+        real_bind_buffer(target, real_buff);
+        GLES.glBufferData(target, size, data, usage);
+        CHECK_GL_ERROR
+    } else {
+        LOG_E("real buffer is null!")
+    }
+}
+
+void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
+    LOG()
+    LOG_D("glBufferSubData, target = %s, offset = %p, size = %d, data = 0x%x",
+          glEnumToString(target), (void*) offset, size, data)
+    GLuint real_buff = find_real_buffer(find_buffer(target));
+    if (real_buff) {
+        real_bind_buffer(target, real_buff);
+        GLES.glBufferSubData(target, offset, size, data);
+        CHECK_GL_ERROR
+    } else {
+        LOG_E("real buffer is null!")
+    }
 }
 
 void* glMapBuffer(GLenum target, GLenum access) {
@@ -54,7 +182,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
         case GL_READ_ONLY:  flags = GL_MAP_READ_BIT; break;
         case GL_WRITE_ONLY: flags = GL_MAP_WRITE_BIT /*| GL_MAP_INVALIDATE_BUFFER_BIT*/; break;
         case GL_READ_WRITE: flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT; break;
-        default:  
+        default:
             return nullptr;
     }
     void* ptr = GLES.glMapBufferRange(target, 0, buffer_size, flags);
@@ -106,7 +234,7 @@ GLboolean glUnmapBuffer(GLenum target) {
     LOG()
     if(g_gles_caps.GL_OES_mapbuffer)
         return GLES.glUnmapBuffer(target);
-    
+
     GLint buffer;
     GLenum binding_query = get_binding_query(target);
     GLES.glGetIntegerv(binding_query, &buffer);
@@ -141,10 +269,4 @@ void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfiel
     if(GLES.glBufferStorageEXT)
         GLES.glBufferStorageEXT(target,size,data,flags);
     CHECK_GL_ERROR
-}
-
-void glBindBuffer(GLenum target, GLuint buffer) {
-    LOG()
-    LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
-    GLES.glBindBuffer(target, buffer);
 }
