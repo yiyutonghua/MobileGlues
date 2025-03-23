@@ -89,7 +89,8 @@ static name##_PTR egl_##name = NULL;                                        \
 
 #define NATIVE_FUNCTION_HEAD(type,name,...)                                 \
 extern "C" GLAPI GLAPIENTRY type name##ARB(__VA_ARGS__) __attribute__((alias(#name))); \
-extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__)  {
+extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__)  { \
+    LOG()
 
 #if GLOBAL_DEBUG
 #define NATIVE_FUNCTION_END(type,name,...)                                  \
@@ -123,7 +124,8 @@ extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__)  {
 #endif
 
 #define STUB_FUNCTION_HEAD(type,name,...)                                   \
-extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__) {
+extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__) { \
+    LOG()
 
 #define STUB_FUNCTION_END(type,name,...)                                    \
     LOG_W("Stub function: %s @ %s(...)", RENDERERNAME, __FUNCTION__);       \
