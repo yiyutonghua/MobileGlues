@@ -74,7 +74,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         android
         log
         EGL
-        vulkan
 )
 
 target_include_directories(mobileglues PUBLIC
