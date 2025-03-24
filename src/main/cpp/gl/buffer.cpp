@@ -43,6 +43,16 @@ GLuint find_real_buffer(GLuint key) {
         return 0;
 }
 
+GLuint find_fake_buffer(GLuint real_buffer) {
+    if (real_buffer == 0)
+        return 0;
+    for (const auto& pair : g_gen_buffers) {
+        if (pair.second == real_buffer)
+            return pair.first;
+    }
+    return 0;
+}
+
 GLuint gen_array() {
     maxArrayId++;
     g_gen_arrays[maxArrayId] = 0;
@@ -69,6 +79,16 @@ GLuint find_real_array(GLuint key) {
         return it->second;
     else
         return 0;
+}
+
+GLuint find_fake_array(GLuint real_array) {
+    if (real_array == 0)
+        return 0;
+    for (const auto& pair : g_gen_arrays) {
+        if (pair.second == real_array)
+            return pair.first;
+    }
+    return 0;
 }
 
 static GLenum get_binding_query(GLenum target) {
