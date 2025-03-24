@@ -60,14 +60,12 @@ void glGetIntegerv(GLenum pname, GLint *params) {
         case GL_PIXEL_UNPACK_BUFFER_BINDING:
         case GL_SHADER_STORAGE_BUFFER_BINDING:
         case GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
-        case GL_UNIFORM_BUFFER_BINDING: {
+        case GL_UNIFORM_BUFFER_BINDING:
             (*params) = (int) find_bound_buffer(pname);
             break;
-        }
-        case GL_VERTEX_ARRAY_BINDING: {
+        case GL_VERTEX_ARRAY_BINDING:
             (*params) = (int) find_bound_array();
             break;
-        }
         default:
             GLES.glGetIntegerv(pname, params);
             LOG_D("  -> %d",*params)
