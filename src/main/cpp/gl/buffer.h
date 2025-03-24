@@ -39,7 +39,7 @@ void remove_buffer(GLuint key);
 
 GLuint find_real_buffer(GLuint key);
 
-GLuint find_fake_buffer(GLuint real_buffer);
+GLuint find_bound_buffer(GLenum key);
 
 GLuint gen_array();
 
@@ -51,7 +51,7 @@ void remove_array(GLuint key);
 
 GLuint find_real_array(GLuint key);
 
-GLuint find_fake_array(GLuint real_array);
+GLuint find_bound_array();
 
 static GLenum get_binding_query(GLenum target);
 

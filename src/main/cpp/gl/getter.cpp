@@ -61,17 +61,11 @@ void glGetIntegerv(GLenum pname, GLint *params) {
         case GL_SHADER_STORAGE_BUFFER_BINDING:
         case GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
         case GL_UNIFORM_BUFFER_BINDING: {
-            int real_buffer;
-            GLES.glGetIntegerv(pname, &real_buffer);
-            CHECK_GL_ERROR
-            (*params) = (int) find_fake_buffer(real_buffer);
+            (*params) = (int) find_bound_buffer(pname);
             break;
         }
         case GL_VERTEX_ARRAY_BINDING: {
-            int real_array;
-            GLES.glGetIntegerv(pname, &real_array);
-            CHECK_GL_ERROR
-            (*params) = (int) find_fake_array(real_array);
+            (*params) = (int) find_bound_array();
             break;
         }
         default:

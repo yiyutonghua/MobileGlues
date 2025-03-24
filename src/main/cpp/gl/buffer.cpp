@@ -13,6 +13,9 @@ GLint maxArrayId = 0;
 std::unordered_map<GLuint, GLuint> g_gen_buffers;
 std::unordered_map<GLuint, GLuint> g_gen_arrays;
 
+std::unordered_map<GLenum , GLuint> g_bound_buffers;
+GLuint bound_array = 0;
+
 std::unordered_map<GLuint, BufferMapping> g_active_mappings;
 
 GLuint gen_buffer() {
@@ -43,14 +46,54 @@ GLuint find_real_buffer(GLuint key) {
         return 0;
 }
 
-GLuint find_fake_buffer(GLuint real_buffer) {
-    if (real_buffer == 0)
-        return 0;
-    for (const auto& pair : g_gen_buffers) {
-        if (pair.second == real_buffer)
-            return pair.first;
+GLuint find_bound_buffer(GLenum key) {
+    GLenum target = 0;
+    switch (key) {
+        case GL_ARRAY_BUFFER_BINDING:
+            target = GL_ARRAY_BUFFER;
+            break;
+        case GL_ATOMIC_COUNTER_BUFFER_BINDING:
+            target = GL_ATOMIC_COUNTER_BUFFER;
+            break;
+        case GL_COPY_READ_BUFFER_BINDING:
+            target = GL_COPY_READ_BUFFER;
+            break;
+        case GL_COPY_WRITE_BUFFER_BINDING:
+            target = GL_COPY_WRITE_BUFFER;
+            break;
+        case GL_DRAW_INDIRECT_BUFFER_BINDING:
+            target = GL_DRAW_INDIRECT_BUFFER;
+            break;
+        case GL_DISPATCH_INDIRECT_BUFFER_BINDING:
+            target = GL_DISPATCH_INDIRECT_BUFFER;
+            break;
+        case GL_ELEMENT_ARRAY_BUFFER_BINDING:
+            target = GL_ELEMENT_ARRAY_BUFFER;
+            break;
+        case GL_PIXEL_PACK_BUFFER_BINDING:
+            target = GL_PIXEL_PACK_BUFFER;
+            break;
+        case GL_PIXEL_UNPACK_BUFFER_BINDING:
+            target = GL_PIXEL_UNPACK_BUFFER;
+            break;
+        case GL_SHADER_STORAGE_BUFFER_BINDING:
+            target = GL_SHADER_STORAGE_BUFFER;
+            break;
+        case GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
+            target = GL_TRANSFORM_FEEDBACK_BUFFER;
+            break;
+        case GL_UNIFORM_BUFFER_BINDING:
+            target = GL_UNIFORM_BUFFER;
+            break;
+        default:
+            target = 0;
+            break;
     }
-    return 0;
+    auto it = g_bound_buffers.find(target);
+    if (it != g_bound_buffers.end())
+        return it->second;
+    else
+        return 0;
 }
 
 GLuint gen_array() {
@@ -81,14 +124,8 @@ GLuint find_real_array(GLuint key) {
         return 0;
 }
 
-GLuint find_fake_array(GLuint real_array) {
-    if (real_array == 0)
-        return 0;
-    for (const auto& pair : g_gen_arrays) {
-        if (pair.second == real_array)
-            return pair.first;
-    }
-    return 0;
+GLuint find_bound_array() {
+    return bound_array;
 }
 
 static GLenum get_binding_query(GLenum target) {
@@ -131,6 +168,7 @@ GLboolean glIsBuffer(GLuint buffer) {
 void glBindBuffer(GLenum target, GLuint buffer) {
     LOG()
     LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
+    g_bound_buffers[target] = buffer;
     if (!has_buffer(buffer) || buffer == 0) {
         GLES.glBindBuffer(target, buffer);
         CHECK_GL_ERROR
@@ -149,6 +187,7 @@ void glBindBuffer(GLenum target, GLuint buffer) {
 void glBindBufferRange(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size) {
     LOG()
     LOG_D("glBindBufferRange, target = %s, index = %d, buffer = %d, offset = %p, size = %zi", glEnumToString(target), index, buffer, (void*) offset, size)
+    g_bound_buffers[target] = buffer;
     if (!has_buffer(buffer) || buffer == 0) {
         GLES.glBindBufferRange(target, index, buffer, offset, size);
         CHECK_GL_ERROR
@@ -167,6 +206,7 @@ void glBindBufferRange(GLenum target, GLuint index, GLuint buffer, GLintptr offs
 void glBindBufferBase(GLenum target, GLuint index, GLuint buffer) {
     LOG()
     LOG_D("glBindBufferBase, target = %s, index = %d, buffer = %d", glEnumToString(target), index, buffer)
+    g_bound_buffers[target] = buffer;
     if (!has_buffer(buffer) || buffer == 0) {
         GLES.glBindBufferBase(target, index, buffer);
         CHECK_GL_ERROR
@@ -331,6 +371,7 @@ GLboolean glIsVertexArray(GLuint array) {
 void glBindVertexArray(GLuint array) {
     LOG()
     LOG_D("glBindVertexArray(%d)", array)
+    bound_array = array;
     if (!has_array(array) || array == 0) {
         GLES.glBindVertexArray(array);
         CHECK_GL_ERROR
