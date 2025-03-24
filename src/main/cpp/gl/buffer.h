@@ -59,6 +59,10 @@ GLAPI GLAPIENTRY GLboolean glIsBuffer(GLuint buffer);
 
 GLAPI GLAPIENTRY void glBindBuffer(GLenum target, GLuint buffer);
 
+GLAPI GLAPIENTRY void glBindBufferRange(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
+
+GLAPI GLAPIENTRY void glBindBufferBase(GLenum target, GLuint index, GLuint buffer);
+
 GLAPI GLAPIENTRY GLboolean glUnmapBuffer(GLenum target);
 
 GLAPI GLAPIENTRY void *glMapBuffer(GLenum target, GLenum access);
