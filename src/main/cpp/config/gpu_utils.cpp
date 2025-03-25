@@ -177,6 +177,6 @@ int hasVulkan13() {
 
     vkDestroyInstance(instance, nullptr);
 
-    dlclose(vk_lib);
+    dlclose(vulkan_lib);
     return 0;
 }
