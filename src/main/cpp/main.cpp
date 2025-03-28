@@ -67,10 +67,10 @@ void proc_init() {
     clear_log();
     start_log();
 
-    init_settings();
-
     LOG_V("Initializing %s ...", RENDERERNAME);
     show_license();
+
+    init_settings();
 
     load_libs();
     init_target_egl();
