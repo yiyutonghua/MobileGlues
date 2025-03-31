@@ -76,6 +76,8 @@ void proc_init() {
     init_target_egl();
     init_target_gles();
 
+    init_settings_post();
+
     init_libshaderconv();
 
 #if PROFILING
