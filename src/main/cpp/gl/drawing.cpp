@@ -99,7 +99,7 @@ void mg_glMultiDrawElementsBaseVertex_multiindirect(GLenum mode, GLsizei* counts
     CHECK_GL_ERROR
 }
 
-void mg_glMultiDrawElementsBaseVertex_unroll(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices, GLsizei primcount, const GLint* basevertex) {
+void mg_glMultiDrawElementsBaseVertex_basevertex(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices, GLsizei primcount, const GLint* basevertex) {
     LOG()
 
     for (GLsizei i = 0; i < primcount; ++i) {
@@ -136,7 +136,7 @@ void mg_glMultiDrawElements_multiindirect(GLenum mode, const GLsizei *count, GLe
     CHECK_GL_ERROR
 }
 
-void mg_glMultiDrawElements_unroll(GLenum mode, const GLsizei *count, GLenum type, const void *const *indices, GLsizei primcount) {
+void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei *count, GLenum type, const void *const *indices, GLsizei primcount) {
     LOG()
 
     for (GLsizei i = 0; i < primcount; ++i) {

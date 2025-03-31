@@ -27,8 +27,8 @@ void* get_multidraw_func(const char* name) {
         case multidraw_mode_t::PreferIndirect:
             namestr += "_indirect";
             break;
-        case multidraw_mode_t::PreferUnroll:
-            namestr += "_unroll";
+        case multidraw_mode_t::PreferBaseVertex:
+            namestr += "_basevertex";
             break;
         case multidraw_mode_t::PreferMultidrawIndirect:
             namestr += "_multiindirect";

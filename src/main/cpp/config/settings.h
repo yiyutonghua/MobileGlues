@@ -14,7 +14,7 @@ extern "C" {
 enum class multidraw_mode_t: int {
     Auto = 0,
     PreferIndirect,
-    PreferUnroll,
+    PreferBaseVertex,
     PreferMultidrawIndirect
 };
 

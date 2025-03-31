@@ -132,7 +132,7 @@ void init_settings() {
         case multidraw_mode_t::PreferIndirect:
             draw_mode_str = "Indirect";
             break;
-        case multidraw_mode_t::PreferUnroll:
+        case multidraw_mode_t::PreferBaseVertex:
             draw_mode_str = "Unroll";
             break;
         case multidraw_mode_t::PreferMultidrawIndirect:
@@ -169,10 +169,10 @@ void init_settings_post() {
             global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
             LOG_V("    -> Indirect (OK)")
             break;
-        case multidraw_mode_t::PreferUnroll:
+        case multidraw_mode_t::PreferBaseVertex:
             LOG_V("multidrawMode = PreferUnroll")
             if (basevertex) {
-                global_settings.multidraw_mode = multidraw_mode_t::PreferUnroll;
+                global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
                 LOG_V("    -> Unroll (OK)")
             } else if (multidraw) {
                 global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
