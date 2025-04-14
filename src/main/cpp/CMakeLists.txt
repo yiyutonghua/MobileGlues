@@ -4,7 +4,7 @@ project("mobileglues")
 
 enable_language(CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -52,9 +52,23 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         config/config.cpp
         config/gpu_utils.cpp
         config/settings.cpp
+
+        gl/fpe/fpe.cpp
+        gl/fpe/state.cpp
+        gl/fpe/transformation.cpp
+        gl/fpe/vertexpointer.cpp
+        gl/fpe/fpe_shadergen.cpp
+        gl/fpe/list.cpp
+        gl/fpe/pointer_utils.cpp
+        gl/fpe/drawing1x.cpp
+        gl/fpe/vertexpointer_utils.cpp
+        gl/fpe/drawstate1x.cpp
+        gl/fpe/glstate.cpp
 )
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ./includes)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        ./includes
+        ./3rdparty/xxhash)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
         ${CMAKE_SOURCE_DIR}/libraries/${ANDROID_ABI}/libglslang.a
