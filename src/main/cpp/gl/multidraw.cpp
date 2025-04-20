@@ -3,6 +3,7 @@
 //
 
 #include "multidraw.h"
+#include <vector>
 
 #define DEBUG 0
 
@@ -243,3 +244,179 @@ void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei *count, GLenum
     CHECK_GL_ERROR
 }
 
+const std::string multidraw_comp_shader =
+R"(#version 310 es
+
+layout(local_size_x = 256) in;
+
+struct DrawCommand {
+    uint  count;
+    uint  instanceCount;
+    uint  firstIndex;
+    int   baseVertex;
+    uint  reservedMustBeZero;
+};
+
+layout(std430, binding = 0) readonly buffer Input { uint in_indices[]; };
+layout(std430, binding = 1) readonly buffer Draws { DrawCommand draws[]; };
+layout(std430, binding = 2) readonly buffer Prefix { uint prefixSums[]; };
+layout(std430, binding = 3) writeonly buffer Output { uint out_indices[]; };
+
+void main() {
+    uint globalIdx = gl_GlobalInvocationID.x;
+    if (globalIdx >= prefixSums[prefixSums.length() - 1])
+        return;
+
+    out_indices[globalIdx] = globalIdx;
+    // bisect to find out draw call #
+//    int low = 0;
+//    int high = draws.length() - 1;
+//    while(low < high) {
+//        int mid = (low + high + 1) / 2;
+//        if (prefixSums[mid] <= globalIdx) {
+//            low = mid;
+//        } else {
+//            high = mid - 1;
+//        }
+//    }
+//
+//    // figure out which index to take
+//    DrawCommand cmd = draws[low];
+//    uint localIdx = globalIdx - prefixSums[low];
+//    uint srcIndex = cmd.firstIndex + localIdx;
+//
+//    // Write out
+//    out_indices[globalIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
+}
+
+)";
+
+static bool g_compute_inited = false;
+std::vector<GLuint> g_prefix_sum;
+GLuint g_prefixsumbuffer = 0;
+GLuint g_outputibo = 0;
+GLuint g_compute_program = 0;
+char g_compile_info[1024];
+GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
+        GLenum mode, GLsizei *counts, GLenum type, const void *const *indices, GLsizei primcount, const GLint *basevertex) {
+    LOG()
+
+    INIT_CHECK_GL_ERROR
+
+    if (primcount <= 0)
+        return;
+
+    // TODO: support `types` other than GL_UNSIGNED_INT
+
+    // Align compute shader input format with standard OpenGL indirect-draw format
+    prepare_indirect_buffer(counts, type, indices, primcount, basevertex);
+
+    // Init compute buffers
+    if (!g_compute_inited) {
+        LOG_D("Initializing multidraw compute pipeline...")
+        glGenBuffers(1, &g_prefixsumbuffer);
+        glGenBuffers(1, &g_outputibo);
+
+        g_compute_program = GLES.glCreateProgram();
+        CHECK_GL_ERROR_NO_INIT
+        GLuint shader = GLES.glCreateShader(GL_COMPUTE_SHADER);
+        CHECK_GL_ERROR_NO_INIT
+        const char* s[] = { multidraw_comp_shader.c_str() };
+        const GLint length[] = { static_cast<GLint>(multidraw_comp_shader.length()) };
+        GLES.glShaderSource(shader, 1, s, length);
+        CHECK_GL_ERROR_NO_INIT
+        GLES.glCompileShader(shader);
+        CHECK_GL_ERROR_NO_INIT
+        int success = 0;
+        GLES.glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        CHECK_GL_ERROR_NO_INIT
+        if (!success) {
+            GLES.glGetShaderInfoLog(shader, 1024, NULL, g_compile_info);
+            CHECK_GL_ERROR_NO_INIT
+            LOG_E("%s: %s shader compile error: %s\nsrc:\n%s",
+                  __func__,
+                  "compute",
+                  g_compile_info,
+                  multidraw_comp_shader.c_str());
+#if DEBUG || GLOBAL_DEBUG
+            abort();
+#endif
+            return;
+        }
+
+        GLES.glAttachShader(g_compute_program, shader);
+        CHECK_GL_ERROR_NO_INIT
+        GLES.glLinkProgram(g_compute_program);
+        CHECK_GL_ERROR_NO_INIT
+
+        GLES.glGetProgramiv(g_compute_program, GL_LINK_STATUS, &success);
+        CHECK_GL_ERROR_NO_INIT
+        if(!success) {
+            GLES.glGetProgramInfoLog(g_compute_program, 1024, NULL, g_compile_info);
+            CHECK_GL_ERROR_NO_INIT
+            LOG_E("program link error: %s", g_compile_info);
+#if DEBUG || GLOBAL_DEBUG
+            abort();
+#endif
+            return;
+        }
+
+        g_compute_inited = true;
+    }
+
+    // Resize prefix sum buffer if needed
+    if (g_prefix_sum.size() < g_cmdbufsize)
+        g_prefix_sum.resize(g_cmdbufsize);
+
+    // Calculate prefix sum
+    g_prefix_sum[0] = counts[0];
+    for (GLsizei i = 1; i < primcount; ++i) {
+        g_prefix_sum[i] = g_prefix_sum[i - 1] + counts[i];
+    }
+
+    // Fill in the data
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, g_prefixsumbuffer);
+    CHECK_GL_ERROR_NO_INIT
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * primcount, g_prefix_sum.data(), GL_DYNAMIC_DRAW);
+    CHECK_GL_ERROR_NO_INIT
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    CHECK_GL_ERROR_NO_INIT
+
+    GLint ibo = 0;
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &ibo);
+    CHECK_GL_ERROR_NO_INIT
+
+    // Bind buffers
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ibo);
+    CHECK_GL_ERROR_NO_INIT
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_indirectbuffer);
+    CHECK_GL_ERROR_NO_INIT
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, g_prefixsumbuffer);
+    CHECK_GL_ERROR_NO_INIT
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, g_outputibo);
+    CHECK_GL_ERROR_NO_INIT
+
+    // Dispatch compute
+    LOG_D("Using compute program = %d", g_compute_program)
+    GLES.glUseProgram(g_compute_program);
+    CHECK_GL_ERROR_NO_INIT
+    GLuint total_indices = g_prefix_sum[primcount - 1];
+    LOG_D("Dispatch compute")
+    GLES.glDispatchCompute((total_indices + 255) / 256, 1, 1);
+    CHECK_GL_ERROR_NO_INIT
+
+    // Wait for compute to complete
+    LOG_D("memory barrier")
+    GLES.glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT);
+    CHECK_GL_ERROR_NO_INIT
+
+    // Bind index buffer and do draw
+    LOG_D("draw")
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_outputibo);
+    CHECK_GL_ERROR_NO_INIT
+    glDrawElements(mode, total_indices, type, 0);
+
+    // Restore states
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    CHECK_GL_ERROR_NO_INIT
+}

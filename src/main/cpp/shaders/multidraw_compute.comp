@@ -1,0 +1,42 @@
+#version 310 es
+
+layout(local_size_x = 256) in;
+
+struct DrawCommand {
+    uint  count;
+    uint  instanceCount;
+    uint  firstIndex;
+    int   baseVertex;
+    uint  reservedMustBeZero;
+};
+
+layout(std430, binding = 0) readonly buffer Input { uint in_indices[]; };
+layout(std430, binding = 1) readonly buffer Draws { DrawCommand draws[]; };
+layout(std430, binding = 2) readonly buffer Prefix { uint prefixSums[]; };
+layout(std430, binding = 3) writeonly buffer Output { uint out_indices[]; };
+
+void main() {
+    uint globalIdx = gl_GlobalInvocationID.x;
+    if (globalIdx >= prefixSums[prefixSums.length() - 1])
+        return;
+
+    // bisect to find out draw call #
+    int low = 0;
+    int high = draws.length() - 1;
+    while(low < high) {
+        int mid = (low + high + 1) / 2;
+        if (prefixSums[mid] <= globalIdx) {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    // figure out which index to take
+    DrawCommand cmd = draws[low];
+    uint localIdx = globalIdx - prefixSums[low];
+    uint srcIndex = cmd.firstIndex + localIdx;
+
+    // Write out
+    out_indices[globalIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
+}
