@@ -247,7 +247,7 @@ void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei *count, GLenum
 const std::string multidraw_comp_shader =
 R"(#version 310 es
 
-layout(local_size_x = 256) in;
+layout(local_size_x = 64) in;
 
 struct DrawCommand {
     uint  count;
@@ -269,24 +269,24 @@ void main() {
 
     out_indices[globalIdx] = globalIdx;
     // bisect to find out draw call #
-//    int low = 0;
-//    int high = draws.length() - 1;
-//    while(low < high) {
-//        int mid = (low + high + 1) / 2;
-//        if (prefixSums[mid] <= globalIdx) {
-//            low = mid;
-//        } else {
-//            high = mid - 1;
-//        }
-//    }
-//
-//    // figure out which index to take
-//    DrawCommand cmd = draws[low];
-//    uint localIdx = globalIdx - prefixSums[low];
-//    uint srcIndex = cmd.firstIndex + localIdx;
-//
-//    // Write out
-//    out_indices[globalIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
+    int low = 0;
+    int high = draws.length() - 1;
+    while(low < high) {
+        int mid = (low + high + 1) / 2;
+        if (prefixSums[mid] <= globalIdx) {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    // figure out which index to take
+    DrawCommand cmd = draws[low];
+    uint localIdx = globalIdx - prefixSums[low];
+    uint srcIndex = cmd.firstIndex + localIdx;
+
+    // Write out
+    out_indices[globalIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
 }
 
 )";
@@ -314,8 +314,8 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     // Init compute buffers
     if (!g_compute_inited) {
         LOG_D("Initializing multidraw compute pipeline...")
-        glGenBuffers(1, &g_prefixsumbuffer);
-        glGenBuffers(1, &g_outputibo);
+        GLES.glGenBuffers(1, &g_prefixsumbuffer);
+        GLES.glGenBuffers(1, &g_outputibo);
 
         g_compute_program = GLES.glCreateProgram();
         CHECK_GL_ERROR_NO_INIT
@@ -375,25 +375,25 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     }
 
     // Fill in the data
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, g_prefixsumbuffer);
+    GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, g_prefixsumbuffer);
     CHECK_GL_ERROR_NO_INIT
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * primcount, g_prefix_sum.data(), GL_DYNAMIC_DRAW);
+    GLES.glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * primcount, g_prefix_sum.data(), GL_DYNAMIC_DRAW);
     CHECK_GL_ERROR_NO_INIT
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     CHECK_GL_ERROR_NO_INIT
 
     GLint ibo = 0;
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &ibo);
+    GLES.glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &ibo);
     CHECK_GL_ERROR_NO_INIT
 
     // Bind buffers
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ibo);
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ibo);
     CHECK_GL_ERROR_NO_INIT
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_indirectbuffer);
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_indirectbuffer);
     CHECK_GL_ERROR_NO_INIT
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, g_prefixsumbuffer);
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, g_prefixsumbuffer);
     CHECK_GL_ERROR_NO_INIT
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, g_outputibo);
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, g_outputibo);
     CHECK_GL_ERROR_NO_INIT
 
     // Dispatch compute
@@ -402,7 +402,7 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     CHECK_GL_ERROR_NO_INIT
     GLuint total_indices = g_prefix_sum[primcount - 1];
     LOG_D("Dispatch compute")
-    GLES.glDispatchCompute((total_indices + 255) / 256, 1, 1);
+    GLES.glDispatchCompute((total_indices + 63) / 64, 1, 1);
     CHECK_GL_ERROR_NO_INIT
 
     // Wait for compute to complete
@@ -412,11 +412,11 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
 
     // Bind index buffer and do draw
     LOG_D("draw")
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_outputibo);
+    GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_outputibo);
     CHECK_GL_ERROR_NO_INIT
-    glDrawElements(mode, total_indices, type, 0);
+    GLES.glDrawElements(mode, total_indices, type, 0);
 
     // Restore states
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
     CHECK_GL_ERROR_NO_INIT
 }
