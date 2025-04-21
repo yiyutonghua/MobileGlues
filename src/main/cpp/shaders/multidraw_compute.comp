@@ -22,21 +22,28 @@ void main() {
 
     // bisect to find out draw call #
     int low = 0;
-    int high = draws.length() - 1;
-    while(low < high) {
-        int mid = (low + high + 1) / 2;
-        if (prefixSums[mid] <= outIdx) {
-            low = mid;
-        } else {
-            high = mid - 1;
+//    int high = draws.length() - 1;
+//    while (low < high) {
+//        int mid = (low + )
+//        int mid = (low + high + 1) / 2;
+//        if (prefixSums[mid] <= outIdx) {
+//            low = mid;
+//        } else {
+//            high = mid - 1;
+//        }
+//    }
+    int l = draws.length() - 1;
+    for (low = 0; low < l; ++low) {
+        if (prefixSums[low] > outIdx) {
+            break;
         }
     }
 
     // figure out which index to take
     DrawCommand cmd = draws[low];
     uint localIdx = outIdx - prefixSums[low];
-    uint srcIndex = cmd.firstIndex + localIdx;
+    uint inIndex = localIdx + cmd.firstIndex;
 
     // Write out
-    out_indices[outIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
+    out_indices[outIdx] = uint(int(in_indices[inIndex]) + cmd.baseVertex);
 }

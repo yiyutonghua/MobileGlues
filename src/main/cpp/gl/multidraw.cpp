@@ -269,23 +269,29 @@ void main() {
 
     // bisect to find out draw call #
     int low = 0;
-    int high = draws.length() - 1;
-    while(low < high) {
-        int mid = (low + high + 1) / 2;
-        if (prefixSums[mid] <= outIdx) {
-            low = mid;
-        } else {
-            high = mid - 1;
+//    int high = draws.length() - 1;
+//    while (low < high) {
+//        int mid = (low + high + 1) / 2;
+//        if (prefixSums[mid] <= outIdx) {
+//            low = mid;
+//        } else {
+//            high = mid - 1;
+//        }
+//    }
+    int l = draws.length() - 1;
+    for (low = 0; low < l; ++low) {
+        if (prefixSums[low] > outIdx) {
+            break;
         }
     }
 
     // figure out which index to take
     DrawCommand cmd = draws[low];
-    uint localIdx = outIdx - prefixSums[low];
-    uint srcIndex = cmd.firstIndex + localIdx;
+    uint localIdx = outIdx - ((low == 0) ? 0u : (prefixSums[low - 1]));
+    uint inIndex = localIdx + cmd.firstIndex;
 
     // Write out
-    out_indices[outIdx] = uint(int(in_indices[srcIndex]) + cmd.baseVertex);
+    out_indices[outIdx] = uint(int(in_indices[inIndex]) + cmd.baseVertex);
 }
 
 )";
@@ -378,8 +384,6 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     CHECK_GL_ERROR_NO_INIT
     GLES.glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * primcount, g_prefix_sum.data(), GL_DYNAMIC_DRAW);
     CHECK_GL_ERROR_NO_INIT
-    GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-    CHECK_GL_ERROR_NO_INIT
 
     // Allocate output buffer
     auto total_indices = g_prefix_sum[primcount - 1];
@@ -387,6 +391,8 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     CHECK_GL_ERROR_NO_INIT
     GLES.glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GLuint) * total_indices, nullptr, GL_DYNAMIC_DRAW);
     CHECK_GL_ERROR_NO_INIT
+
+
     GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     CHECK_GL_ERROR_NO_INIT
 
@@ -408,6 +414,9 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
     GLint prev_program = 0;
     GLES.glGetIntegerv(GL_CURRENT_PROGRAM, &prev_program);
     CHECK_GL_ERROR_NO_INIT
+    GLint prev_vb = 0;
+    GLES.glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prev_vb);
+    CHECK_GL_ERROR_NO_INIT
 
     // Dispatch compute
     LOG_D("Using compute program = %d", g_compute_program)
@@ -424,6 +433,8 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
 
     // Bind index buffer and do draw
     LOG_D("draw")
+    GLES.glBindBuffer(GL_VERTEX_ARRAY, prev_vb);
+    CHECK_GL_ERROR_NO_INIT
     GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_outputibo);
     CHECK_GL_ERROR_NO_INIT
     GLES.glDrawElements(mode, total_indices, type, 0);
