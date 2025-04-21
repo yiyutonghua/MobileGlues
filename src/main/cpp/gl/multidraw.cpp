@@ -267,17 +267,8 @@ void main() {
     if (outIdx >= prefixSums[prefixSums.length() - 1])
         return;
 
-    // bisect to find out draw call #
+    // Find out draw call #
     int low = 0;
-//    int high = draws.length() - 1;
-//    while (low < high) {
-//        int mid = (low + high + 1) / 2;
-//        if (prefixSums[mid] <= outIdx) {
-//            low = mid;
-//        } else {
-//            high = mid - 1;
-//        }
-//    }
     int l = draws.length() - 1;
     for (low = 0; low < l; ++low) {
         if (prefixSums[low] > outIdx) {
@@ -433,6 +424,8 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
 
     // Bind index buffer and do draw
     LOG_D("draw")
+    GLES.glUseProgram(prev_program);
+    CHECK_GL_ERROR_NO_INIT
     GLES.glBindBuffer(GL_VERTEX_ARRAY, prev_vb);
     CHECK_GL_ERROR_NO_INIT
     GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_outputibo);
