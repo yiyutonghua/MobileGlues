@@ -22,7 +22,7 @@ void main() {
 
     // Find out draw call #
     int low = 0;
-    int l = draws.length() - 1;
+    int l = draws.length();
     for (low = 0; low < l; ++low) {
         if (prefixSums[low] > outIdx) {
             break;
