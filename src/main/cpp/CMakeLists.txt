@@ -52,18 +52,6 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         config/config.cpp
         config/gpu_utils.cpp
         config/settings.cpp
-
-        gl/fpe/fpe.cpp
-        gl/fpe/state.cpp
-        gl/fpe/transformation.cpp
-        gl/fpe/vertexpointer.cpp
-        gl/fpe/fpe_shadergen.cpp
-        gl/fpe/list.cpp
-        gl/fpe/pointer_utils.cpp
-        gl/fpe/drawing1x.cpp
-        gl/fpe/vertexpointer_utils.cpp
-        gl/fpe/drawstate1x.cpp
-        gl/fpe/glstate.cpp
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
