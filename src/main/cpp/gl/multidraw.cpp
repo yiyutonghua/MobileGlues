@@ -305,8 +305,6 @@ std::vector<GLuint> g_prefix_sum;
 GLuint g_prefixsumbuffer = 0;
 GLuint g_outputibo = 0;
 GLuint g_compute_program = 0;
-GLuint g_compute_program_t1 = 0;
-GLuint g_compute_program_t2 = 0;
 char g_compile_info[1024];
 
 GLuint compile_compute_program(const std::string& src) {
