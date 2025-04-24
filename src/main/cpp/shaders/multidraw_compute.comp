@@ -30,7 +30,7 @@ void main() {
     //    }
 
     int low = 0;
-    int high = draws.length();
+    int high = prefixSums.length();
     while (low < high) {
         int mid = low + (high - low) / 2;
         if (prefixSums[mid] > outIdx) {
