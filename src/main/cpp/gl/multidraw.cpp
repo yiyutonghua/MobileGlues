@@ -280,11 +280,11 @@ void main() {
     int high = draws.length();
     while (low < high) {
         int mid = low + (high - low) / 2;
-        if (prefixSums[mid] <= outIdx) {
-            low = mid + 1; // next [mid + 1, high)
+        if (prefixSums[mid] > outIdx) {
+            high = mid; // next [low, mid)
         }
         else {
-            high = mid; // next [low, mid)
+            low = mid + 1; // next [mid + 1, high)
         }
     }
 
@@ -294,7 +294,8 @@ void main() {
     uint inIndex = localIdx + cmd.firstIndex;
 
     // Write out
-    out_indices[outIdx] = uint(int(in_indices[inIndex]) + cmd.baseVertex);
+    out_indices[outIdx] = uint(in_indices[inIndex] + uint(cmd.baseVertex));
+//    out_indices[outIdx] = uint(cmd.baseVertex);
 }
 
 )";
