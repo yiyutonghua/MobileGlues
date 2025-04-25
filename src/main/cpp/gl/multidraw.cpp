@@ -500,7 +500,7 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(
 
     // Wait for compute to complete
     LOG_D("memory barrier")
-    GLES.glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT);
+    GLES.glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     CHECK_GL_ERROR_NO_INIT
 
     // Bind index buffer and do draw
