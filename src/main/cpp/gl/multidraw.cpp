@@ -368,6 +368,7 @@ GLuint g_compute_program = 0;
 char g_compile_info[1024];
 
 GLuint compile_compute_program(const std::string& src) {
+    INIT_CHECK_GL_ERROR
     auto program = GLES.glCreateProgram();
     CHECK_GL_ERROR_NO_INIT
     GLuint shader = GLES.glCreateShader(GL_COMPUTE_SHADER);
