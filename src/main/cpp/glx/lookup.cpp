@@ -4,10 +4,10 @@
 
 #include "lookup.h"
 
-#include <stdio.h>
+#include <cstdio>
 #include <dlfcn.h>
 #include <EGL/egl.h>
-#include <string.h>
+#include <cstring>
 #include "../includes.h"
 #include "../gl/log.h"
 #include "../gl/envvars.h"
@@ -49,6 +49,10 @@ void* get_multidraw_func(const char* name) {
 
 void *glXGetProcAddress(const char *name) {
     LOG()
+#ifdef __APPLE__
+    return dlsym((void*)(~(uintptr_t)0), name);
+#else
+    
     void* proc = nullptr;
 
     proc = get_multidraw_func(name);
@@ -59,26 +63,13 @@ void *glXGetProcAddress(const char *name) {
     if (!proc) {
         fprintf(stderr, "Failed to get OpenGL function %s: %s\n", name, dlerror());
         LOG_W("Failed to get OpenGL function: %s", (const char*)name)
-        return NULL;
+        return nullptr;
     }
 
     return proc;
+#endif
 }
 
 void *glXGetProcAddressARB(const char *name) {
-    LOG()
-    void* proc = nullptr;
-
-    proc = get_multidraw_func(name);
-
-    if (!proc)
-        proc = dlsym(RTLD_DEFAULT, (const char*)name);
-
-    if (!proc) {
-        fprintf(stderr, "Failed to get OpenGL function %s: %s\n", name, dlerror());
-        LOG_W("Failed to get OpenGL function: %s", (const char*)name)
-        return NULL;
-    }
-
-    return proc;
+    return glXGetProcAddress(name);
 }

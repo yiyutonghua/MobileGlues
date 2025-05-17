@@ -383,6 +383,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
 #define BIN_FILE_PREFIX "/sdcard/MG/buf/"
 #endif
 
+#if !defined(__APPLE__)
 extern "C" {
     GLAPI GLAPIENTRY void *glMapBufferARB(GLenum target, GLenum access) __attribute__((alias("glMapBuffer")));
     GLAPI GLAPIENTRY void *glBufferDataARB(GLenum target, GLenum access) __attribute__((alias("glBufferData")));
@@ -390,6 +391,7 @@ extern "C" {
     GLAPI GLAPIENTRY void glBufferStorageARB(GLenum target, GLsizeiptr size, const void* data, GLbitfield flags) __attribute__((alias("glBufferStorage")));
     GLAPI GLAPIENTRY void glBindBufferARB(GLenum target, GLuint buffer) __attribute__((alias("glBindBuffer")));
 }
+#endif
 
 GLboolean glUnmapBuffer(GLenum target) {
     LOG()
