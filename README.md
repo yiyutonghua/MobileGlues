@@ -26,7 +26,7 @@
        #if MG_MOBILEGLUES_VERSION >= 1270
            // Logic for MobileGlues (version >= V1.2.7)
        #else
-		   // Logic for MobileGlues (version < V1.2.7)
+	// Logic for MobileGlues (version < V1.2.7)
        #endif
    #else
        // ...
