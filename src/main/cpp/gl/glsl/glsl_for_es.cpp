@@ -25,23 +25,6 @@
 char* (*MesaConvertShader)(const char *src, unsigned int type, unsigned int glsl, unsigned int essl);
 #endif
 
-//void trim(char* str) {
-//    char* end;
-//    while (isspace((unsigned char)*str)) str++;
-//    if (*str == 0) return;
-//    end = str + strlen(str) - 1;
-//    while (end > str && isspace((unsigned char)*end)) end--;
-//    *(end + 1) = 0;
-//}
-//
-//int startsWith(const char *str, const char *prefix) {
-//    if (!str || !prefix) return 0;
-//    while (*prefix) {
-//        if (*str++ != *prefix++) return 0;
-//    }
-//    return 1;
-//}
-
 static TBuiltInResource InitResources()
 {
     TBuiltInResource Resources{};
@@ -163,142 +146,6 @@ int getGLSLVersion(const char* glsl_code) {
     return -1;
 }
 
-//std::string removeSecondLine(std::string code) {
-//    size_t firstLineEnd = code.find('\n');
-//    if (firstLineEnd == std::string::npos) {
-//        return code;
-//    }
-//    size_t secondLineEnd = code.find('\n', firstLineEnd + 1);
-//    if (secondLineEnd == std::string::npos) {
-//        return code;
-//    }
-//    code.erase(firstLineEnd + 1, secondLineEnd - firstLineEnd);
-//    return code;
-//}
-
-//char* disable_GL_ARB_derivative_control(const char* glslCode) {
-//    std::string code(glslCode);
-//    std::string target = "GL_ARB_derivative_control";
-//    size_t pos = code.find(target);
-//
-//    if (pos != std::string::npos) {
-//        size_t ifdefPos = 0;
-//        while ((ifdefPos = code.find("#ifdef GL_ARB_derivative_control", ifdefPos)) != std::string::npos) {
-//            code.replace(ifdefPos, 32, "#if 0");
-//            ifdefPos += 4;
-//        }
-//
-//        size_t ifndefPos = 0;
-//        while ((ifndefPos = code.find("#ifndef GL_ARB_derivative_control", ifndefPos)) != std::string::npos) {
-//            code.replace(ifndefPos, 33, "#if 1");
-//            ifndefPos += 4;
-//        }
-//
-//        code = removeSecondLine(code);
-//
-//        char* result = new char[code.length() + 1];
-//        std::strcpy(result, code.c_str());
-//        return result;
-//    }
-//
-//    char* result = new char[code.length() + 1];
-//    std::strcpy(result, code.c_str());
-//    return result;
-//}
-//
-//char* forceSupporterInput(char* glslCode) {
-//    // first
-//    const char* target = "const mat3 rotInverse = transpose(rot);";
-//    const char* replacement = "const mat3 rotInverse = mat3(rot[0][0], rot[1][0], rot[2][0], rot[0][1], rot[1][1], rot[2][1], rot[0][2], rot[1][2], rot[2][2]);";
-//
-//    char* pos = strstr(glslCode, target);
-//    if (pos != nullptr) {
-//        size_t targetLen = strlen(target);
-//        size_t replacementLen = strlen(replacement);
-//
-//        size_t newSize = strlen(glslCode) - targetLen + replacementLen + 1;
-//        char* modifiedCode = new char[newSize];
-//
-//        strncpy(modifiedCode, glslCode, pos - glslCode);
-//        modifiedCode[pos - glslCode] = '\0';
-//
-//        strcat(modifiedCode, replacement);
-//
-//        strcat(modifiedCode, pos + targetLen);
-//        glslCode = new char[strlen(modifiedCode) + 1];
-//        std::strcpy(glslCode, modifiedCode);
-//        std::free(modifiedCode);
-//    }
-//
-//    // second
-//    if (!std::strstr(glslCode, "deferredOutput2 = GI_TemporalFilter()")) {
-//        return glslCode;
-//    }
-//
-//    if (std::strstr(glslCode, "vec4 GI_TemporalFilter()")) {
-//        return glslCode;
-//    }
-//
-//
-//    LOG_D("find GI_TemporalFilter()")
-//
-//    const char* GI_TemporalFilter = R"(
-//vec4 GI_TemporalFilter() {
-//    vec2 uv = gl_FragCoord.xy / screenSize;
-//    uv += taaJitter * pixelSize;
-//    vec4 currentGI = texture(colortex0, uv);
-//    float depth = texture(depthtex0, uv).r;
-//    vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
-//    vec4 viewPos = gbufferProjectionInverse * clipPos;
-//    viewPos /= viewPos.w;
-//    vec4 worldPos = gbufferModelViewInverse * viewPos;
-//    vec4 prevClipPos = gbufferPreviousProjection * (gbufferPreviousModelView * worldPos);
-//    prevClipPos /= prevClipPos.w;
-//    vec2 prevUV = prevClipPos.xy * 0.5 + 0.5;
-//    vec4 historyGI = texture(colortex1, prevUV);
-//    float difference = length(currentGI.rgb - historyGI.rgb);
-//    float thresholdValue = 0.1;
-//    float adaptiveBlend = mix(0.9, 0.0, smoothstep(thresholdValue, thresholdValue * 2.0, difference));
-//    vec4 filteredGI = mix(currentGI, historyGI, adaptiveBlend);
-//    if (difference > thresholdValue * 2.0) {
-//        filteredGI = currentGI;
-//    }
-//    return filteredGI;
-//}
-//)";
-//
-//    char *mainPos = strstr(glslCode, "\nvoid main()");
-//    if (mainPos == nullptr) {
-//        LOG_E("Error: 'void main()' not found in GLSL code.")
-//        return glslCode;
-//    }
-//
-//    size_t prefixLength = mainPos - glslCode;
-//    size_t originalLength = strlen(glslCode);
-//    size_t insertLength = strlen(GI_TemporalFilter);
-//
-//    char *modifiedCode = (char *)malloc(originalLength + insertLength + 2);
-//    if (modifiedCode == nullptr) {
-//        LOG_E("Memory allocation failed.")
-//        return glslCode;
-//    }
-//
-//    strncpy(modifiedCode, glslCode, prefixLength);
-//    modifiedCode[prefixLength] = '\0';
-//
-//    strcat(modifiedCode, "\n");
-//    strcat(modifiedCode, GI_TemporalFilter);
-//    strcat(modifiedCode, "\n");
-//
-//    strcat(modifiedCode, mainPos);
-//
-//    free(glslCode);
-//    glslCode = modifiedCode;
-//
-//    return glslCode;
-//}
-
-
 std::string forceSupporterOutput(const std::string& glslCode) {
     bool hasPrecisionFloat = glslCode.find("precision ") != std::string::npos &&
                              glslCode.find("float;") != std::string::npos;
@@ -363,228 +210,6 @@ std::string removeLayoutBinding(const std::string& glslCode) {
     result = std::regex_replace(result, bindingRegex2, "layout(");
     return result;
 }
-
-// TODO
-[[maybe_unused]] std::string makeRGBWriteonly(const std::string& input) {
-    static std::regex pattern(R"(.*layout\([^)]*rgba[^)]*\).*?)");
-    std::string result;
-    std::string::size_type start = 0;
-    std::string::size_type end;
-    while ((end = input.find('\n', start)) != std::string::npos) {
-        std::string line = input.substr(start, end - start);
-        if (std::regex_search(line, pattern)) {
-            result += "writeonly " + line + "\n";
-        } else {
-            result += line + "\n";
-        }
-        start = end + 1;
-    }
-    std::string lastLine = input.substr(start);
-    if (std::regex_search(lastLine, pattern)) {
-        result += "writeonly " + lastLine;
-    } else {
-        result += lastLine;
-    }
-
-    return result;
-}
-
-//char* removeLineDirective(char* glslCode) {
-//    char* cursor = glslCode;
-//    int modifiedCodeIndex = 0;
-//    size_t maxLength = 1024 * 10;
-//    char* modifiedGlslCode = (char*)malloc(maxLength * sizeof(char));
-//    if (!modifiedGlslCode) return nullptr;
-//
-//    while (*cursor) {
-//        if (strncmp(cursor, "\n#", 2) == 0) {
-//            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//            char* last_cursor = cursor;
-//            while (cursor[0] != '\n') cursor++;
-//            char* line_feed_cursor = cursor;
-//            while (isspace(cursor[0])) cursor--;
-//            if (cursor[0] == '\\')
-//            {
-//                // find line directive, now remove it
-//                char* slash_cursor = cursor;
-//                cursor = last_cursor;
-//                while (cursor < slash_cursor - 1)
-//                    modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//                modifiedGlslCode[modifiedCodeIndex++] = ' ';
-//                cursor = line_feed_cursor + 1;
-//                while (isspace(cursor[0])) cursor++;
-//
-//                while (true) {
-//                    char* last_cursor2 = cursor;
-//                    while (cursor[0] != '\n') cursor++;
-//                    cursor -= 1;
-//                    while (isspace(cursor[0])) cursor--;
-//                    if (cursor[0] == '\\') {
-//                        char* slash_cursor2 = cursor;
-//                        cursor = last_cursor2;
-//                        while (cursor < slash_cursor2)
-//                            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//                        while (cursor[0] != '\n') cursor++;
-//                        cursor++;
-//                        while (isspace(cursor[0])) cursor++;
-//                    } else {
-//                        cursor = last_cursor2;
-//                        while (cursor[0] != '\n')
-//                            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//                        break;
-//                    }
-//                }
-//                cursor++;
-//            }
-//            else {
-//                cursor = last_cursor;
-//            }
-//        }
-//        else {
-//            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//        }
-//
-//        if (modifiedCodeIndex >= maxLength - 1) {
-//            maxLength *= 2;
-//            modifiedGlslCode = (char*)realloc(modifiedGlslCode, maxLength);
-//            if (!modifiedGlslCode) return nullptr;
-//        }
-//    }
-//
-//    modifiedGlslCode[modifiedCodeIndex] = '\0';
-//    return modifiedGlslCode;
-//}
-
-//char* process_uniform_declarations(char* glslCode) {
-//    char* cursor = glslCode;
-//    char name[256], type[256], initial_value[1024];
-//    int modifiedCodeIndex = 0;
-//    size_t maxLength = 1024 * 10;
-//    char* modifiedGlslCode = (char*)malloc(maxLength * sizeof(char));
-//    if (!modifiedGlslCode) return nullptr;
-//
-//    while (*cursor) {
-//        if (strncmp(cursor, "uniform", 7) == 0) {
-//            char* cursor_start = cursor;
-//
-//            cursor += 7;
-//
-//            while (isspace((unsigned char)*cursor)) cursor++;
-//
-//            // may be precision qualifier
-//            char* precision = nullptr;
-//            if (startsWith(cursor, "highp")) {
-//                precision = " highp";
-//                cursor += 5;
-//                while (isspace((unsigned char)*cursor)) cursor++;
-//            } else if (startsWith(cursor, "lowp")) {
-//                precision = " lowp";
-//                cursor += 4;
-//                while (isspace((unsigned char)*cursor)) cursor++;
-//            } else if (startsWith(cursor, "mediump")) {
-//                precision = " mediump";
-//                cursor += 7;
-//                while (isspace((unsigned char)*cursor)) cursor++;
-//            }
-//
-//            int i = 0;
-//            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
-//                type[i++] = *cursor++;
-//            }
-//            type[i] = '\0';
-//
-//            while (isspace((unsigned char)*cursor)) cursor++;
-//
-//            // may be precision qualifier
-//            if(!precision)
-//            {
-//                if (startsWith(cursor, "highp")) {
-//                    precision = " highp";
-//                    cursor += 5;
-//                    while (isspace((unsigned char)*cursor)) cursor++;
-//                } else if (startsWith(cursor, "lowp")) {
-//                    precision = " lowp";
-//                    cursor += 4;
-//                    while (isspace((unsigned char)*cursor)) cursor++;
-//                } else if (startsWith(cursor, "mediump")) {
-//                    precision = " mediump";
-//                    cursor += 7;
-//                    while (isspace((unsigned char)*cursor)) cursor++;
-//                } else {
-//                    precision = "";
-//                }
-//            }
-//
-//            while (isspace((unsigned char)*cursor)) cursor++;
-//
-//            i = 0;
-//            while (isalnum((unsigned char)*cursor) || *cursor == '_') {
-//                name[i++] = *cursor++;
-//            }
-//            name[i] = '\0';
-//            while (isspace((unsigned char)*cursor)) cursor++;
-//
-//            initial_value[0] = '\0';
-//            if (*cursor == '=') {
-//                cursor++;
-//                i = 0;
-//                while (*cursor && *cursor != ';') {
-//                    initial_value[i++] = *cursor++;
-//                }
-//                initial_value[i] = '\0';
-//                trim(initial_value);
-//            }
-//
-//            while (*cursor != ';' && *cursor) {
-//                cursor++;
-//            }
-//
-//            char* cursor_end = cursor;
-//
-//            size_t spaceLeft = maxLength - modifiedCodeIndex;
-//            int len = 0;
-//
-//            if (*initial_value) {
-//                len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
-//            } else {
-//                // use original declaration
-//                size_t length = cursor_end - cursor_start + 1;
-//                if (length < spaceLeft) {
-//                    memcpy(modifiedGlslCode + modifiedCodeIndex, cursor_start, length);
-//                    len = (int)length;
-//                } else {
-//                    fprintf(stderr, "Error: Not enough space in buffer\n");
-//                }
-//                // len = snprintf(modifiedGlslCode + modifiedCodeIndex, spaceLeft, "uniform%s %s %s;", precision, type, name);
-//            }
-//
-//            if (len < 0 || len >= spaceLeft) {
-//                free(modifiedGlslCode);
-//                return nullptr;
-//            }
-//            modifiedCodeIndex += len;
-//
-//            while (*cursor == ';') cursor++;
-//
-//        } else {
-//            modifiedGlslCode[modifiedCodeIndex++] = *cursor++;
-//        }
-//
-//        while (modifiedCodeIndex >= maxLength - 1) {
-//            maxLength *= 2;
-//            char* temp = (char*)realloc(modifiedGlslCode, maxLength);
-//            if (!temp) {
-//                free(modifiedGlslCode);
-//                return nullptr;
-//            }
-//            modifiedGlslCode = temp;
-//        }
-//    }
-//
-//    modifiedGlslCode[modifiedCodeIndex] = '\0';
-//    return modifiedGlslCode;
-//}
 
 void trim(std::string& str) {
     str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](int ch) {
@@ -1003,7 +628,6 @@ std::string GLSLtoGLSLES_2(const char *glsl_code, GLenum glsl_type, uint essl_ve
         }
     }
 #endif
-//    char* correct_glsl = glsl_code;
     std::string correct_glsl_str = preprocess_glsl(glsl_code);
     LOG_D("Firstly converted GLSL:\n%s", correct_glsl_str.c_str())
     int glsl_version = get_or_add_glsl_version(correct_glsl_str);
@@ -1030,15 +654,9 @@ std::string GLSLtoGLSLES_2(const char *glsl_code, GLenum glsl_type, uint essl_ve
     essl = removeLayoutBinding(essl);
     essl = processOutColorLocations(essl);
     essl = forceSupporterOutput(essl);
-    //essl = makeRGBWriteonly(essl);
-
-//    char* result_essl = new char[essl.length() + 1];
-//    std::strcpy(result_essl, essl.c_str());
 
     LOG_D("Originally GLSL to GLSL ES Complete: \n%s", essl.c_str())
 
-//    free(shader_source);
-//    glslang::FinalizeProcess();
     return_code = errc;
     return essl;
 }
@@ -1048,8 +666,7 @@ std::string GLSLtoGLSLES_1(const char *glsl_code, GLenum glsl_type, uint esversi
     LOG_W("Warning: use glsl optimizer to convert shader.")
     if (esversion < 300) esversion = 300;
     std::string result = MesaConvertShader(glsl_code, glsl_type == GL_VERTEX_SHADER ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER, 460LL, esversion);
-//    char * ret = (char*)malloc(sizeof(char) * strlen(result) + 1);
-//    strcpy(ret, result);
+
     return_code = 0;
     return result;
 #else
