@@ -438,6 +438,44 @@ static inline void replace_all(std::string& str, const std::string& from, const 
     }
 }
 
+static inline void inject_textureQueryLod(std::string& glsl) {
+    const std::string textureQueryLodCall = "textureQueryLod(";
+    const std::string textureQueryLodDef = "vec2 mg_textureQueryLod(sampler2D tex, vec2 uv)";
+    const std::string mainStart = "void main()";
+
+    // Already defined function
+    const auto def_loc = glsl.find(textureQueryLodDef);
+    if (def_loc != std::string::npos)
+        return;
+
+    // Never called function
+    const auto call_loc = glsl.find(textureQueryLodCall);
+    if (call_loc == std::string::npos)
+        return;
+
+
+    const auto main_loc = glsl.find(mainStart);
+    // No main(), no inject
+    if (main_loc == std::string::npos)
+        return;
+
+    const std::string textureQueryLodImpl = R"(
+vec2 mg_textureQueryLod(sampler2D tex, vec2 uv) {
+    vec2 texSizeF = vec2(textureSize(tex, 0));
+    vec2 dFdx_uv = dFdx(uv * texSizeF);
+    vec2 dFdy_uv = dFdy(uv * texSizeF);
+    float maxDerivative = max(length(dFdx_uv), length(dFdy_uv));
+    float lod = log2(maxDerivative);
+    return vec2(lod);
+}
+)";
+    // Replace all calls to textureQueryLod()
+    replace_all(glsl, "textureQueryLod(", "mg_textureQueryLod(");
+
+    // Do injection here
+    glsl.insert(main_loc, "\n" + textureQueryLodImpl + "\n");
+}
+
 static inline void inject_temporal_filter(std::string& glsl) {
     const std::string temporalFilterCall = "deferredOutput2 = GI_TemporalFilter()";
     const std::string temporalFilterDef = "vec4 GI_TemporalFilter()";
@@ -502,6 +540,10 @@ std::string preprocess_glsl(const std::string& glsl) {
 
     // GI_TemporalFilter injection
     inject_temporal_filter(ret);
+
+    // textureQueryLod injection
+    inject_textureQueryLod(ret);
+
     return ret;
 }
 
