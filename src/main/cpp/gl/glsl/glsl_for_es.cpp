@@ -525,6 +525,28 @@ vec4 GI_TemporalFilter() {
     glsl.insert(main_loc, "\n" + GI_TemporalFilter + "\n");
 }
 
+void inject_mg_macro_definition(std::string& glslCode) {
+    std::stringstream macro_stream;
+    macro_stream << "\n#define MG_MOBILEGLUES\n"
+                 << "#define MG_MOBILEGLUES_VERSION "
+                 << MAJOR << MINOR << REVISION << PATCH << "\n";
+    std::string macro_definitions = macro_stream.str();
+
+    size_t lastExtensionPos = glslCode.rfind("#extension");
+    size_t insertionPos = 0;
+
+    if (lastExtensionPos != std::string::npos) {
+        size_t nextNewline = glslCode.find('\n', lastExtensionPos);
+        insertionPos = (nextNewline != std::string::npos) ? nextNewline + 1 : glslCode.length();
+    } else {
+        size_t firstNewline = glslCode.find('\n');
+        insertionPos = (firstNewline != std::string::npos) ? firstNewline + 1 : 0;
+    }
+
+    glslCode.insert(insertionPos, macro_definitions);
+}
+
+
 std::string preprocess_glsl(const std::string& glsl) {
     std::string ret = glsl;
     // Remove lines beginning with `#line`
@@ -540,9 +562,12 @@ std::string preprocess_glsl(const std::string& glsl) {
 
     // GI_TemporalFilter injection
     inject_temporal_filter(ret);
-
+    
     // textureQueryLod injection
     inject_textureQueryLod(ret);
+
+    // MobileGlues macros injection
+    inject_mg_macro_definition(ret);
 
     return ret;
 }
