@@ -562,9 +562,11 @@ std::string preprocess_glsl(const std::string& glsl) {
 
     // GI_TemporalFilter injection
     inject_temporal_filter(ret);
-    
+
     // textureQueryLod injection
-    inject_textureQueryLod(ret);
+    if (!g_gles_caps.GL_EXT_texture_query_lod) {
+        inject_textureQueryLod(ret);
+    }
 
     // MobileGlues macros injection
     inject_mg_macro_definition(ret);
