@@ -525,18 +525,19 @@ vec4 GI_TemporalFilter() {
     glsl.insert(main_loc, "\n" + GI_TemporalFilter + "\n");
 }
 
-void inject_mg_macro_definition(std::string& glslCode) {
-    std::stringstream macro_stream;
-    macro_stream << "\n#define MG_MOBILEGLUES\n"
-                 << "#define MG_MOBILEGLUES_VERSION "
-                 << MAJOR << MINOR << REVISION << PATCH << "\n";
-    std::string macro_definitions = macro_stream.str();
+#define xstr(s) str(s)
+#define str(s) #s
 
-    size_t lastExtensionPos = glslCode.rfind("#extension");
+void inject_mg_macro_definition(std::string& glslCode) {
+    std::string macro_definitions =
+            "\n#define MG_MOBILEGLUES\n"
+            "#define MG_MOBILEGLUES_VERSION " xstr(MAJOR) xstr(MINOR) xstr(REVISION) xstr(PATCH) "\n";
+
+    size_t versionPos = glslCode.rfind("#version");
     size_t insertionPos = 0;
 
-    if (lastExtensionPos != std::string::npos) {
-        size_t nextNewline = glslCode.find('\n', lastExtensionPos);
+    if (versionPos != std::string::npos) {
+        size_t nextNewline = glslCode.find('\n', versionPos);
         insertionPos = (nextNewline != std::string::npos) ? nextNewline + 1 : glslCode.length();
     } else {
         size_t firstNewline = glslCode.find('\n');
