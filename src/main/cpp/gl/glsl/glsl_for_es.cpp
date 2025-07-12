@@ -8,7 +8,6 @@
 #include <fstream>
 #include "../log.h"
 #include "glslang/SPIRV/GlslangToSpv.h"
-#include "preConvertedGlsl.h"
 #include <string>
 #include <regex>
 #include <strstream>
@@ -16,8 +15,6 @@
 #include <sstream>
 #include "cache.h"
 #include "../../version.h"
-
-//#define FEATURE_PRE_CONVERTED_GLSL
 
 #define DEBUG 0
 
@@ -689,15 +686,6 @@ std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, in
 
 static bool glslang_inited = false;
 std::string GLSLtoGLSLES_2(const char *glsl_code, GLenum glsl_type, uint essl_version, int& return_code) {
-#ifdef FEATURE_PRE_CONVERTED_GLSL
-    if (getGLSLVersion(glsl_code) == 430) {
-        char* converted = preConvertedGlsl(glsl_code);
-        if (converted) {
-            LOG_D("Find pre-converted glsl, now use it.")
-            return converted;
-        }
-    }
-#endif
     std::string correct_glsl_str = preprocess_glsl(glsl_code);
     LOG_D("Firstly converted GLSL:\n%s", correct_glsl_str.c_str())
     int glsl_version = get_or_add_glsl_version(correct_glsl_str);
