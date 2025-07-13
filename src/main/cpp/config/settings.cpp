@@ -93,13 +93,11 @@ void init_settings() {
         case AngleConfig::EnableIfPossible: {
             int isQcom = isAdreno(gpu_cstr);
             int is740 = isAdreno740(gpu_cstr);
-            int hasVk13 = hasVulkan13();
 
             LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
             LOG_D("Is Adreno 740? = %s", is740 ? "true" : "false")
-            LOG_D("Has Vulkan 1.3? = %s", hasVk13 ? "true" : "false")
 
-            finalAngleMode = (is740 || !hasVk13) ? AngleMode::Disabled : AngleMode::Enabled;
+            finalAngleMode = is740 ? AngleMode::Disabled : AngleMode::Enabled;
             LOG_D("ANGLE: Conditionally %s", (finalAngleMode == AngleMode::Enabled) ? "enabled" : "disabled");
             break;
         }
