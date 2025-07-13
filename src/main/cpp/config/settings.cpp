@@ -79,6 +79,7 @@ void init_settings() {
     const char* gpu_cstr = gpuString.c_str();
     LOG_D("GPU: %s", gpu_cstr ? gpu_cstr : "(unknown)")
 
+    int isQcom = isAdreno(gpu_cstr);
     switch (angleConfig) {
         case AngleConfig::ForceDisable:
             finalAngleMode = AngleMode::Disabled;
@@ -91,7 +92,6 @@ void init_settings() {
             break;
             
         case AngleConfig::EnableIfPossible: {
-            int isQcom = isAdreno(gpu_cstr);
             int is740 = isAdreno740(gpu_cstr);
 
             LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
@@ -104,8 +104,14 @@ void init_settings() {
             
         case AngleConfig::DisableIfPossible:
         default:
-            finalAngleMode = AngleMode::Disabled;
-            LOG_D("ANGLE: Disabled by default");
+            if (isQcom && !isAdreno740(gpu_cstr)) {
+                finalAngleMode = AngleMode::Enabled;
+                LOG_D("ANGLE: Enabled by default for Adreno");
+            } else {
+                finalAngleMode = AngleMode::Disabled;
+                LOG_D("ANGLE: Disabled by default for non-Adreno or Adreno 740");
+			}
+
             break;
     }
     
