@@ -180,7 +180,7 @@ void init_settings() {
     LOG_V("[MobileGlues] Setting: maxGlslCacheSize       = %i", 
           static_cast<int>(global_settings.max_glsl_cache_size / 1024 / 1024))
     LOG_V("[MobileGlues] Setting: multidrawMode          = %s", draw_mode_str.c_str())
-    LOG_V("[MobileGlues] Setting: angleDepthClearFixMode = %i", static_cast<int>(angleDepthClearFixMode))
+    LOG_V("[MobileGlues] Setting: angleDepthClearFixMode = %i", static_cast<int>(global_settings.angle_depth_clear_fix_mode))
 }
 
 void init_settings_post() {
