@@ -82,7 +82,20 @@ void init_settings() {
     const char* gpu_cstr = gpuString.c_str();
     LOG_D("GPU: %s", gpu_cstr ? gpu_cstr : "(unknown)")
 
+    int hasVk11 = hasVulkan11();
     int isQcom = isAdreno(gpu_cstr);
+    int is730 = isAdreno730(gpu_cstr);
+    int is740 = isAdreno740(gpu_cstr);
+    int is830 = isAdreno830(gpu_cstr);
+    bool isANGLESupported = checkIfANGLESupported(gpu_cstr);
+
+	LOG_D("Has Vulkan 1.1? = %s", hasVk11 ? "true" : "false")
+    LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
+    LOG_D("Is Adreno 730? = %s", is730 ? "true" : "false")
+    LOG_D("Is Adreno 740? = %s", is740 ? "true" : "false")
+	LOG_D("Is Adreno 830? = %s", is830 ? "true" : "false")
+	LOG_D("Is ANGLE supported? = %s", isANGLESupported ? "true" : "false")
+
     switch (angleConfig) {
         case AngleConfig::ForceDisable:
             finalAngleMode = AngleMode::Disabled;
@@ -95,24 +108,19 @@ void init_settings() {
             break;
             
         case AngleConfig::EnableIfPossible: {
-            int is740 = isAdreno740(gpu_cstr);
-
-            LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
-            LOG_D("Is Adreno 740? = %s", is740 ? "true" : "false")
-
-            finalAngleMode = is740 ? AngleMode::Disabled : AngleMode::Enabled;
+            finalAngleMode = isANGLESupported ? AngleMode::Enabled : AngleMode::Disabled;
             LOG_D("ANGLE: Conditionally %s", (finalAngleMode == AngleMode::Enabled) ? "enabled" : "disabled");
             break;
         }
             
         case AngleConfig::DisableIfPossible:
         default:
-            if (isQcom && !isAdreno740(gpu_cstr)) {
+            if (isQcom && isANGLESupported) {
                 finalAngleMode = AngleMode::Enabled;
-                LOG_D("ANGLE: Enabled by default for Adreno");
+                LOG_D("ANGLE: Enabled by default for Adreno (except Adreno 730/740)");
             } else {
                 finalAngleMode = AngleMode::Disabled;
-                LOG_D("ANGLE: Disabled by default for non-Adreno or Adreno 740");
+                LOG_D("ANGLE: Disabled by default for non-Adreno or Adreno 730/740");
 			}
 
             break;
