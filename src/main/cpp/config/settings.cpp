@@ -120,6 +120,7 @@ void init_settings() {
     
     global_settings.angle = finalAngleMode;
     LOG_D("Final ANGLE setting: %d", static_cast<int>(global_settings.angle))
+    global_settings.buffer_coherent_as_flush = (global_settings.angle == AngleMode::Disabled);
 
     if (global_settings.angle == AngleMode::Enabled) {
         setenv("LIBGL_GLES", "libGLESv2_angle.so", 1);
@@ -181,6 +182,7 @@ void init_settings() {
           static_cast<int>(global_settings.max_glsl_cache_size / 1024 / 1024))
     LOG_V("[MobileGlues] Setting: multidrawMode          = %s", draw_mode_str.c_str())
     LOG_V("[MobileGlues] Setting: angleDepthClearFixMode = %i", static_cast<int>(global_settings.angle_depth_clear_fix_mode))
+    LOG_V("[MobileGlues] Setting: bufferCoherentAsFlush = %i", static_cast<int>(global_settings.buffer_coherent_as_flush))
 }
 
 void init_settings_post() {
