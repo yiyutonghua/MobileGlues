@@ -82,14 +82,14 @@ void init_settings() {
     const char* gpu_cstr = gpuString.c_str();
     LOG_D("GPU: %s", gpu_cstr ? gpu_cstr : "(unknown)")
 
-    int hasVk11 = hasVulkan11();
+    int hasVk12 = hasVulkan12();
     int isQcom = isAdreno(gpu_cstr);
     int is730 = isAdreno730(gpu_cstr);
     int is740 = isAdreno740(gpu_cstr);
     int is830 = isAdreno830(gpu_cstr);
     bool isANGLESupported = checkIfANGLESupported(gpu_cstr);
 
-	LOG_D("Has Vulkan 1.1? = %s", hasVk11 ? "true" : "false")
+	LOG_D("Has Vulkan 1.2? = %s", hasVk12 ? "true" : "false")
     LOG_D("Is Adreno? = %s", isQcom ? "true" : "false")
     LOG_D("Is Adreno 730? = %s", is730 ? "true" : "false")
     LOG_D("Is Adreno 740? = %s", is740 ? "true" : "false")
@@ -115,14 +115,7 @@ void init_settings() {
             
         case AngleConfig::DisableIfPossible:
         default:
-            if (isQcom && isANGLESupported) {
-                finalAngleMode = AngleMode::Enabled;
-                LOG_D("ANGLE: Enabled by default for Adreno (except Adreno 730/740)");
-            } else {
-                finalAngleMode = AngleMode::Disabled;
-                LOG_D("ANGLE: Disabled by default for non-Adreno or Adreno 730/740");
-			}
-
+            finalAngleMode = AngleMode::Disabled;
             break;
     }
     

@@ -96,7 +96,7 @@ int isAdreno730(const char* gpu) {
 }
 
 bool checkIfANGLESupported(const char* gpu) {
-    return !isAdreno730(gpu) && !isAdreno740(gpu) && hasVulkan11();
+    return !isAdreno730(gpu) && !isAdreno740(gpu) && hasVulkan12();
 }
 
 int isAdreno830(const char* gpu) {
@@ -106,10 +106,10 @@ int isAdreno830(const char* gpu) {
     return isAdreno(gpu) && (strstr(gpu, "830") != nullptr);
 }
 
-static std::optional<int> hasVk11;
-int hasVulkan11() {
-    if (hasVk11.has_value())
-        return hasVk11.value();
+static std::optional<int> hasVk12;
+int hasVulkan12() {
+    if (hasVk12.has_value())
+        return hasVk12.value();
     void* vulkan_lib = open_lib(vk_lib, nullptr);
     if (!vulkan_lib)
         return 0;
@@ -169,7 +169,7 @@ int hasVulkan11() {
     VkInstance instance = {};
     result = vkCreateInstance(&createInfo, nullptr, &instance);
     if (result != VK_SUCCESS) {
-        hasVk11 = false;
+        hasVk12 = false;
         return 0;
     }
 
@@ -177,7 +177,7 @@ int hasVulkan11() {
     result = vkEnumeratePhysicalDevices(instance, &gpuCount, nullptr);
     if (result != VK_SUCCESS || gpuCount == 0) {
         vkDestroyInstance(instance, nullptr);
-        hasVk11 = false;
+        hasVk12 = false;
         return 0;
     }
 
@@ -188,9 +188,9 @@ int hasVulkan11() {
         VkPhysicalDeviceProperties deviceProperties;
         vkGetPhysicalDeviceProperties(physicalDevices[i], &deviceProperties);
 
-        if (deviceProperties.apiVersion >= VK_API_VERSION_1_1) {
+        if (deviceProperties.apiVersion >= VK_API_VERSION_1_2) {
             vkDestroyInstance(instance, nullptr);
-            hasVk11 = true;
+            hasVk12 = true;
             return 1;
         }
     }
@@ -200,7 +200,7 @@ int hasVulkan11() {
     vkDestroyInstance(instance, nullptr);
 
     dlclose(vulkan_lib);
-    hasVk11 = false;
+    hasVk12 = false;
     return 0;
     
 #endif
