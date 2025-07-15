@@ -783,26 +783,80 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
     glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 }
 
+void convertRGBAtoBGRA(void* src, void* dst, int width, int height) {
+    uint8_t* srcPtr = (uint8_t*)src;
+    uint8_t* dstPtr = (uint8_t*)dst;
+    size_t totalPixels = width * height;
+
+    for (size_t i = 0; i < totalPixels; i++) {
+        dstPtr[0] = srcPtr[2];  // B <- R
+        dstPtr[1] = srcPtr[1];  // G <- G
+        dstPtr[2] = srcPtr[0];  // R <- B
+        dstPtr[3] = srcPtr[3];  // A <- A
+        srcPtr += 4;
+        dstPtr += 4;
+    }
+}
+
+void convertRGBAtoARGB(void* src, void* dst, int width, int height) {
+    uint32_t* srcPtr = (uint32_t*)src;
+    uint32_t* dstPtr = (uint32_t*)dst;
+    size_t totalPixels = width * height;
+
+    for (size_t i = 0; i < totalPixels; i++) {
+        uint32_t pixel = *srcPtr++;
+        *dstPtr++ = ((pixel >> 16) & 0xFF) |  // R->B
+            (pixel & 0x0000FF00) |            // G->G
+            ((pixel << 16) & 0x00FF0000) |    // B->R
+            ((pixel << 8) & 0xFF000000);      // A->A
+    }
+}
+
 #if GLOBAL_DEBUG || DEBUG
 #include <fstream>
 #include "../config/config.h"
 #endif
 
-void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void *pixels) {
+void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels) {
     LOG()
-    LOG_D("glReadPixels, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
-          x, y, width, height, format, type, pixels)
-          
+    LOG_I("glReadPixels, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
+            x, y, width, height, format, type, pixels)
+
     static int count = 0;
-    GLenum prevFormat = format;
-    
-    if (format == GL_BGRA && type == GL_UNSIGNED_INT_8_8_8_8) {
+    GLenum origFormat = format;
+    GLenum origType = type;
+
+    if (format == GL_BGRA &&
+        (type == GL_UNSIGNED_INT_8_8_8_8 ||
+            type == GL_UNSIGNED_INT_8_8_8_8_REV)) {
+
         format = GL_RGBA;
         type = GL_UNSIGNED_BYTE;
     }
-    LOG_D("glReadPixels converted, x=%d, y=%d, width=%d, height=%d, format=0x%x, type=0x%x, pixels=0x%x",
-          x, y, width, height, format, type, pixels)
-    GLES.glReadPixels(x, y, width, height, format, type, pixels);
+
+    void* readBuffer = pixels;
+    if (origFormat == GL_BGRA) {
+        size_t bufferSize = width * height * 4;
+        readBuffer = malloc(bufferSize);
+        if (!readBuffer) {
+            LOG_E("Failed to allocate temporary buffer for glReadPixels");
+            return;
+        }
+    }
+
+    LOG_D("Calling GLES.glReadPixels with format=%s, type=%s",
+        glEnumToString(format), glEnumToString(type));
+    GLES.glReadPixels(x, y, width, height, format, type, readBuffer);
+
+    if (origFormat == GL_BGRA) {
+        if (origType == GL_UNSIGNED_INT_8_8_8_8) {
+            convertRGBAtoBGRA(readBuffer, pixels, width, height);
+        }
+        else if (origType == GL_UNSIGNED_INT_8_8_8_8_REV) {
+            convertRGBAtoARGB(readBuffer, pixels, width, height);
+        }
+        free(readBuffer);
+    }
 
 #if GLOBAL_DEBUG || DEBUG
     if (prevFormat == GL_BGRA && type == GL_UNSIGNED_BYTE) {
