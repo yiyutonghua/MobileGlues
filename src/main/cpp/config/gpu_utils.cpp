@@ -10,6 +10,7 @@
 
 #include <EGL/egl.h>
 #include <cstring>
+#include <optional>
 
 static const char *gles3_lib[] = {
         "libGLESv3_CM",
