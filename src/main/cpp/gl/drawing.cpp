@@ -5,16 +5,117 @@
 #include "drawing.h"
 #include "buffer.h"
 #include "framebuffer.h"
+#include "mg.h"
+#include "texture.h"
+#include <ankerl/unordered_dense.h>
 
 #define DEBUG 0
+
+template <typename Key, typename Value>
+using unordered_map = ankerl::unordered_dense::map<Key, Value>;
+
+GLuint bufSampelerProg;
+GLuint bufSampelerLoc;
+std::string bufSampelerName;
+
+extern std::unordered_map<GLuint, bool> program_map_is_sampler_buffer_emulated;
+
+unordered_map<GLuint, SamplerInfo> g_samplerCacheForSamplerBuffer;
+
+void setupBufferTextureUniforms(GLuint program) {
+    LOG_D("setupBufferTextureUniforms, program: %d", program);
+
+    if (!program_map_is_sampler_buffer_emulated[program])
+        return;
+
+    if (g_samplerCacheForSamplerBuffer.find(program) == g_samplerCacheForSamplerBuffer.end()) {
+        auto& progSamplerInfo = g_samplerCacheForSamplerBuffer[program];
+        GLint locWidth = GLES.glGetUniformLocation(program, "u_BufferTexWidth");
+        GLint locHeight = GLES.glGetUniformLocation(program, "u_BufferTexHeight");
+        if (locWidth == -1) {
+            LOG_W("u_BufferTexWidth uniform not found in program %d", program);
+            return;
+        }
+
+        progSamplerInfo.locHeight = locHeight;
+        progSamplerInfo.locWidth = locWidth;
+        progSamplerInfo.samplers.clear();
+
+        GLint numUniforms = 0;
+        GLES.glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &numUniforms);
+        LOG_D("Program %d has %d active uniforms", program, numUniforms);
+
+        for (GLint i = 0; i < numUniforms; ++i) {   
+            const GLsizei bufSize = 256;
+            GLchar name[bufSize];
+            GLsizei length = 0;
+            GLint size = 0;
+            GLenum type = 0;
+            GLES.glGetActiveUniform(program, i, bufSize, &length, &size, &type, name);
+
+            if (type == GL_SAMPLER_2D || type == GL_INT_SAMPLER_2D) {
+                GLint locSampler = GLES.glGetUniformLocation(program, name);
+                progSamplerInfo.samplers.push_back(locSampler);
+            }
+        }
+    }
+
+    auto& progSamplerInfo = g_samplerCacheForSamplerBuffer[program];
+
+    GLint locWidth = progSamplerInfo.locWidth;
+    GLint locHeight = progSamplerInfo.locHeight;
+
+    for (auto locSampler : progSamplerInfo.samplers) {
+        if (locSampler < 0) {
+            continue;
+        }
+        
+        GLuint prev_unit = gl_state->current_tex_unit;
+        const GLint unit = 15;
+        
+        GLES.glActiveTexture(GL_TEXTURE0 + unit);
+        GLint texId = 0;
+        GLES.glGetIntegerv(GL_TEXTURE_BINDING_2D, &texId);
+        if (texId == 0) {
+            GLES.glActiveTexture(GL_TEXTURE0 + prev_unit);
+            continue;
+        }
+        
+        GLint width = g_textures[texId].width;
+        
+        GLES.glUniform1i(locSampler, unit);
+        GLES.glUniform1i(locWidth, g_textures[texId].width);
+        GLES.glUniform1i(locHeight, g_textures[texId].height);
+        
+        GLES.glActiveTexture(GL_TEXTURE0 + prev_unit);
+    }
+}
+
+void prepareForDraw() {
+	LOG_D("prepareForDraw...")
+    if (hardware->emulate_texture_buffer)
+    {	
+        setupBufferTextureUniforms(gl_state->current_program);
+    }
+}
 
 // solve the crash error for ANGLE, but it will make Derivative Main with Optifine not work!
 
 //_Thread_local static bool unexpected_error = false; 
 
+void glDrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei primcount) {
+    LOG()
+    LOG_D("glDrawElementsInstanced, mode: %d, count: %d, type: %d, indices: %p, primcount: %d",
+          mode, count, type, indices, primcount)
+    prepareForDraw();
+    GLES.glDrawElementsInstanced(mode, count, type, indices, primcount);
+    CHECK_GL_ERROR
+}
+
 void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices) {
     LOG()
     LOG_D("glDrawElements, mode: %d, count: %d, type: %d, indices: %p", mode, count, type, indices)
+    prepareForDraw();
     //LOAD_GLES_FUNC(glGetError)
     //GLenum pre_err = GLES.glGetError();
     //if(pre_err != GL_NO_ERROR) {

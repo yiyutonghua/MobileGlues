@@ -8,6 +8,7 @@
 #include <dlfcn.h>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 #include <cstring>
 #include <GLES/gl32.h>
 #include "../includes.h"
@@ -17,9 +18,17 @@
 #include "../gles/loader.h"
 #include "mg.h"
 
+struct SamplerInfo {
+    GLint locWidth;
+    GLint locHeight;
+    std::vector<GLint> samplers;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+GLAPI GLAPIENTRY void glDrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei primcount);
 
 GLAPI GLAPIENTRY void glMultiDrawElements(GLenum mode, const GLsizei *count, GLenum type, const void *const *indices, GLsizei primcount);
 
