@@ -54,4 +54,6 @@ struct texture_t {
 
 extern std::unordered_map<GLuint, texture_t> g_textures;
 
+GLenum mgGetTexTarget(GLuint id);
+
 #endif
