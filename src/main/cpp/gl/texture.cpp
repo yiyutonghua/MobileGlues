@@ -14,7 +14,7 @@
 #include <android/log.h>
 #endif
 
-#include "gl.h"
+#include <GL/gl.h>
 #include "../gles/gles.h"
 #include "log.h"
 #include "../gles/loader.h"

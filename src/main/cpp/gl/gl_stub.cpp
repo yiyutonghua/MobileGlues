@@ -2,7 +2,7 @@
 // Created by BZLZHH on 2025/1/29.
 //
 #include "../includes.h"
-#include "gl.h"
+#include <GL/gl.h>
 #include "glcorearb.h"
 #include "log.h"
 #include "../gles/loader.h"

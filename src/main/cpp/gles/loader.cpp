@@ -7,7 +7,7 @@
 #include "loader.h"
 #include "../includes.h"
 #include "loader.h"
-#include "../gl/gl.h"
+#include <GL/gl.h>
 #include "../gl/glext.h"
 #include "../gl/envvars.h"
 #include "../gl/log.h"
