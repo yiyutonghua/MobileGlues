@@ -4,7 +4,7 @@
 
 #include "DSAWrapper.h"
 #include <cassert>
-#include "..\texture.h"
+#include "../texture.h"
 
 #define DEBUG 0
 
