@@ -209,6 +209,10 @@ void InitGLESCapabilities() {
     if (global_settings.ext_compute_shader) {
         AppendExtension("GL_ARB_compute_shader");
     }
+
+    if (g_gles_caps.major > 3 || (g_gles_caps.major == 3 && g_gles_caps.minor >= 1)) {
+        AppendExtension("GL_ARB_vertex_attrib_binding");
+    }
 }
 
 void init_target_gles() {
