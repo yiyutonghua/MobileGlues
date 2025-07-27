@@ -157,7 +157,35 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         if (format) *format = GL_RED;
         if (type) *type = GL_HALF_FLOAT;
         break;
-    case GL_R32F:
+    case GL_RED:
+        if (type) {
+            switch (*type) {
+            case GL_UNSIGNED_BYTE:
+                *internal_format = GL_R8;
+                if (format) *format = GL_RED;
+                break;
+            case GL_BYTE:
+                *internal_format = GL_R8_SNORM;
+                if (format) *format = GL_RED;
+                break;
+            case GL_HALF_FLOAT:
+                *internal_format = GL_R16F;
+                if (format) *format = GL_RED;
+                break;
+            case GL_FLOAT:
+                *internal_format = GL_R32F;
+                if (format) *format = GL_RED;
+                break;
+            default:
+                LOG_E("Unsupported type for GL_RED: %s", glEnumToString(*type));
+                if (type) *type = GL_UNSIGNED_BYTE; // Fallback to unsigned byte
+                *internal_format = GL_R8; // Fallback to R8
+                if (format) *format = GL_RED;
+				break;
+            }
+        }
+
+        *internal_format = GL_R32F;
         if (format) *format = GL_RED;
         if (type) *type = GL_FLOAT;
         break;
