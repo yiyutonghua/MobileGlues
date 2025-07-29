@@ -222,7 +222,7 @@ const GLubyte * glGetString( GLenum name ) {
                 }
                 else {
 					Version defaultVersion = Version(DEFAULT_GL_VERSION);
-					versionString += std::format(" §4§l({}) MobileGlues§r ", defaultVersion.toString().c_str());
+                    versionString += " §4§l(" + defaultVersion.toString() + ") MobileGlues§r ";
                 }
 
                 versionString += std::to_string(MAJOR) + "."
