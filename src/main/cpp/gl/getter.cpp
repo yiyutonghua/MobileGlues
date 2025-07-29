@@ -5,6 +5,7 @@
 #include "getter.h"
 #include "buffer.h"
 #include <string>
+#include <format>
 #include <vector>
 
 #define DEBUG 0
