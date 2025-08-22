@@ -601,12 +601,12 @@ void init_target_gles() {
 
     bool noCoreBaseVertex = g_gles_caps.major < 3 || (g_gles_caps.major == 3 && g_gles_caps.minor < 2);
     if (noCoreBaseVertex) {
-        if (g_gles_caps.GL_EXT_draw_elements_base_vertex) {
-            g_gles_func.glDrawElementsBaseVertex =
-                (glDrawElementsBaseVertex_PTR)proc_address(gles, "glDrawElementsBaseVertexEXT");
-        } else if (g_gles_caps.GL_OES_draw_elements_base_vertex) {
+        if (g_gles_caps.GL_OES_draw_elements_base_vertex) {
             g_gles_func.glDrawElementsBaseVertex =
                 (glDrawElementsBaseVertex_PTR)proc_address(gles, "glDrawElementsBaseVertexOES");
+        } else if (g_gles_caps.GL_EXT_draw_elements_base_vertex) {
+            g_gles_func.glDrawElementsBaseVertex =
+                (glDrawElementsBaseVertex_PTR)proc_address(gles, "glDrawElementsBaseVertexEXT");
         } else {
             g_gles_func.glDrawElementsBaseVertex = nullptr;
         }
