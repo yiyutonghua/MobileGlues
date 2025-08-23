@@ -104,6 +104,8 @@ void init_gl_state() {
     set_gl_state_proxy_intformat(0);
 
     InitTextureMap(1024);
+    InitBufferMap(4096);
+    InitVertexArrayMap(512);
 }
 
 void LogOpenGLExtensions() {
