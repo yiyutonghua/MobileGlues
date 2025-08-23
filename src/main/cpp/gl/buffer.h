@@ -11,7 +11,7 @@
 #include "log.h"
 #include "mg.h"
 #include <GL/gl.h>
-
+#include <cstddef>
 #include <vector>
 
 typedef struct {

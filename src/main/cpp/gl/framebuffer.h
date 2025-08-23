@@ -6,6 +6,7 @@
 #define MOBILEGLUES_FRAMEBUFFER_H
 
 #include <GL/gl.h>
+#include <cstddef>
 
 #ifdef __cplusplus
 extern "C" {
