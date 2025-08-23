@@ -311,8 +311,6 @@ void InitVertexArrayMap(size_t expectedSize) {
     g_element_array_buffer_per_vao.resize(1, 0);
 }
 
-unordered_map<GLuint, BufferMapping> g_active_mappings;
-
 void glGenBuffers(GLsizei n, GLuint* buffers) {
     LOG()
     LOG_D("glGenBuffers(%i, %p)", n, buffers)
@@ -711,17 +709,6 @@ void* glMapBuffer(GLenum target, GLenum access) {
     if (g_gles_caps.GL_OES_mapbuffer) {
         return GLES.glMapBufferOES(target, access);
     }
-    if (get_binding_query(target) == 0) {
-        return nullptr;
-    }
-    GLint current_buffer;
-    GLES.glGetIntegerv(get_binding_query(target), &current_buffer);
-    if (current_buffer == 0) {
-        return nullptr;
-    }
-    if (g_active_mappings[current_buffer].mapped_ptr != nullptr) {
-        return nullptr;
-    }
     GLint buffer_size;
     GLES.glGetBufferParameteriv(target, GL_BUFFER_SIZE, &buffer_size);
     if (buffer_size <= 0 || glGetError() != GL_NO_ERROR) {
@@ -733,7 +720,7 @@ void* glMapBuffer(GLenum target, GLenum access) {
         flags = GL_MAP_READ_BIT;
         break;
     case GL_WRITE_ONLY:
-        flags = GL_MAP_WRITE_BIT /*| GL_MAP_INVALIDATE_BUFFER_BIT*/;
+        flags = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
         break;
     case GL_READ_WRITE:
         flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT;
@@ -741,31 +728,8 @@ void* glMapBuffer(GLenum target, GLenum access) {
     default:
         return nullptr;
     }
-    void* ptr = GLES.glMapBufferRange(target, 0, buffer_size, flags);
-    if (!ptr) return nullptr;
-    BufferMapping mapping;
-    mapping.target = target;
-    mapping.buffer_id = (GLuint)current_buffer;
-    mapping.mapped_ptr = ptr;
-#if GLOBAL_DEBUG || DEBUG
-    if (target == GL_PIXEL_UNPACK_BUFFER) {
-        mapping.client_ptr = malloc(buffer_size);
-        memset(mapping.client_ptr, 0xFF, buffer_size);
-    }
-#endif
-    mapping.size = buffer_size;
-    mapping.flags = flags;
-    mapping.is_dirty = (flags & GL_MAP_WRITE_BIT) ? GL_TRUE : GL_FALSE;
-    g_active_mappings[current_buffer] = mapping;
-    CHECK_GL_ERROR
-#if GLOBAL_DEBUG || DEBUG
-    if (target == GL_PIXEL_UNPACK_BUFFER)
-        return mapping.client_ptr;
-    else
-        return ptr;
-#else
+    void* ptr = glMapBufferRange(target, 0, buffer_size, flags);
     return ptr;
-#endif
 }
 
 #if GLOBAL_DEBUG || DEBUG
@@ -798,31 +762,7 @@ GLboolean glUnmapBuffer(GLenum target) {
     LOG_D("%s(%s)", __func__, glEnumToString(target));
     if (g_gles_caps.GL_OES_mapbuffer) return GLES.glUnmapBuffer(target);
 
-    GLint buffer;
-    GLenum binding_query = get_binding_query(target);
-    GLES.glGetIntegerv(binding_query, &buffer);
-
-    if (buffer == 0) return GL_FALSE;
-
-#if GLOBAL_DEBUG || DEBUG
-    //     Blit data from client side to OpenGL here
-    if (target == GL_PIXEL_UNPACK_BUFFER) {
-        auto& mapping = g_active_mappings[buffer];
-
-        std::fstream fs(std::string(BIN_FILE_PREFIX) + "buf" + std::to_string(buffer) + ".bin",
-                        std::ios::out | std::ios::binary | std::ios::trunc);
-        fs.write((const char*)mapping.client_ptr, mapping.size);
-        fs.close();
-
-        //        memset(mapping.mapped_ptr, 0xFF, mapping.size);
-        memcpy(mapping.mapped_ptr, mapping.client_ptr, mapping.size);
-        free(mapping.client_ptr);
-        mapping.client_ptr = nullptr;
-    }
-#endif
-
     GLboolean result = GLES.glUnmapBuffer(target);
-    g_active_mappings.erase(buffer);
     CHECK_GL_ERROR
     return result;
 }
