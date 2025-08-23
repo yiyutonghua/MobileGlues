@@ -26,19 +26,22 @@ static GLuint current_read_fbo = 0;
 static std::vector<framebuffer_t> framebuffers;
 void ensure_max_attachments() {
     if (MAX_COLOR_ATTACHMENTS == 0) {
-        glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &MAX_COLOR_ATTACHMENTS);
+        GLES.glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &MAX_COLOR_ATTACHMENTS);
         MAX_COLOR_ATTACHMENTS = MAX_COLOR_ATTACHMENTS > 0 ? MAX_COLOR_ATTACHMENTS : 8;
     }
     if (MAX_DRAW_BUFFERS == 0) {
-        glGetIntegerv(GL_MAX_DRAW_BUFFERS, &MAX_DRAW_BUFFERS);
+        GLES.glGetIntegerv(GL_MAX_DRAW_BUFFERS, &MAX_DRAW_BUFFERS);
         MAX_DRAW_BUFFERS = MAX_DRAW_BUFFERS > 0 ? MAX_DRAW_BUFFERS : 8;
     }
 }
 framebuffer_t& get_framebuffer(GLuint id) {
     if (id >= framebuffers.size()) {
-        framebuffers.resize(id + 1);
+        framebuffers.resize(id + 10);
     }
     return framebuffers[id];
+}
+void InitFramebufferMap(size_t expectedSize) {
+    framebuffers.reserve(expectedSize);
 }
 void init_framebuffer(framebuffer_t& fbo) {
     if (!fbo.initialized) {

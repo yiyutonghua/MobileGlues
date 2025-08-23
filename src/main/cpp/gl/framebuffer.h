@@ -25,4 +25,6 @@ GLAPI GLAPIENTRY GLenum glCheckFramebufferStatus(GLenum target);
 }
 #endif
 
+void InitFramebufferMap(size_t expectedSize);
+
 #endif //MOBILEGLUES_FRAMEBUFFER_H
