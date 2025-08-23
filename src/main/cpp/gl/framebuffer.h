@@ -11,18 +11,6 @@
 extern "C" {
 #endif
 
-struct attachment_t {
-    GLenum textarget;
-    GLuint texture;
-    GLint level;
-};
-
-struct framebuffer_t {
-    GLenum current_target;
-    struct attachment_t* draw_attachment;
-    struct attachment_t* read_attachment;
-};
-
 GLint getMaxDrawBuffers();
 
 GLAPI GLAPIENTRY void glBindFramebuffer(GLenum target, GLuint framebuffer);
