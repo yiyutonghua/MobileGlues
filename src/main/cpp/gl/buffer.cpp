@@ -7,10 +7,6 @@
 #include "texture.h"
 #include <cstring>
 
-template <typename K, typename V>
-using unordered_map = ankerl::unordered_dense::map<K, V>;
-// using unordered_map = std::unordered_map<K, V>;
-
 #define DEBUG 0
 
 GLuint bound_array;
@@ -56,7 +52,7 @@ struct BufferMapping {
     bool persistent = false;
 };
 
-static unordered_map<GLuint, BufferMapping> g_buffer_mapping;
+static UnorderedMap<GLuint, BufferMapping> g_buffer_mapping;
 
 static inline int ensure_buffer_capacity(GLuint id) {
     if ((int)g_gen_buffers.size() <= (int)id) {
