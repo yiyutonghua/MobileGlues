@@ -930,6 +930,10 @@ void glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length)
 
     GLuint real_buffer = find_real_buffer(buffer);
     if (real_buffer) {
+        GLES.glBindBuffer(target, 0);
+        GLES.glBindBuffer(target, real_buffer);
+        GLES.glBufferSubData(target, mapping.offset + offset, length, static_cast<char*>(mapping.shadowBuffer) + offset + mapping.offset);
+        // call glBufferSubData twice to prevent unexpected error during buffer updating
         GLES.glBindBuffer(target, real_buffer);
         GLES.glBufferSubData(target, mapping.offset + offset, length, static_cast<char*>(mapping.shadowBuffer) + offset + mapping.offset);
         CHECK_GL_ERROR
