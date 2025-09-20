@@ -918,6 +918,12 @@ void glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length)
         return;
     }
 
+    if (offset < mapping.offset || offset + length > mapping.offset + mapping.length) {
+        LOG_E("glFlushMappedBufferRange: Flushed range [%ld, %ld) is outside mapped range [%ld, %ld) for buffer %u.",
+              offset, offset + length, mapping.offset, mapping.offset + mapping.length, buffer);
+        return;
+    }
+
     GLuint real_buffer = find_real_buffer(buffer);
     if (real_buffer) {
         GLES.glBindBuffer(target, 0);
