@@ -148,6 +148,8 @@ void glHint(GLenum target, GLenum mode) {
     LOG_D("glHint, target = %s, mode = %s", glEnumToString(target), glEnumToString(mode))
 }
 
+/*
+
 typedef struct FakeSync {
     int id;
 } FakeSync;
@@ -210,3 +212,4 @@ void glGetSynciv(GLsync sync, GLenum pname, GLsizei bufSize,
     }
     if (length) *length = 1;
 }
+*/
