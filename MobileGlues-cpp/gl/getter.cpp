@@ -63,8 +63,7 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         break;
     }
     case GL_CONTEXT_FLAGS: {
-        (*params) =
-            GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT | GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT | GL_CONTEXT_FLAG_NO_ERROR_BIT;
+        (*params) = 0;
         break;
     }
     case GL_ARRAY_BUFFER_BINDING:

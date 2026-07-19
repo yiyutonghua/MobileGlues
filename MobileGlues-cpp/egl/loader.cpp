@@ -46,7 +46,7 @@ void init_target_egl() {
                               EGL_SURFACE_TYPE,
                               EGL_PBUFFER_BIT,
                               EGL_RENDERABLE_TYPE,
-                              EGL_OPENGL_ES2_BIT,
+                              EGL_OPENGL_ES3_BIT,
                               EGL_NONE};
 
     EGLint ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};

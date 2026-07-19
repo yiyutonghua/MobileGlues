@@ -25,6 +25,8 @@
 namespace {
 
     constexpr EGLint kBackendDesktopGlClientVersion = 3;
+    constexpr EGLint kBackendDesktopGlRenderableBit = EGL_OPENGL_ES3_BIT;
+    constexpr EGLint kVirtualDesktopProfileMask = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
     constexpr size_t kMaxEglAttributePairs = 128;
 
     struct DesktopContextInfo {
@@ -64,14 +66,14 @@ namespace {
     EGLint backendRenderableMask(EGLint frontend_mask) {
         if (containsOpenGLBit(frontend_mask)) {
             frontend_mask &= ~EGL_OPENGL_BIT;
-            frontend_mask |= EGL_OPENGL_ES2_BIT;
+            frontend_mask |= kBackendDesktopGlRenderableBit;
         }
         return frontend_mask;
     }
 
     EGLint frontendRenderableMask(EGLint backend_mask) {
         constexpr EGLint kBackendGlesBits = EGL_OPENGL_ES_BIT | EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT;
-        if ((backend_mask & (EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT)) != 0) {
+        if ((backend_mask & kBackendDesktopGlRenderableBit) != 0) {
             backend_mask &= ~kBackendGlesBits;
             backend_mask |= EGL_OPENGL_BIT;
         }
@@ -100,12 +102,13 @@ namespace {
         }
 
         if (!has_renderable_type && requests_desktop_gl) {
-            backend_attributes->insert(backend_attributes->end() - 1, {EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT});
+            backend_attributes->insert(backend_attributes->end() - 1,
+                                       {EGL_RENDERABLE_TYPE, kBackendDesktopGlRenderableBit});
         } else if (has_renderable_type && requests_desktop_gl) {
             for (size_t i = 0; i + 1 < backend_attributes->size(); i += 2) {
                 if ((*backend_attributes)[i] == EGL_NONE) break;
                 if ((*backend_attributes)[i] == EGL_RENDERABLE_TYPE) {
-                    (*backend_attributes)[i + 1] |= EGL_OPENGL_ES2_BIT;
+                    (*backend_attributes)[i + 1] |= kBackendDesktopGlRenderableBit;
                 }
             }
         }
@@ -122,7 +125,29 @@ namespace {
         case EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE:
         case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
         case EGL_CONTEXT_OPENGL_NO_ERROR_KHR:
+        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT:
+        case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY_EXT:
             return true;
+        default:
+            return false;
+        }
+    }
+
+    bool supportsDesktopContextAttribute(EGLint attribute, EGLint value) {
+        switch (attribute) {
+        case EGL_CONTEXT_FLAGS_KHR:
+            return value == 0;
+        case EGL_CONTEXT_OPENGL_PROFILE_MASK:
+            return value == kVirtualDesktopProfileMask;
+        case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY:
+        case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY_EXT:
+            return value == EGL_NO_RESET_NOTIFICATION;
+        case EGL_CONTEXT_OPENGL_DEBUG:
+        case EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE:
+        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
+        case EGL_CONTEXT_OPENGL_NO_ERROR_KHR:
+        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT:
+            return value == EGL_FALSE;
         default:
             return false;
         }
@@ -139,12 +164,17 @@ namespace {
     }
 
     bool makeBackendContextAttributes(const EGLint* attrib_list, std::vector<EGLint>* backend_attributes,
-                                      EGLint* frontend_major, EGLint* frontend_minor) {
-        if (!copyAttributeList(attrib_list, backend_attributes)) return false;
+                                      EGLint* frontend_major, EGLint* frontend_minor, EGLint* error) {
+        *error = EGL_SUCCESS;
+        if (!copyAttributeList(attrib_list, backend_attributes)) {
+            *error = EGL_BAD_ATTRIBUTE;
+            return false;
+        }
 
-        *frontend_major = defaultDesktopMajorVersion();
-        *frontend_minor = defaultDesktopMinorVersion();
+        EGLint requested_major = defaultDesktopMajorVersion();
+        EGLint requested_minor = defaultDesktopMinorVersion();
         bool saw_major_version = false;
+        bool saw_minor_version = false;
         std::vector<EGLint> rewritten;
         rewritten.reserve(backend_attributes->size() + 3);
 
@@ -156,21 +186,43 @@ namespace {
             // EGL_CONTEXT_MAJOR_VERSION aliases EGL_CONTEXT_CLIENT_VERSION. Under the
             // desktop API it denotes the requested desktop GL version, not GLES.
             if (attribute == EGL_CONTEXT_CLIENT_VERSION) {
-                if (!saw_major_version) {
-                    *frontend_major = value;
-                    saw_major_version = true;
+                if (saw_major_version) {
+                    *error = EGL_BAD_ATTRIBUTE;
+                    return false;
                 }
+                requested_major = value;
+                saw_major_version = true;
                 continue;
             }
             if (attribute == EGL_CONTEXT_MINOR_VERSION) {
-                *frontend_minor = value;
+                if (saw_minor_version) {
+                    *error = EGL_BAD_ATTRIBUTE;
+                    return false;
+                }
+                requested_minor = value;
+                saw_minor_version = true;
                 continue;
             }
-            if (isDesktopOnlyContextAttribute(attribute)) continue;
+            if (isDesktopOnlyContextAttribute(attribute)) {
+                if (!supportsDesktopContextAttribute(attribute, value)) {
+                    *error = EGL_BAD_MATCH;
+                    return false;
+                }
+                continue;
+            }
 
             rewritten.push_back(attribute);
             rewritten.push_back(value);
         }
+
+        if (saw_major_version && !saw_minor_version) requested_minor = 0;
+        if (requested_major != defaultDesktopMajorVersion() || requested_minor != defaultDesktopMinorVersion()) {
+            *error = EGL_BAD_MATCH;
+            return false;
+        }
+
+        *frontend_major = requested_major;
+        *frontend_minor = requested_minor;
 
         rewritten.push_back(EGL_CONTEXT_CLIENT_VERSION);
         rewritten.push_back(kBackendDesktopGlClientVersion);
@@ -419,16 +471,18 @@ extern "C"
             return egl_eglCreateContext(dpy, config, share_context, attrib_list);
         }
 
-        LOAD_EGL(eglBindAPI)
-        if (egl_eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) return EGL_NO_CONTEXT;
-
         std::vector<EGLint> backend_attributes;
         EGLint frontend_major = 0;
         EGLint frontend_minor = 0;
-        if (!makeBackendContextAttributes(attrib_list, &backend_attributes, &frontend_major, &frontend_minor)) {
-            setFrontendError(EGL_BAD_ATTRIBUTE);
+        EGLint context_error = EGL_SUCCESS;
+        if (!makeBackendContextAttributes(attrib_list, &backend_attributes, &frontend_major, &frontend_minor,
+                                          &context_error)) {
+            setFrontendError(context_error);
             return EGL_NO_CONTEXT;
         }
+
+        LOAD_EGL(eglBindAPI)
+        if (egl_eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) return EGL_NO_CONTEXT;
 
         EGLContext context = egl_eglCreateContext(dpy, config, share_context, backend_attributes.data());
         if (context != EGL_NO_CONTEXT) {
