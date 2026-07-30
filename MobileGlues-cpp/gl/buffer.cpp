@@ -362,26 +362,7 @@ void glBindBuffer(GLenum target, GLuint buffer) {
     CHECK_GL_ERROR
 }
 
-struct atomic_buffer {
-    GLuint id;
-    GLsizeiptr size;
-    GLintptr offset;
-};
-
-static std::vector<atomic_buffer> g_buffer_map_atomic_buffer_info;
-static std::vector<GLuint> g_buffer_map_ssbo_id; // shall we use this in the future?
-
-void bindAllAtomicCounterAsSSBO() {
-    const size_t count = g_buffer_map_atomic_buffer_info.size();
-    for (size_t i = 0; i < count; ++i) {
-        atomic_buffer buf = g_buffer_map_atomic_buffer_info[i];
-        if (buf.id != 0) {
-            GLuint realID = find_real_buffer(buf.id);
-            GLES.glBindBufferRange(GL_SHADER_STORAGE_BUFFER, i, realID, buf.offset, buf.size);
-            LOG_D("Bound atomic counter buffer %u(real: %u) as SSBO at index %zu", buf, realID, i);
-        }
-    }
-}
+static std::vector<GLuint> g_buffer_map_ssbo_id;
 
 void glBindBufferRange(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size) {
     LOG()
@@ -400,12 +381,6 @@ void glBindBufferRange(GLenum target, GLuint index, GLuint buffer, GLintptr offs
         CHECK_GL_ERROR
     }
     GLES.glBindBufferRange(target, index, real_buffer, offset, size);
-    if (target == GL_ATOMIC_COUNTER_BUFFER) {
-        if (g_buffer_map_atomic_buffer_info.empty()) {
-            g_buffer_map_atomic_buffer_info.resize(GL_MAX_ATOMIC_COUNTER_BUFFER_BINDINGS, {});
-        }
-        g_buffer_map_atomic_buffer_info[index] = {buffer, size, offset};
-    }
     CHECK_GL_ERROR
 }
 
