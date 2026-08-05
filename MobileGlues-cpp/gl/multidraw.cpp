@@ -10,6 +10,7 @@
 #include "buffer.h"
 #include "enable.h"
 #include "restart.h"
+#include "../egl/context.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -249,7 +250,13 @@ static bool is_strip_like_mode(GLenum mode) {
 // and the command fill wrote through a null pointer.
 // ---------------------------------------------------------------------------
 
-static EGLContext g_owner_ctx = EGL_NO_CONTEXT;
+// Identified by the monotonic MGContext id, not by the EGLContext pointer.
+// EGLContext is a driver heap allocation, so destroying one and creating another
+// very often returns the same address; comparing addresses reported "same
+// context" for a context that never owned any of these objects, and the stale
+// names were then used against it. 0 means "no tracked context", which is also
+// what the bootstrap probe context looks like.
+static unsigned long long g_owner_ctx_id = 0;
 
 enum class md_probe_state_t { Unprobed, Working, Failed };
 
@@ -311,8 +318,8 @@ static md_probe_state_t g_mda_state = md_probe_state_t::Unprobed;
 // the context being left is not addressable from the one being entered. Making
 // that case tidy needs a per-context map; it is not implemented.
 static void multidraw_check_context() {
-    EGLContext cur = eglGetCurrentContext();
-    if (cur == g_owner_ctx) return;
+    const unsigned long long cur = g_current_ctx ? g_current_ctx->id : 0;
+    if (cur == g_owner_ctx_id) return;
 
     // Deliberately no glDelete* here: if the owning context is gone its objects
     // went with it, and if it is merely not current then these names refer to
@@ -344,8 +351,8 @@ static void multidraw_check_context() {
     g_element_size_loc = -1;
     g_max_compute_groups_x = 0;
 
-    g_owner_ctx = cur;
-    LOG_D("multidraw: EGL context changed, scratch objects invalidated")
+    g_owner_ctx_id = cur;
+    LOG_D("multidraw: context changed, scratch objects invalidated")
 }
 
 // ---------------------------------------------------------------------------

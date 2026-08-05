@@ -51,6 +51,7 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
     ctx->current_count = 0;
     ctx->destroy_pending = false;
     mg_enable_reset(&ctx->enable);
+    ctx->gl = gl_state_s{};
 
     // A context created with a share handle joins that context's group, so the
     // objects GL shares stay described by one record.
@@ -113,6 +114,10 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     it->second->read = read;
     ++it->second->current_count;
     g_current_ctx = it->second.get();
+    // Repoint the shared gl_state at this context's copy. Everything that reads
+    // gl_state-> keeps working unchanged; it simply stops being one set of values
+    // for every context in the process.
+    gl_state = &g_current_ctx->gl;
     LOG_D("MGContext %llu is now current", it->second->id)
 }
 

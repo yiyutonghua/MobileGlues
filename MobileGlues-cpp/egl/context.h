@@ -10,6 +10,7 @@
 
 #include "../includes.h"
 #include "../gl/enable.h"
+#include "../gl/mg.h"
 #include <memory>
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ struct MGContext {
     std::shared_ptr<MGShareGroup> share_group;
 
     mg_enable_state_t enable; // per-context by definition: enable state is not shared
+    gl_state_s gl;            // current program / texture unit / draw fbo, all per-context
 
     EGLSurface draw;
     EGLSurface read;
