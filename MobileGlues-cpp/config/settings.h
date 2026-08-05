@@ -22,6 +22,9 @@ typedef unsigned long size_t;
 
 #define DEFAULT_GL_VERSION 40
 
+// The integer value of every entry is persisted in the user configuration
+// ("multidrawMode"), so new modes must be appended immediately before MaxValue.
+// Renumbering an existing entry would silently repoint every existing config.
 enum class multidraw_mode_t : int {
     Auto = 0,
     PreferIndirect,
@@ -29,6 +32,7 @@ enum class multidraw_mode_t : int {
     PreferMultidrawIndirect,
     DrawElements,
     Compute,
+    NativeMultiDraw,
     MaxValue
 };
 

@@ -43,9 +43,15 @@ std::string handle_multidraw_func_name(std::string name) {
     case multidraw_mode_t::Compute:
         namestr += "_compute";
         break;
+    case multidraw_mode_t::NativeMultiDraw:
+        namestr += "_native";
+        break;
     default:
-        LOG_W("get_multidraw_func() cannot determine multidraw emulation mode!")
-        return {};
+        // Hand back the unmangled name: it resolves to the dispatcher in
+        // multidraw.cpp, which picks a mode itself. Returning an empty string
+        // here made the caller dlsym("") and get a null function pointer.
+        LOG_W_FORCE("get_multidraw_func() cannot determine multidraw emulation mode, using dispatcher")
+        return name;
     }
 
     return namestr;
