@@ -32,6 +32,17 @@ extern "C"
         GLuint reservedMustBeZero;
     };
 
+    // GL 4.6 DrawArraysIndirectCommand. Four words, tightly packed. GLES only
+    // treats the fourth as baseInstance with EXT_base_instance; otherwise it is
+    // reservedMustBeZero, and glMultiDrawArrays has no base instance, so writing
+    // 0 is correct under both readings.
+    struct draw_arrays_indirect_command_t {
+        GLuint count;
+        GLuint instanceCount;
+        GLuint first;
+        GLuint baseInstanceOrReserved;
+    };
+
     // Per-sub-draw data handed to the compute shader as a single std430 ivec2
     // array. Merging firstIndex and baseVertex keeps the shader at four shader
     // storage blocks, which is the minimum GLES 3.1 guarantees.
@@ -83,6 +94,12 @@ extern "C"
     // in gl_stub.cpp, so an application calling them got no geometry and no
     // error.
     GLAPI GLAPIENTRY void glMultiDrawArrays(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount);
+    GLAPI GLAPIENTRY void mg_glMultiDrawArrays_unroll(GLenum mode, const GLint* first, const GLsizei* count,
+                                                            GLsizei drawcount);
+    GLAPI GLAPIENTRY void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsizei* count,
+                                                         GLsizei drawcount);
+    GLAPI GLAPIENTRY void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const GLsizei* count,
+                                                             GLsizei drawcount);
     GLAPI GLAPIENTRY void glMultiDrawArraysIndirect(GLenum mode, const void* indirect, GLsizei drawcount,
                                                     GLsizei stride);
     GLAPI GLAPIENTRY void glMultiDrawElementsIndirect(GLenum mode, GLenum type, const void* indirect,

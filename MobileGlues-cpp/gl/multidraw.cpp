@@ -244,10 +244,21 @@ static bool is_strip_like_mode(GLenum mode) {
 
 static EGLContext g_owner_ctx = EGL_NO_CONTEXT;
 
+enum class native_state_t { Unprobed, Working, Failed };
+
 // indirect / multiindirect paths
 static bool g_indirect_cmds_inited = false;
 static GLsizei g_cmdbufsize = 0;
 static GLuint g_indirectbuffer = 0;
+
+// Arrays commands are 16 bytes, element commands 20, and the capacity counters
+// below are in commands, not bytes. Sharing one buffer between the two layouts
+// would let an Elements call skip its resize because an Arrays call had already
+// "grown" it, and then map past the end of the store.
+static GLuint g_arrays_indirectbuffer = 0;
+static GLsizei g_arrays_cmdbufsize = 0;
+static native_state_t g_arrays_mdi_state = native_state_t::Unprobed;
+static native_state_t g_arrays_nativeext_state = native_state_t::Unprobed;
 
 // drawelements path
 static GLuint g_scratch_ibo = 0;
@@ -269,7 +280,6 @@ static GLint g_max_compute_groups_x = 0;
 // after a context change native was re-enabled but never re-probed -- and an
 // unprobed call reports success unconditionally, which loses the whole batch on
 // a driver whose entry point is a stub.
-enum class native_state_t { Unprobed, Working, Failed };
 static native_state_t g_native_state = native_state_t::Unprobed;
 static native_state_t g_nativeext_state = native_state_t::Unprobed;
 
@@ -295,6 +305,10 @@ static void multidraw_check_context() {
     g_indirect_cmds_inited = false;
     g_cmdbufsize = 0;
     g_indirectbuffer = 0;
+    g_arrays_indirectbuffer = 0;
+    g_arrays_cmdbufsize = 0;
+    g_arrays_mdi_state = native_state_t::Unprobed;
+    g_arrays_nativeext_state = native_state_t::Unprobed;
     g_scratch_ibo = 0;
     g_compute_inited = false;
     // The failure latches are per-context capability facts, so they are cleared
@@ -853,6 +867,8 @@ static bool mg_native_multidraw(GLenum mode, const GLsizei* counts, GLenum type,
 void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices,
                                              GLsizei primcount, const GLint* basevertex) {
     LOG()
+    // The latch read just below is per-context, so re-arm it first.
+    multidraw_check_context();
 
     // Hand over before doing any work once native is known to be unusable,
     // otherwise every later call would validate and prepare the batch twice.
@@ -889,6 +905,7 @@ void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenu
 void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
                                       GLsizei primcount) {
     LOG()
+    multidraw_check_context();
 
     if (g_nativeext_state == native_state_t::Failed || !g_mde_ext) {
         mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
@@ -921,6 +938,8 @@ void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum 
 void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
                                    GLsizei primcount) {
     LOG()
+    // The latch read just below is per-context, so re-arm it first.
+    multidraw_check_context();
 
     if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) {
         mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
@@ -1391,25 +1410,220 @@ void mg_glMultiDrawElements_compute(GLenum mode, const GLsizei* count, GLenum ty
 // error at all.
 // ---------------------------------------------------------------------------
 
-void glMultiDrawArrays(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
-    LOG()
-    if (drawcount <= 0) return;
+// ---------------------------------------------------------------------------
+// glMultiDrawArrays
+//
+// lookup.cpp does not mangle this name: there is one exported definition that
+// picks its own backend, so the mg_glMultiDrawArrays_* symbols are internal and
+// their suffixes do not have to match md_backend_suffix().
+// ---------------------------------------------------------------------------
+
+// A negative first matters more than it looks: DrawArraysIndirectCommand::first
+// is a GLuint, so it would become a ~4.29e9 vertex offset instead of an error.
+static bool mg_validate_multidraw_arrays(const GLint* first, const GLsizei* count, GLsizei drawcount) {
+    if (drawcount <= 0) return false;
     if (!first || !count) {
         MD_WARN_ONCE("glMultiDrawArrays: first/count is NULL");
-        return;
+        return false;
     }
     for (GLsizei i = 0; i < drawcount; ++i) {
         if (count[i] < 0) {
             MD_WARN_ONCE("glMultiDrawArrays: negative count at sub-draw %d", i);
-            return;
+            return false;
+        }
+        if (first[i] < 0) {
+            MD_WARN_ONCE("glMultiDrawArrays: negative first at sub-draw %d", i);
+            return false;
         }
     }
+    return true;
+}
+
+void mg_glMultiDrawArrays_unroll(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
+    LOG()
+    if (!mg_validate_multidraw_arrays(first, count, drawcount)) return;
 
     prepareForDraw();
     for (GLsizei i = 0; i < drawcount; ++i) {
         if (count[i] > 0) GLES.glDrawArrays(mode, first[i], count[i]);
     }
     CHECK_GL_ERROR
+}
+
+void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
+    LOG()
+    // The latch below is per-context, so it has to be re-armed before it is read.
+    multidraw_check_context();
+
+    if (g_arrays_nativeext_state == native_state_t::Failed || !g_mda_ext) {
+        mg_glMultiDrawArrays_multiindirect(mode, first, count, drawcount);
+        return;
+    }
+    if (!mg_validate_multidraw_arrays(first, count, drawcount)) return;
+
+    prepareForDraw();
+
+    const bool probing = (g_arrays_nativeext_state == native_state_t::Unprobed);
+    if (probing) mg_md_drain();
+
+    g_mda_ext(mode, first, count, drawcount);
+
+    if (probing) {
+        const GLenum err = mg_md_check();
+        if (err != GL_NO_ERROR) {
+            MD_WARN_ONCE("multidraw arrays: glMultiDrawArraysEXT failed with 0x%04x, disabling nativeext", err);
+            g_arrays_nativeext_state = native_state_t::Failed;
+            mg_glMultiDrawArrays_multiindirect(mode, first, count, drawcount);
+            return;
+        }
+        g_arrays_nativeext_state = native_state_t::Working;
+    }
+    CHECK_GL_ERROR
+}
+
+// Folds the batch into one glMultiDrawArraysIndirectEXT by building a command
+// buffer. Returns false when the buffer could not be prepared.
+static bool prepare_arrays_indirect_buffer(const GLint* first, const GLsizei* count, GLsizei drawcount,
+                                           GLuint* out_prev_binding) {
+    if (drawcount <= 0) return false;
+
+    GLuint prev = 0;
+    GLES.glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, reinterpret_cast<GLint*>(&prev));
+    *out_prev_binding = prev;
+
+    if (!g_arrays_indirectbuffer) {
+        GLES.glGenBuffers(1, &g_arrays_indirectbuffer);
+        g_arrays_cmdbufsize = 0;
+    }
+    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_arrays_indirectbuffer);
+
+    if (g_arrays_cmdbufsize < drawcount) {
+        size_t sz = g_arrays_cmdbufsize > 0 ? static_cast<size_t>(g_arrays_cmdbufsize) : 1;
+        while (sz < static_cast<size_t>(drawcount))
+            sz *= 2;
+
+        const size_t wanted = sz * sizeof(draw_arrays_indirect_command_t);
+        GLES.glBufferData(GL_DRAW_INDIRECT_BUFFER, static_cast<GLsizeiptr>(wanted), NULL, GL_DYNAMIC_DRAW);
+
+        GLint real_size = 0;
+        GLES.glGetBufferParameteriv(GL_DRAW_INDIRECT_BUFFER, GL_BUFFER_SIZE, &real_size);
+        if (real_size < 0 || static_cast<size_t>(real_size) < wanted) {
+            MD_WARN_ONCE("multidraw arrays: indirect buffer allocation failed (wanted %zu bytes, got %d)", wanted,
+                         real_size);
+            g_arrays_cmdbufsize = 0;
+            GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev);
+            return false;
+        }
+        g_arrays_cmdbufsize = static_cast<GLsizei>(sz);
+    }
+
+    auto* cmds = static_cast<draw_arrays_indirect_command_t*>(GLES.glMapBufferRange(
+        GL_DRAW_INDIRECT_BUFFER, 0, static_cast<GLsizeiptr>(drawcount * sizeof(draw_arrays_indirect_command_t)),
+        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT));
+    if (!cmds) {
+        MD_WARN_ONCE("multidraw arrays: failed to map the indirect command buffer");
+        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev);
+        return false;
+    }
+
+    for (GLsizei i = 0; i < drawcount; ++i) {
+        cmds[i].count = static_cast<GLuint>(count[i] > 0 ? count[i] : 0);
+        cmds[i].instanceCount = 1;
+        cmds[i].first = static_cast<GLuint>(first[i]); // validated non-negative
+        cmds[i].baseInstanceOrReserved = 0;
+    }
+
+    if (GLES.glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER) == GL_FALSE) {
+        MD_WARN_ONCE("multidraw arrays: indirect command buffer contents lost on unmap");
+        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev);
+        return false;
+    }
+    return true;
+}
+
+void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
+    LOG()
+    multidraw_check_context();
+
+    if (g_arrays_mdi_state == native_state_t::Failed || !GLES.glMultiDrawArraysIndirectEXT) {
+        mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
+        return;
+    }
+    if (!mg_validate_multidraw_arrays(first, count, drawcount)) return;
+
+    // GLES requires a vertex array object for an indirect draw, and requires
+    // every enabled array to be buffer-backed. The unrolled loop is legal with
+    // VAO 0, so this check decides between them rather than reporting an error.
+    GLint vao = 0;
+    GLES.glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
+    if (vao == 0) {
+        LOG_D("multidraw arrays: no vertex array object bound, unrolling")
+        mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
+        return;
+    }
+
+    // Indirect draws are not allowed while transform feedback is active and not
+    // paused; the unrolled loop is.
+    if (GLES.glIsEnabled) {
+        GLint tf_active = 0, tf_paused = 0;
+        GLES.glGetIntegerv(GL_TRANSFORM_FEEDBACK_ACTIVE, &tf_active);
+        GLES.glGetIntegerv(GL_TRANSFORM_FEEDBACK_PAUSED, &tf_paused);
+        if (tf_active && !tf_paused) {
+            LOG_D("multidraw arrays: transform feedback active, unrolling")
+            mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
+            return;
+        }
+    }
+
+    prepareForDraw();
+
+    GLuint prev_indirect = 0;
+    if (!prepare_arrays_indirect_buffer(first, count, drawcount, &prev_indirect)) {
+        mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
+        return;
+    }
+
+    const bool probing = (g_arrays_mdi_state == native_state_t::Unprobed);
+    if (probing) mg_md_drain();
+
+    GLES.glMultiDrawArraysIndirectEXT(mode, 0, drawcount, 0);
+
+    if (probing) {
+        const GLenum err = mg_md_check();
+        if (err != GL_NO_ERROR) {
+            MD_WARN_ONCE("multidraw arrays: glMultiDrawArraysIndirectEXT failed with 0x%04x, disabling", err);
+            g_arrays_mdi_state = native_state_t::Failed;
+            GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev_indirect);
+            mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
+            return;
+        }
+        g_arrays_mdi_state = native_state_t::Working;
+    }
+
+    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev_indirect);
+    CHECK_GL_ERROR
+}
+
+typedef void (*glMultiDrawArrays_t)(GLenum, const GLint*, const GLsizei*, GLsizei);
+
+void glMultiDrawArrays(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
+    static glMultiDrawArrays_t func_ptr = nullptr;
+
+    if (func_ptr == nullptr) {
+        switch (multidraw_backend_of(md_entry_t::Arrays)) {
+        case md_backend_t::NativeExt:
+            func_ptr = mg_glMultiDrawArrays_nativeext;
+            break;
+        case md_backend_t::MultiIndirect:
+            func_ptr = mg_glMultiDrawArrays_multiindirect;
+            break;
+        default:
+            func_ptr = mg_glMultiDrawArrays_unroll;
+            break;
+        }
+    }
+
+    func_ptr(mode, first, count, drawcount);
 }
 
 void glMultiDrawArraysIndirect(GLenum mode, const void* indirect, GLsizei drawcount, GLsizei stride) {
