@@ -76,6 +76,8 @@ extern "C"
                                                          const void* const* indices, GLsizei primcount);
     GLAPI GLAPIENTRY void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum type,
                                                         const void* const* indices, GLsizei primcount);
+    GLAPI GLAPIENTRY void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum type,
+                                                           const void* const* indices, GLsizei primcount);
 
     // GL 4.6 core multi-draw entry points. These used to be silent no-op stubs
     // in gl_stub.cpp, so an application calling them got no geometry and no

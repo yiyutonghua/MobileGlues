@@ -22,25 +22,6 @@ typedef unsigned long size_t;
 
 #define DEFAULT_GL_VERSION 40
 
-// DEPRECATED. The single "multidrawMode" key controlled every multi-draw entry
-// point at once, which forced meaningless combinations: glMultiDrawElements has
-// no base vertex, so PreferBaseVertex/Compute/DrawElements were three names for
-// one unrolled loop there, while glMultiDrawArrays and the two *Indirect entry
-// points ignored the setting entirely.
-//
-// Replaced by one key per entry point (md_entry_t / md_backend_t below). Kept
-// only so the transition can be staged; nothing reads the old key any more.
-enum class multidraw_mode_t : int {
-    Auto = 0,
-    PreferIndirect,
-    PreferBaseVertex,
-    PreferMultidrawIndirect,
-    DrawElements,
-    Compute,
-    NativeMultiDraw,
-    MaxValue
-};
-
 // The distinct multi-draw *implementations*. Which of them are actually distinct
 // differs per entry point; md_entry_desc_t::allowed encodes that.
 //
@@ -202,7 +183,6 @@ struct global_settings_t {
     bool ext_direct_state_access;
     bool buffer_coherent_as_flush;
     size_t max_glsl_cache_size;
-    multidraw_mode_t multidraw_mode; // deprecated, see multidraw_mode_t
     md_backend_t multidraw_backend[static_cast<int>(md_entry_t::MaxValue)];
     unsigned multidraw_disabled_mask; // bit (1u << md_backend_t) = user disabled it
     AngleDepthClearFixMode angle_depth_clear_fix_mode;
@@ -224,6 +204,11 @@ inline md_backend_t multidraw_backend_of(md_entry_t e) {
     return global_settings.multidraw_backend[static_cast<int>(e)];
 }
 const char* md_backend_name(md_backend_t b);
+
+// Suffix of the mg_<entry>_<suffix> symbol implementing a backend. One table so
+// the dispatcher in gl/multidraw.cpp and the symbol glx/lookup.cpp hands to the
+// application cannot disagree about which implementation a setting selects.
+const char* md_backend_suffix(md_backend_t b);
 
 // Defined in gl/multidraw.cpp: resolves GL_EXT_multi_draw_arrays lazily, because
 // the GLES loader does not carry those entry points and gles/* is not ours to

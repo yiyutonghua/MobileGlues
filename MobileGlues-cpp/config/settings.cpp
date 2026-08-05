@@ -22,7 +22,6 @@ void init_settings() {
     global_settings.ignore_error = IgnoreErrorLevel::Partial;
     global_settings.ext_compute_shader = false;
     global_settings.max_glsl_cache_size = 30 * 1024 * 1024;
-    global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
     global_settings.angle_depth_clear_fix_mode = AngleDepthClearFixMode::Disabled;
     global_settings.ext_direct_state_access = true;
     global_settings.custom_gl_version = {0, 0, 0}; // will go default
@@ -380,6 +379,27 @@ const char* md_backend_name(md_backend_t b) {
     return "(unknown)";
 }
 
+const char* md_backend_suffix(md_backend_t b) {
+    switch (b) {
+    case B::Unroll:
+        return "_drawelements"; // historical symbol name, kept so it stays resolvable
+    case B::BaseVertex:
+        return "_basevertex";
+    case B::Indirect:
+        return "_indirect";
+    case B::MultiIndirect:
+        return "_multiindirect";
+    case B::Native:
+        return "_native";
+    case B::NativeExt:
+        return "_nativeext";
+    case B::Compute:
+        return "_compute";
+    default:
+        return nullptr; // Auto never survives resolution
+    }
+}
+
 // Parses "multidrawDisableBackends" into a bitmask. A disabled backend is
 // treated exactly like one the driver does not have, so it flows through the
 // same degradation path.
@@ -456,50 +476,16 @@ static md_backend_t resolve_multidraw_entry(md_entry_t e, const md_caps_t& caps,
 }
 
 void set_multidraw_setting() { // should be called after init_gles_target()
-    multidraw_mode_t multidrawMode = static_cast<multidraw_mode_t>(config_get_int("multidrawMode"));
-    if (static_cast<int>(multidrawMode) != -1) {
-        LOG_W_FORCE("multidrawMode is deprecated and will stop being read. Each entry point now has its own key: "
+    // multidrawMode is no longer read. It selected one strategy for every
+    // multi-draw entry point at once, which meant most of its values were
+    // meaningless for most entry points. init_settings_post() now resolves one
+    // backend per entry point from the multidrawMode<EntryPoint> keys.
+    if (config_get_int(const_cast<char*>("multidrawMode")) != -1) {
+        LOG_W_FORCE("multidrawMode is no longer used. Each entry point has its own key now: "
                     "multidrawModeArrays, multidrawModeElements, multidrawModeElementsBaseVertex, "
-                    "multidrawModeArraysIndirect, multidrawModeElementsIndirect (values are names, e.g. "
-                    "\"multiindirect\"). See also multidrawDisableBackends.")
+                    "multidrawModeArraysIndirect, multidrawModeElementsIndirect. Values are backend names, "
+                    "e.g. \"multiindirect\". See also multidrawDisableBackends.")
     }
-    if (static_cast<int>(multidrawMode) == -1) {
-        multidrawMode = multidraw_mode_t::Auto;
-    }
-    if (static_cast<int>(multidrawMode) < 0 ||
-        static_cast<int>(multidrawMode) >= static_cast<int>(multidraw_mode_t::MaxValue)) {
-        multidrawMode = multidraw_mode_t::Auto;
-    }
-    global_settings.multidraw_mode = multidrawMode;
-    std::string draw_mode_str;
-    switch (global_settings.multidraw_mode) {
-    case multidraw_mode_t::PreferIndirect:
-        draw_mode_str = "Indirect";
-        break;
-    case multidraw_mode_t::PreferBaseVertex:
-        draw_mode_str = "Unroll";
-        break;
-    case multidraw_mode_t::PreferMultidrawIndirect:
-        draw_mode_str = "Multidraw indirect";
-        break;
-    case multidraw_mode_t::DrawElements:
-        draw_mode_str = "DrawElements";
-        break;
-    case multidraw_mode_t::Compute:
-        draw_mode_str = "Compute";
-        break;
-    case multidraw_mode_t::NativeMultiDraw:
-        draw_mode_str = "Native multidraw";
-        break;
-    case multidraw_mode_t::Auto:
-        draw_mode_str = "Auto";
-        break;
-    default:
-        draw_mode_str = "(Unknown)";
-        global_settings.multidraw_mode = multidraw_mode_t::Auto;
-        break;
-    }
-    LOG_V("[MobileGlues] Setting: multidrawMode               = %s", draw_mode_str.c_str())
 }
 
 void init_settings_post() {
@@ -553,134 +539,6 @@ void init_settings_post() {
             resolve_multidraw_entry(static_cast<md_entry_t>(i), md_caps, global_settings.multidraw_disabled_mask);
     }
 
-    switch (global_settings.multidraw_mode) {
-    case multidraw_mode_t::NativeMultiDraw:
-        LOG_V("multidrawMode = NativeMultiDraw")
-        if (native) {
-            global_settings.multidraw_mode = multidraw_mode_t::NativeMultiDraw;
-            LOG_V("    -> NativeMultiDraw (OK)")
-        } else if (multidraw) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
-            LOG_V("    -> MultidrawIndirect (Preferred not supported, falling back)")
-        } else if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (Preferred not supported, falling back)")
-        } else if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (Preferred not supported, falling back)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Preferred not supported, falling back)")
-        }
-        break;
-    case multidraw_mode_t::PreferMultidrawIndirect:
-        LOG_V("multidrawMode = PreferMultidrawIndirect")
-        if (multidraw) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
-            LOG_V("    -> MultidrawIndirect (OK)")
-        } else if (native) {
-            global_settings.multidraw_mode = multidraw_mode_t::NativeMultiDraw;
-            LOG_V("    -> NativeMultiDraw (Preferred not supported, falling back)")
-        } else if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (Preferred not supported, falling back)")
-        } else if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (Preferred not supported, falling back)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Preferred not supported, falling back)")
-        }
-        break;
-    case multidraw_mode_t::PreferIndirect:
-        LOG_V("multidrawMode = PreferIndirect")
-        if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (OK)")
-        } else if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (Preferred not supported, falling back)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Preferred not supported, falling back)")
-        }
-        break;
-    case multidraw_mode_t::PreferBaseVertex:
-        LOG_V("multidrawMode = PreferBaseVertex")
-        if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (OK)")
-        } else if (multidraw) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
-            LOG_V("    -> MultidrawIndirect (Preferred not supported, falling back)")
-        } else if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (Preferred not supported, falling back)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Preferred not supported, falling back)")
-        }
-        break;
-    case multidraw_mode_t::DrawElements:
-        LOG_V("multidrawMode = DrawElements")
-        global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-        LOG_V("    -> DrawElements (OK)")
-        break;
-    case multidraw_mode_t::Compute:
-        LOG_V("multidrawMode = Compute")
-        if (compute) {
-            global_settings.multidraw_mode = multidraw_mode_t::Compute;
-            LOG_V("    -> Compute (OK)")
-        } else if (multidraw) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
-            LOG_V("    -> MultidrawIndirect (Compute not supported, falling back)")
-        } else if (native) {
-            global_settings.multidraw_mode = multidraw_mode_t::NativeMultiDraw;
-            LOG_V("    -> NativeMultiDraw (Compute not supported, falling back)")
-        } else if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (Compute not supported, falling back)")
-        } else if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (Compute not supported, falling back)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Compute not supported, falling back)")
-        }
-        break;
-    case multidraw_mode_t::Auto:
-        LOG_V("multidrawMode = Auto")
-        // MultidrawIndirect stays first so that devices which already used it keep
-        // exactly the path they had. NativeMultiDraw is placed ahead of Indirect
-        // and BaseVertex only: it is one API call with exact base vertex semantics
-        // instead of primcount calls, so it can only help those two branches, and
-        // it carries a driver risk (see the `native` capability check above) that
-        // does not belong on a path that already worked.
-        if (multidraw) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferMultidrawIndirect;
-            LOG_V("    -> MultidrawIndirect (Auto detected)")
-        } else if (native) {
-            global_settings.multidraw_mode = multidraw_mode_t::NativeMultiDraw;
-            LOG_V("    -> NativeMultiDraw (Auto detected)")
-        } else if (indirect) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferIndirect;
-            LOG_V("    -> Indirect (Auto detected)")
-        } else if (basevertex) {
-            global_settings.multidraw_mode = multidraw_mode_t::PreferBaseVertex;
-            LOG_V("    -> BaseVertex (Auto detected)")
-        } else {
-            global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-            LOG_V("    -> DrawElements (Auto detected)")
-        }
-        break;
-    default:
-        // Reached only if a new enumerator is added without a case here; Auto is
-        // handled above so that an explicit mode is never silently logged as Auto.
-        LOG_W_FORCE("multidrawMode = %d is unhandled, using DrawElements",
-                    static_cast<int>(global_settings.multidraw_mode))
-        global_settings.multidraw_mode = multidraw_mode_t::DrawElements;
-        break;
-    }
 }
 
 std::string dump_settings_string(std::string prefix) {
@@ -706,36 +564,17 @@ std::string dump_settings_string(std::string prefix) {
     ss << prefix << "ExtDirectStateAccess: " << (global_settings.ext_direct_state_access ? "True" : "False") << "\n";
     ss << prefix << "MaxGlslCacheSize: " << (global_settings.max_glsl_cache_size / 1024 / 1024) << "MB\n";
 
-    ss << prefix << "MultidrawMode: ";
-    switch (global_settings.multidraw_mode) {
-    case multidraw_mode_t::Auto:
-        ss << "Auto";
-        break;
-    case multidraw_mode_t::PreferIndirect:
-        ss << "Indirect (glDrawElementsIndirect)";
-        break;
-    case multidraw_mode_t::PreferBaseVertex:
-        ss << "BaseVertex (glDrawElementsBaseVertex)";
-        break;
-    case multidraw_mode_t::PreferMultidrawIndirect:
-        ss << "MultidrawIndirect (glMultiDrawElementsIndirect)";
-        break;
-    case multidraw_mode_t::DrawElements:
-        ss << "DrawElements (glDrawElements with per-draw CPU rebase)";
-        break;
-    case multidraw_mode_t::Compute:
-        // Only glMultiDrawElementsBaseVertex has a base vertex to rebase, so this
-        // mode has no effect on the plain glMultiDrawElements entry point.
-        ss << "Compute (glMultiDrawElementsBaseVertex via compute-shader rebase)";
-        break;
-    case multidraw_mode_t::NativeMultiDraw:
-        ss << "NativeMultiDraw (glMultiDrawElementsBaseVertexEXT)";
-        break;
-    default:
-        ss << "Unknown";
-        break;
+    for (int i = 0; i < MD_ENTRY_COUNT; ++i) {
+        ss << prefix << k_md_entries[i].key << ": "
+           << md_backend_name(global_settings.multidraw_backend[i]) << "\n";
     }
-    ss << "\n";
+    if (global_settings.multidraw_disabled_mask != 0) {
+        ss << prefix << "MultidrawDisabledBackends:";
+        for (const auto& n : k_md_backend_names) {
+            if (global_settings.multidraw_disabled_mask & md_bit(n.backend)) ss << " " << n.name;
+        }
+        ss << "\n";
+    }
 
     ss << prefix << "AngleDepthClearFixMode: "
        << (global_settings.angle_depth_clear_fix_mode == AngleDepthClearFixMode::Disabled ? "Disabled" : "Enabled")

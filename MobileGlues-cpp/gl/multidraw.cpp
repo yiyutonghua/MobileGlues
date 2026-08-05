@@ -262,7 +262,7 @@ static GLuint g_compute_program = 0;
 static GLint g_element_size_loc = -1;
 static GLint g_max_compute_groups_x = 0;
 
-// native path.
+// native paths.
 //
 // One tri-state rather than a separate "probed" flag and "failed" flag: those
 // were kept in two places, only one of which multidraw_check_context() reset, so
@@ -271,6 +271,7 @@ static GLint g_max_compute_groups_x = 0;
 // a driver whose entry point is a stub.
 enum class native_state_t { Unprobed, Working, Failed };
 static native_state_t g_native_state = native_state_t::Unprobed;
+static native_state_t g_nativeext_state = native_state_t::Unprobed;
 
 // Invalidate every cached GL object name when the current context changes.
 //
@@ -301,6 +302,7 @@ static void multidraw_check_context() {
     // to re-arm its probe, which is why it is a single tri-state.
     g_compute_failed = false;
     g_native_state = native_state_t::Unprobed;
+    g_nativeext_state = native_state_t::Unprobed;
     g_prefixsumbuffer = 0;
     g_drawcmd_ssbo = 0;
     g_outputibo = 0;
@@ -376,34 +378,29 @@ void glMultiDrawElements(GLenum mode, const GLsizei* count, GLenum type, const v
     static glMultiDrawElements_t func_ptr = nullptr;
 
     if (func_ptr == nullptr) {
-        switch (global_settings.multidraw_mode) {
-        case multidraw_mode_t::PreferIndirect:
+        switch (multidraw_backend_of(md_entry_t::Elements)) {
+        case md_backend_t::Indirect:
             func_ptr = mg_glMultiDrawElements_indirect;
             break;
-        case multidraw_mode_t::PreferBaseVertex:
-            func_ptr = mg_glMultiDrawElements_basevertex;
-            break;
-        case multidraw_mode_t::PreferMultidrawIndirect:
+        case md_backend_t::MultiIndirect:
             func_ptr = mg_glMultiDrawElements_multiindirect;
             break;
-        case multidraw_mode_t::DrawElements:
-            func_ptr = mg_glMultiDrawElements_drawelements;
-            break;
-        case multidraw_mode_t::Compute:
-            func_ptr = mg_glMultiDrawElements_compute;
-            break;
-        case multidraw_mode_t::NativeMultiDraw:
+        case md_backend_t::Native:
             func_ptr = mg_glMultiDrawElements_native;
             break;
+        case md_backend_t::NativeExt:
+            func_ptr = mg_glMultiDrawElements_nativeext;
+            break;
         default:
+            // Unroll, and anything the mask should already have rejected.
             func_ptr = mg_glMultiDrawElements_drawelements;
             break;
         }
     }
 
-    // Validation and the context check happen inside the mode implementation, so
-    // they also cover the case where glXGetProcAddress handed that symbol to the
-    // application directly.
+    // Validation and the context check happen inside the backend implementation,
+    // so they also cover the case where glXGetProcAddress handed that symbol to
+    // the application directly.
     func_ptr(mode, count, type, indices, primcount);
 }
 
@@ -414,23 +411,20 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
     static glMultiDrawElementsBaseVertex_t func_ptr = nullptr;
 
     if (func_ptr == nullptr) {
-        switch (global_settings.multidraw_mode) {
-        case multidraw_mode_t::PreferIndirect:
+        switch (multidraw_backend_of(md_entry_t::ElementsBaseVertex)) {
+        case md_backend_t::Indirect:
             func_ptr = mg_glMultiDrawElementsBaseVertex_indirect;
             break;
-        case multidraw_mode_t::PreferBaseVertex:
+        case md_backend_t::BaseVertex:
             func_ptr = mg_glMultiDrawElementsBaseVertex_basevertex;
             break;
-        case multidraw_mode_t::PreferMultidrawIndirect:
+        case md_backend_t::MultiIndirect:
             func_ptr = mg_glMultiDrawElementsBaseVertex_multiindirect;
             break;
-        case multidraw_mode_t::DrawElements:
-            func_ptr = mg_glMultiDrawElementsBaseVertex_drawelements;
-            break;
-        case multidraw_mode_t::Compute:
+        case md_backend_t::Compute:
             func_ptr = mg_glMultiDrawElementsBaseVertex_compute;
             break;
-        case multidraw_mode_t::NativeMultiDraw:
+        case md_backend_t::Native:
             func_ptr = mg_glMultiDrawElementsBaseVertex_native;
             break;
         default:
@@ -878,6 +872,47 @@ void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenu
         // Only reachable on the single call whose probe failed.
         mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
         return;
+    }
+
+    CHECK_GL_ERROR
+}
+
+// ---------------------------------------------------------------------------
+// Backend: NativeExt (GL_EXT_multi_draw_arrays / GL_ANGLE_multi_draw)
+//
+// glMultiDrawElementsEXT has exactly the signature and semantics of the GL 1.4
+// core command, so this is one driver call with no command buffer to build and
+// no synthesised base vertex array. Same probe-and-latch as the Native backend,
+// for the same reason: a resolved symbol is not proof the driver implements it.
+// ---------------------------------------------------------------------------
+
+void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
+                                      GLsizei primcount) {
+    LOG()
+
+    if (g_nativeext_state == native_state_t::Failed || !g_mde_ext) {
+        mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
+        return;
+    }
+
+    if (!mg_multidraw_enter(count, type, primcount, indices)) return;
+
+    prepareForDraw();
+
+    const bool probing = (g_nativeext_state == native_state_t::Unprobed);
+    if (probing) mg_md_drain();
+
+    g_mde_ext(mode, count, type, indices, primcount);
+
+    if (probing) {
+        const GLenum err = mg_md_check();
+        if (err != GL_NO_ERROR) {
+            MD_WARN_ONCE("multidraw nativeext: glMultiDrawElementsEXT failed with 0x%04x, disabling nativeext", err);
+            g_nativeext_state = native_state_t::Failed;
+            mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
+            return;
+        }
+        g_nativeext_state = native_state_t::Working;
     }
 
     CHECK_GL_ERROR
