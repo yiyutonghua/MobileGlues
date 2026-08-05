@@ -134,10 +134,25 @@ namespace {
         }
     }
 
+    // Which desktop-only context attributes this layer can honour.
+    //
+    // Debug, forward-compatible and no-error are ACCEPTED rather than rejected.
+    // They describe what the context promises the application, not something the
+    // backend has to implement: a forward-compatible core context simply must not
+    // expose deprecated functionality, which this layer does not anyway, and
+    // debug output is already a real GLES 3.2 capability. Rejecting them turned
+    // an attribute the previous code silently ignored into a hard EGL_BAD_MATCH,
+    // which is what GLFW's GLFW_OPENGL_DEBUG_CONTEXT and
+    // GLFW_OPENGL_FORWARD_COMPAT set by default on a core profile request.
+    //
+    // Robust access is still refused: EXT_robustness is a real behavioural
+    // guarantee about out-of-range accesses, and claiming it without checking the
+    // backend would be a promise this layer cannot keep.
     bool supportsDesktopContextAttribute(EGLint attribute, EGLint value) {
         switch (attribute) {
         case EGL_CONTEXT_FLAGS_KHR:
-            return value == 0;
+            // Only the flags that map onto something meaningful.
+            return (value & ~(EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR | EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)) == 0;
         case EGL_CONTEXT_OPENGL_PROFILE_MASK:
             return value == kVirtualDesktopProfileMask;
         case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY:
@@ -145,8 +160,9 @@ namespace {
             return value == EGL_NO_RESET_NOTIFICATION;
         case EGL_CONTEXT_OPENGL_DEBUG:
         case EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE:
-        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
         case EGL_CONTEXT_OPENGL_NO_ERROR_KHR:
+            return true;
+        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
         case EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT:
             return value == EGL_FALSE;
         default:
@@ -165,7 +181,9 @@ namespace {
     }
 
     bool makeBackendContextAttributes(const EGLint* attrib_list, std::vector<EGLint>* backend_attributes,
-                                      EGLint* frontend_major, EGLint* frontend_minor, EGLint* error) {
+                                      EGLint* frontend_major, EGLint* frontend_minor, EGLint* frontend_flags,
+                                      EGLint* error) {
+        *frontend_flags = 0;
         *error = EGL_SUCCESS;
         if (!copyAttributeList(attrib_list, backend_attributes)) {
             *error = EGL_BAD_ATTRIBUTE;
@@ -204,6 +222,14 @@ namespace {
                 saw_minor_version = true;
                 continue;
             }
+            if (attribute == EGL_CONTEXT_FLAGS_KHR) {
+                *frontend_flags |= value;
+            } else if (attribute == EGL_CONTEXT_OPENGL_DEBUG && value == EGL_TRUE) {
+                *frontend_flags |= EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR;
+            } else if (attribute == EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE && value == EGL_TRUE) {
+                *frontend_flags |= EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR;
+            }
+
             if (isDesktopOnlyContextAttribute(attribute)) {
                 if (!supportsDesktopContextAttribute(attribute, value)) {
                     *error = EGL_BAD_MATCH;
@@ -217,7 +243,17 @@ namespace {
         }
 
         if (saw_major_version && !saw_minor_version) requested_minor = 0;
-        if (requested_major != defaultDesktopMajorVersion() || requested_minor != defaultDesktopMinorVersion()) {
+
+        // "At most what is configured", not "exactly what is configured". EGL and
+        // GLX both allow returning a context of any version no lower than the one
+        // requested, and requiring equality meant a loader asking for 3.2 core --
+        // which is what LWJGL and GLFW ask for -- got EGL_BAD_MATCH against the
+        // default customGLVersion of 4.0 and could not create a context at all.
+        const EGLint configured = defaultDesktopMajorVersion() * 100 + defaultDesktopMinorVersion() * 10;
+        const EGLint requested = requested_major * 100 + requested_minor * 10;
+        if (requested > configured) {
+            LOG_W_FORCE("eglCreateContext: %d.%d was requested but customGLVersion is %d.%d", requested_major,
+                        requested_minor, defaultDesktopMajorVersion(), defaultDesktopMinorVersion())
             *error = EGL_BAD_MATCH;
             return false;
         }
@@ -479,8 +515,9 @@ extern "C"
         EGLint frontend_major = 0;
         EGLint frontend_minor = 0;
         EGLint context_error = EGL_SUCCESS;
+        EGLint frontend_flags = 0;
         if (!makeBackendContextAttributes(attrib_list, &backend_attributes, &frontend_major, &frontend_minor,
-                                          &context_error)) {
+                                          &frontend_flags, &context_error)) {
             setFrontendError(context_error);
             return EGL_NO_CONTEXT;
         }
@@ -492,7 +529,7 @@ extern "C"
         if (context != EGL_NO_CONTEXT) {
             rememberDesktopContext(context, dpy, frontend_major, frontend_minor);
             mg_context_create(dpy, context, share_context, EGL_OPENGL_API, frontend_major, frontend_minor,
-                              kVirtualDesktopProfileMask, 0);
+                              kVirtualDesktopProfileMask, frontend_flags);
         }
         return context;
     }

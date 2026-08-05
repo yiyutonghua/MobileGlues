@@ -7,6 +7,7 @@
 
 #include "getter.h"
 #include "enable.h"
+#include "../egl/context.h"
 #include "buffer.h"
 #include <string>
 #include <format>
@@ -51,10 +52,12 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         (*params) = num_extensions;
         break;
     case GL_MAJOR_VERSION:
-        (*params) = GLVersion.Major;
+        // What THIS context was granted, which after the version gate was relaxed
+        // is what the application asked for rather than the configured maximum.
+        (*params) = g_current_ctx ? g_current_ctx->granted_major : GLVersion.Major;
         break;
     case GL_MINOR_VERSION:
-        (*params) = GLVersion.Minor;
+        (*params) = g_current_ctx ? g_current_ctx->granted_minor : GLVersion.Minor;
         break;
     case GL_MAX_TEXTURE_IMAGE_UNITS: {
         int es_params = 16;
@@ -64,7 +67,11 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         break;
     }
     case GL_CONTEXT_FLAGS: {
-        (*params) = 0;
+        // Reported from what the context was actually created with. Claiming
+        // flags the application never asked for -- as this did before it was
+        // reduced to 0 -- makes a loader believe it has a debug or robust context
+        // that does not behave like one.
+        (*params) = g_current_ctx ? g_current_ctx->context_flags : 0;
         break;
     }
     case GL_ARRAY_BUFFER_BINDING:
