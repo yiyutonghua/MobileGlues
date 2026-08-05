@@ -579,7 +579,7 @@ extern "C"
         LOG_D("eglGetPlatformDisplay, platform: %d, native_display: %p, attrib_list: "
               "%p",
               platform, native_display, attrib_list);
-        LOAD_EGL(eglGetPlatformDisplay)
+        LOAD_EGL_OR(eglGetPlatformDisplay, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_DISPLAY)
         return egl_eglGetPlatformDisplay(platform, native_display, attrib_list);
     }
 
@@ -587,7 +587,7 @@ extern "C"
                                                       const EGLAttrib* attrib_list) {
         LOG_D("eglCreatePlatformWindowSurface, dpy: %p, config: %p, native_window: %p, attrib_list: %p", dpy, config,
               native_window, attrib_list);
-        LOAD_EGL(eglCreatePlatformWindowSurface)
+        LOAD_EGL_OR(eglCreatePlatformWindowSurface, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_SURFACE)
         return egl_eglCreatePlatformWindowSurface(dpy, config, native_window, attrib_list);
     }
 
@@ -595,14 +595,14 @@ extern "C"
                                                       const EGLAttrib* attrib_list) {
         LOG_D("eglCreatePlatformPixmapSurface, dpy: %p, config: %p, native_pixmap: %p, attrib_list: %p", dpy, config,
               native_pixmap, attrib_list);
-        LOAD_EGL(eglCreatePlatformPixmapSurface)
+        LOAD_EGL_OR(eglCreatePlatformPixmapSurface, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_SURFACE)
         return egl_eglCreatePlatformPixmapSurface(dpy, config, native_pixmap, attrib_list);
     }
 
     EGL_API EGLDisplay eglGetPlatformDisplayEXT(EGLenum platform, void* native_display, const EGLint* attrib_list) {
         LOG_D("eglGetPlatformDisplayEXT, platform: %d, native_display: %p, attrib_list: %p", platform, native_display,
               attrib_list);
-        LOAD_EGL(eglGetPlatformDisplayEXT)
+        LOAD_EGL_OR(eglGetPlatformDisplayEXT, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_DISPLAY)
         return egl_eglGetPlatformDisplayEXT(platform, native_display, attrib_list);
     }
 
@@ -610,7 +610,7 @@ extern "C"
                                                          const EGLint* attrib_list) {
         LOG_D("eglCreatePlatformWindowSurfaceEXT, dpy: %p, config: %p, native_window: %p, attrib_list: %p", dpy, config,
               native_window, attrib_list);
-        LOAD_EGL(eglCreatePlatformWindowSurfaceEXT)
+        LOAD_EGL_OR(eglCreatePlatformWindowSurfaceEXT, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_SURFACE)
         return egl_eglCreatePlatformWindowSurfaceEXT(dpy, config, native_window, attrib_list);
     }
 
@@ -618,7 +618,7 @@ extern "C"
                                                          const EGLint* attrib_list) {
         LOG_D("eglCreatePlatformPixmapSurfaceEXT, dpy: %p, config: %p, native_pixmap: %p, attrib_list: %p", dpy, config,
               native_pixmap, attrib_list);
-        LOAD_EGL(eglCreatePlatformPixmapSurfaceEXT)
+        LOAD_EGL_OR(eglCreatePlatformPixmapSurfaceEXT, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_SURFACE)
         return egl_eglCreatePlatformPixmapSurfaceEXT(dpy, config, native_pixmap, attrib_list);
     }
 

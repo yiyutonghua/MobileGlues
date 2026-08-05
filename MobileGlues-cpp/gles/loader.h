@@ -41,17 +41,36 @@ extern "C"
 
     void* open_lib(const char** names, const char* override);
 
+// Resolve an EGL entry point from the backend library, once per call site.
+//
+// The initialiser is a lambda call rather than a `static bool first` flag, so
+// the compiler emits a thread-safe guard around it. The old shape was an
+// unsynchronised double-checked initialisation: both statics were
+// constant-initialised, so no guard was generated and nothing ordered the write
+// of the pointer against another thread's read of the flag. Two threads entering
+// any EGL wrapper for the first time could see `first == false` with the pointer
+// still null.
+//
+// A failed resolution is reported unconditionally: LOG_W compiles to nothing in
+// release builds (GLOBAL_DEBUG in gl/log.h), so the old warning never reached a
+// user's log and the caller went on to jump through the null pointer anyway.
 #define LOAD_EGL(name)                                                                                                 \
-    static name##_PTR egl_##name = NULL;                                                                               \
-    {                                                                                                                  \
-        static bool first = true;                                                                                      \
-        if (first) {                                                                                                   \
-            first = false;                                                                                             \
-            if (egl != NULL) {                                                                                         \
-                egl_##name = (name##_PTR)proc_address(egl, #name);                                                     \
-            }                                                                                                          \
-            if (egl_##name == NULL) LOG_W("Error: " #name " is NULL\n");                                               \
-        }                                                                                                              \
+    static name##_PTR egl_##name = []() -> name##_PTR {                                                                \
+        name##_PTR p = (egl != NULL) ? (name##_PTR)proc_address(egl, #name) : NULL;                                    \
+        if (p == NULL) LOG_W_FORCE("EGL entry point " #name " is not available in the backend library")                \
+        return p;                                                                                                      \
+    }(); /* the semicolon lives in the macro so the 56 existing call sites, which  \
+            were written against a block-shaped macro and carry none, still work */
+
+// Same, but bail out instead of calling through a null pointer. Use it for the
+// entry points a backend is genuinely allowed not to have -- the platform and
+// EXT variants -- where the old macro produced a crash rather than a failure the
+// caller could handle.
+#define LOAD_EGL_OR(name, onfail, retval)                                                                              \
+    LOAD_EGL(name)                                                                                                     \
+    if (egl_##name == NULL) {                                                                                          \
+        onfail;                                                                                                        \
+        return retval;                                                                                                 \
     }
 
 #define CLEAR_GL_ERROR                                                                                                 \
