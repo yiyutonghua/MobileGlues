@@ -205,6 +205,14 @@ inline md_backend_t multidraw_backend_of(md_entry_t e) {
 }
 const char* md_backend_name(md_backend_t b);
 
+// True when the user disabled this backend with multidrawDisableBackends.
+// The runtime fallback chains in gl/multidraw.cpp consult this too: resolution
+// alone is not enough, because a chain can hand control to a backend the user
+// asked never to be used.
+inline bool md_backend_disabled(md_backend_t b) {
+    return (global_settings.multidraw_disabled_mask & (1u << static_cast<int>(b))) != 0;
+}
+
 // Suffix of the mg_<entry>_<suffix> symbol implementing a backend. One table so
 // the dispatcher in gl/multidraw.cpp and the symbol glx/lookup.cpp hands to the
 // application cannot disagree about which implementation a setting selects.

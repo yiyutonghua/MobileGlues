@@ -402,7 +402,10 @@ const char* md_backend_suffix(md_backend_t b) {
 
 // Parses "multidrawDisableBackends" into a bitmask. A disabled backend is
 // treated exactly like one the driver does not have, so it flows through the
-// same degradation path.
+// same degradation path -- both here during resolution and in the runtime
+// fallback chains in gl/multidraw.cpp, which consult md_backend_disabled().
+// Resolution alone would not be enough: a chain can hand control to a backend
+// the user asked never to be used.
 static unsigned parse_multidraw_disable_mask() {
     const std::string raw = md_config_string("multidrawDisableBackends");
     unsigned mask = 0;
@@ -410,7 +413,10 @@ static unsigned parse_multidraw_disable_mask() {
     for (size_t i = 0; i <= raw.size(); ++i) {
         const char ch = i < raw.size() ? raw[i] : ',';
         if (ch == ',' || ch == ';') {
-            if (!token.empty()) {
+            bool blank = true;
+            for (char c : token)
+                if (c != ' ' && c != '\t' && c != '_' && c != '-') blank = false;
+            if (!token.empty() && !blank) {
                 B b;
                 if (!md_parse_backend(token, &b) || b == B::Auto) {
                     LOG_W_FORCE("multidrawDisableBackends: '%s' is not a backend name, ignored", token.c_str())
@@ -469,10 +475,15 @@ static md_backend_t resolve_multidraw_entry(md_entry_t e, const md_caps_t& caps,
         return cand;
     }
 
-    // Unroll is in every ladder and is always available, so this is unreachable
-    // unless someone disables it explicitly.
-    LOG_W_FORCE("%s: every backend is unavailable or disabled; using unroll", d.key)
-    return B::Unroll;
+    // Fall back to the last rung of this entry's own ladder rather than to a
+    // fixed backend: Unroll is not a member of the *Indirect entries' sets, and
+    // reporting a backend they do not accept would make the log contradict the
+    // key's documented values.
+    B last = B::Unroll;
+    for (int i = 0; i < MD_LADDER_MAX && d.ladder[i] != B::MaxValue; ++i)
+        last = d.ladder[i];
+    LOG_W_FORCE("%s: every backend is unavailable or disabled; using %s", d.key, md_backend_name(last))
+    return last;
 }
 
 void set_multidraw_setting() { // should be called after init_gles_target()
@@ -525,7 +536,7 @@ void init_settings_post() {
     md_caps_t md_caps = {};
     md_caps.basevertex = basevertex;
     md_caps.indirect_elements = indirect;
-    md_caps.indirect_arrays = GLES.glDrawArraysIndirect != nullptr;
+    md_caps.indirect_arrays = has_es31 && GLES.glDrawArraysIndirect != nullptr;
     md_caps.multiindirect_elements = multidraw;
     md_caps.multiindirect_arrays =
         g_gles_caps.GL_EXT_multi_draw_indirect && GLES.glMultiDrawArraysIndirectEXT != nullptr;

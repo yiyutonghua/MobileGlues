@@ -208,6 +208,9 @@ GLuint find_bound_buffer(GLenum key) {
     case GL_UNIFORM_BUFFER_BINDING:
         target = GL_UNIFORM_BUFFER;
         break;
+    case GL_PARAMETER_BUFFER_BINDING:
+        target = GL_PARAMETER_BUFFER;
+        break;
     default:
         target = 0;
         break;
@@ -325,6 +328,14 @@ void glDeleteBuffers(GLsizei n, const GLuint* buffers) {
     LOG()
     LOG_D("glDeleteBuffers(%i, %p)", n, buffers)
     for (int i = 0; i < n; ++i) {
+        // GL resets a binding to 0 when the bound buffer is deleted. The
+        // parameter buffer slot is the only source of truth gl/multidraw.cpp has
+        // for where the draw count lives -- there is no driver-side binding to
+        // cross-check it against -- and deleted ids are recycled by gen_buffer(),
+        // so a stale slot would silently point at somebody else's buffer.
+        if (buffers[i] != 0 && find_bound_buffer(GL_PARAMETER_BUFFER_BINDING) == buffers[i]) {
+            set_bound_buffer_by_target(GL_PARAMETER_BUFFER, 0);
+        }
         if (find_real_buffer(buffers[i])) {
             GLuint real_buff = find_real_buffer(buffers[i]);
             GLES.glDeleteBuffers(1, &real_buff);
