@@ -104,8 +104,9 @@ extern "C"
                                                     GLsizei stride);
     GLAPI GLAPIENTRY void glMultiDrawElementsIndirect(GLenum mode, GLenum type, const void* indirect,
                                                       GLsizei drawcount, GLsizei stride);
-    // Not implemented: honouring these needs GL_PARAMETER_BUFFER binding state,
-    // which lives outside this module. They report once instead of vanishing.
+    // The draw count is read on the GPU: a compute shader compacts the command
+    // buffer so the commands past the count draw nothing. No CPU readback, so no
+    // pipeline stall and no stale count.
     GLAPI GLAPIENTRY void glMultiDrawArraysIndirectCount(GLenum mode, const void* indirect, GLintptr drawcount,
                                                          GLsizei maxdrawcount, GLsizei stride);
     GLAPI GLAPIENTRY void glMultiDrawElementsIndirectCount(GLenum mode, GLenum type, const void* indirect,

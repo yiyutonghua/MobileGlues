@@ -7,6 +7,7 @@
 
 #include "multidraw.h"
 #include "../config/settings.h"
+#include "buffer.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -273,6 +274,15 @@ static GLuint g_compute_program = 0;
 static GLint g_element_size_loc = -1;
 static GLint g_max_compute_groups_x = 0;
 
+// glMultiDraw*IndirectCount compaction
+static GLuint g_count_program = 0;
+static GLuint g_count_scratch = 0;
+static GLsizei g_count_scratch_bytes = 0;
+static bool g_count_inited = false;
+static bool g_count_failed = false;
+static GLint g_count_loc_max = -1, g_count_loc_srcwords = -1, g_count_loc_srcoff = -1, g_count_loc_cntoff = -1,
+             g_count_loc_dstwords = -1;
+
 // native paths.
 //
 // One tri-state rather than a separate "probed" flag and "failed" flag: those
@@ -309,6 +319,12 @@ static void multidraw_check_context() {
     g_arrays_cmdbufsize = 0;
     g_arrays_mdi_state = native_state_t::Unprobed;
     g_arrays_nativeext_state = native_state_t::Unprobed;
+    g_count_program = 0;
+    g_count_scratch = 0;
+    g_count_scratch_bytes = 0;
+    g_count_inited = false;
+    g_count_failed = false;
+    g_count_loc_max = g_count_loc_srcwords = g_count_loc_srcoff = g_count_loc_cntoff = g_count_loc_dstwords = -1;
     g_scratch_ibo = 0;
     g_compute_inited = false;
     // The failure latches are per-context capability facts, so they are cleared
@@ -1072,17 +1088,8 @@ static GLuint compile_compute_program(const std::string& src) {
     }
 
     GLES.glDeleteShader(shader);
-
-    g_element_size_loc = GLES.glGetUniformLocation(program, "uElementSize");
-    if (g_element_size_loc < 0) {
-        // uElementSize drives read_index()'s 8/16/32-bit unpacking. Without it the
-        // uniform stays 0, every index is decoded as if it were 8-bit, and the
-        // draw silently renders garbage. Treat it as a link failure instead.
-        MD_WARN_ONCE("multidraw compute: uElementSize uniform not found, disabling compute mode");
-        GLES.glDeleteProgram(program);
-        return 0;
-    }
-
+    // Deliberately generic: the caller looks up whatever uniforms its own shader
+    // declares. This builds more than one program now.
     return program;
 }
 
@@ -1144,6 +1151,17 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(GLenum mode, GLsi
         GLES.glGenBuffers(1, &g_outputibo);
 
         g_compute_program = compile_compute_program(multidraw_comp_shader);
+        if (g_compute_program != 0) {
+            g_element_size_loc = GLES.glGetUniformLocation(g_compute_program, "uElementSize");
+            if (g_element_size_loc < 0) {
+                // uElementSize drives read_index()'s 8/16/32-bit unpacking. Without
+                // it the uniform stays 0, every index is decoded as if it were
+                // 8-bit, and the draw silently renders garbage.
+                MD_WARN_ONCE("multidraw compute: uElementSize uniform not found, disabling compute mode");
+                GLES.glDeleteProgram(g_compute_program);
+                g_compute_program = 0;
+            }
+        }
         if (g_compute_program == 0) {
             MD_WARN_ONCE("multidraw compute: pipeline init failed, falling back for the rest of this context");
             GLES.glDeleteBuffers(1, &g_prefixsumbuffer);
@@ -1679,29 +1697,239 @@ void glMultiDrawElementsIndirect(GLenum mode, GLenum type, const void* indirect,
     CHECK_GL_ERROR
 }
 
+// ---------------------------------------------------------------------------
+// glMultiDraw{Arrays,Elements}IndirectCount
+//
+// The draw count lives in the buffer bound to GL_PARAMETER_BUFFER, which is the
+// whole point of the command: it is normally written by the GPU, so reading it
+// back on the CPU would mean a full pipeline stall every frame -- and reading it
+// without a stall would mean reading a stale value and drawing the wrong number
+// of commands.
+//
+// Instead the commands are compacted on the GPU. A compute shader copies
+// maxdrawcount commands into a scratch buffer and sets instanceCount to 0 on
+// every command at or past the real count; a command with instanceCount 0 draws
+// nothing. One glMultiDraw*IndirectEXT over the scratch buffer then produces
+// exactly the requested draws with no readback and no stall.
+//
+// Drawing maxdrawcount commands unchanged would NOT be a valid shortcut: the
+// slots past the count hold stale or zeroed commands, and rendering them puts
+// back the geometry the application just culled.
+// ---------------------------------------------------------------------------
+
+static const std::string multidraw_count_shader =
+    R"(#version 310 es
+
+layout(local_size_x = 64) in;
+
+layout(location = 0) uniform uint uMaxDrawCount;
+layout(location = 1) uniform uint uSrcWords;   // stride in words between source commands
+layout(location = 2) uniform uint uSrcOffset;  // byte offset of the first command, in words
+layout(location = 3) uniform uint uCountWord;  // byte offset of the count, in words
+layout(location = 4) uniform uint uDstWords;   // words per command (4 arrays, 5 elements)
+
+layout(std430, binding = 0) readonly buffer Src { uint src[]; };
+layout(std430, binding = 1) readonly buffer Param { uint param[]; };
+layout(std430, binding = 2) writeonly buffer Dst { uint dst[]; };
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uMaxDrawCount) {
+        return;
+    }
+
+    // Clamped: the application promises count <= maxdrawcount, but the buffer is
+    // ordinary memory and a corrupt value must not make this read past the end
+    // of the source commands.
+    uint realCount = min(param[uCountWord], uMaxDrawCount);
+
+    uint sbase = uSrcOffset + i * uSrcWords;
+    uint dbase = i * uDstWords;
+    for (uint w = 0u; w < uDstWords; ++w) {
+        dst[dbase + w] = src[sbase + w];
+    }
+    if (i >= realCount) {
+        dst[dbase + 1u] = 0u; // instanceCount, word 1 of both command layouts
+    }
+}
+
+)";
+
+static bool mg_count_init() {
+    if (g_count_failed) return false;
+    if (g_count_inited) return true;
+
+    if (!GLES.glDispatchCompute) {
+        MD_WARN_ONCE("multidraw count: compute shaders are unavailable, cannot honour *IndirectCount");
+        g_count_failed = true;
+        return false;
+    }
+
+    g_count_program = compile_compute_program(multidraw_count_shader);
+    if (g_count_program == 0) {
+        MD_WARN_ONCE("multidraw count: compaction shader failed to build");
+        g_count_failed = true;
+        return false;
+    }
+    g_count_loc_max = GLES.glGetUniformLocation(g_count_program, "uMaxDrawCount");
+    g_count_loc_srcwords = GLES.glGetUniformLocation(g_count_program, "uSrcWords");
+    g_count_loc_srcoff = GLES.glGetUniformLocation(g_count_program, "uSrcOffset");
+    g_count_loc_cntoff = GLES.glGetUniformLocation(g_count_program, "uCountWord");
+    g_count_loc_dstwords = GLES.glGetUniformLocation(g_count_program, "uDstWords");
+    if (g_count_loc_max < 0 || g_count_loc_srcwords < 0 || g_count_loc_srcoff < 0 || g_count_loc_cntoff < 0 ||
+        g_count_loc_dstwords < 0) {
+        MD_WARN_ONCE("multidraw count: compaction shader is missing uniforms");
+        GLES.glDeleteProgram(g_count_program);
+        g_count_program = 0;
+        g_count_failed = true;
+        return false;
+    }
+
+    GLES.glGenBuffers(1, &g_count_scratch);
+    g_count_scratch_bytes = 0;
+    g_count_inited = true;
+    return true;
+}
+
+// Returns true when the compacted draw was issued.
+static bool mg_indirect_count(GLenum mode, GLenum type, bool is_elements, const void* indirect, GLintptr drawcount,
+                              GLsizei maxdrawcount, GLsizei stride) {
+    if (maxdrawcount <= 0) return true; // nothing to draw, and that is not an error
+
+    const GLsizei cmd_bytes = is_elements ? static_cast<GLsizei>(sizeof(draw_elements_indirect_command_t))
+                                          : static_cast<GLsizei>(sizeof(draw_arrays_indirect_command_t));
+    const GLsizei src_stride = stride ? stride : cmd_bytes;
+    const uintptr_t src_off = reinterpret_cast<uintptr_t>(indirect);
+
+    if (stride < 0 || (src_stride % 4) != 0 || (src_off % 4) != 0 || (drawcount % 4) != 0 || drawcount < 0) {
+        MD_WARN_ONCE("multidraw count: stride/offsets must be non-negative multiples of 4");
+        return false;
+    }
+    if (src_stride < cmd_bytes) {
+        MD_WARN_ONCE("multidraw count: stride %d is smaller than one command", src_stride);
+        return false;
+    }
+
+    multidraw_check_context();
+    if (!mg_count_init()) return false;
+
+    const GLuint param_real = find_real_buffer(find_bound_buffer(GL_PARAMETER_BUFFER));
+    if (param_real == 0) {
+        MD_WARN_ONCE("multidraw count: no GL_PARAMETER_BUFFER bound, nothing drawn");
+        return false;
+    }
+    GLint src_bound = 0;
+    GLES.glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, &src_bound);
+    if (src_bound == 0) {
+        MD_WARN_ONCE("multidraw count: no GL_DRAW_INDIRECT_BUFFER bound, nothing drawn");
+        return false;
+    }
+
+    const size_t dst_bytes = static_cast<size_t>(maxdrawcount) * static_cast<size_t>(cmd_bytes);
+    GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, g_count_scratch);
+    if (g_count_scratch_bytes < static_cast<GLsizei>(dst_bytes)) {
+        GLES.glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<GLsizeiptr>(dst_bytes), nullptr, GL_DYNAMIC_DRAW);
+        GLint got = 0;
+        GLES.glGetBufferParameteriv(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &got);
+        if (got < 0 || static_cast<size_t>(got) < dst_bytes) {
+            MD_WARN_ONCE("multidraw count: scratch allocation failed (wanted %zu bytes, got %d)", dst_bytes, got);
+            g_count_scratch_bytes = 0;
+            GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            return false;
+        }
+        g_count_scratch_bytes = static_cast<GLsizei>(dst_bytes);
+    }
+    GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    // Save the state the dispatch is about to take over.
+    GLint prev_ssbo = 0, prev_program = 0, prev_indirect = 0;
+    GLES.glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING, &prev_ssbo);
+    GLES.glGetIntegerv(GL_CURRENT_PROGRAM, &prev_program);
+    GLES.glGetIntegerv(GL_DRAW_INDIRECT_BUFFER_BINDING, &prev_indirect);
+    GLint prev_base[3] = {};
+    GLint64 prev_start[3] = {}, prev_size[3] = {};
+    for (int i = 0; i < 3; ++i) {
+        GLES.glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING, i, &prev_base[i]);
+        if (GLES.glGetInteger64i_v) {
+            GLES.glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START, i, &prev_start[i]);
+            GLES.glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE, i, &prev_size[i]);
+        }
+    }
+    auto restore_ssbo = [&]() {
+        for (int i = 0; i < 3; ++i) {
+            if (prev_base[i] != 0 && prev_size[i] > 0)
+                GLES.glBindBufferRange(GL_SHADER_STORAGE_BUFFER, i, static_cast<GLuint>(prev_base[i]),
+                                       static_cast<GLintptr>(prev_start[i]), static_cast<GLsizeiptr>(prev_size[i]));
+            else
+                GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, static_cast<GLuint>(prev_base[i]));
+        }
+        GLES.glBindBuffer(GL_SHADER_STORAGE_BUFFER, prev_ssbo);
+    };
+
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, static_cast<GLuint>(src_bound));
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, param_real);
+    GLES.glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, g_count_scratch);
+
+    GLES.glUseProgram(g_count_program);
+    GLES.glUniform1ui(g_count_loc_max, static_cast<GLuint>(maxdrawcount));
+    GLES.glUniform1ui(g_count_loc_srcwords, static_cast<GLuint>(src_stride / 4));
+    GLES.glUniform1ui(g_count_loc_srcoff, static_cast<GLuint>(src_off / 4));
+    GLES.glUniform1ui(g_count_loc_cntoff, static_cast<GLuint>(drawcount / 4));
+    GLES.glUniform1ui(g_count_loc_dstwords, static_cast<GLuint>(cmd_bytes / 4));
+
+    mg_md_drain();
+    GLES.glDispatchCompute(static_cast<GLuint>((maxdrawcount + 63) / 64), 1, 1);
+    const GLenum err = mg_md_check();
+    if (err != GL_NO_ERROR) {
+        MD_WARN_ONCE("multidraw count: compaction dispatch failed with 0x%04x, nothing drawn", err);
+        restore_ssbo();
+        GLES.glUseProgram(static_cast<GLuint>(prev_program));
+        return false;
+    }
+
+    GLES.glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+
+    restore_ssbo();
+    GLES.glUseProgram(static_cast<GLuint>(prev_program));
+
+    prepareForDraw();
+    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_count_scratch);
+
+    const bool have_mdi = g_gles_caps.GL_EXT_multi_draw_indirect &&
+                          (is_elements ? GLES.glMultiDrawElementsIndirectEXT != nullptr
+                                       : GLES.glMultiDrawArraysIndirectEXT != nullptr);
+    if (have_mdi) {
+        if (is_elements)
+            GLES.glMultiDrawElementsIndirectEXT(mode, type, 0, maxdrawcount, 0);
+        else
+            GLES.glMultiDrawArraysIndirectEXT(mode, 0, maxdrawcount, 0);
+    } else {
+        // Commands past the count carry instanceCount 0, so walking all of them
+        // draws exactly the same thing, one call at a time.
+        for (GLsizei i = 0; i < maxdrawcount; ++i) {
+            const void* off = reinterpret_cast<const void*>(static_cast<uintptr_t>(i) * cmd_bytes);
+            if (is_elements) {
+                if (GLES.glDrawElementsIndirect) GLES.glDrawElementsIndirect(mode, type, off);
+            } else {
+                if (GLES.glDrawArraysIndirect) GLES.glDrawArraysIndirect(mode, off);
+            }
+        }
+    }
+
+    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, static_cast<GLuint>(prev_indirect));
+    return true;
+}
+
 void glMultiDrawArraysIndirectCount(GLenum mode, const void* indirect, GLintptr drawcount, GLsizei maxdrawcount,
                                     GLsizei stride) {
     LOG()
-    (void)mode;
-    (void)indirect;
-    (void)drawcount;
-    (void)maxdrawcount;
-    (void)stride;
-    // Reading the draw count requires GL_PARAMETER_BUFFER binding state, which is
-    // not tracked anywhere in MobileGlues. Report instead of vanishing.
-    MD_WARN_ONCE("glMultiDrawArraysIndirectCount is not implemented (GL 4.6 core); nothing was drawn");
+    mg_indirect_count(mode, 0, false, indirect, drawcount, maxdrawcount, stride);
 }
 
 void glMultiDrawElementsIndirectCount(GLenum mode, GLenum type, const void* indirect, GLintptr drawcount,
                                       GLsizei maxdrawcount, GLsizei stride) {
     LOG()
-    (void)mode;
-    (void)type;
-    (void)indirect;
-    (void)drawcount;
-    (void)maxdrawcount;
-    (void)stride;
-    MD_WARN_ONCE("glMultiDrawElementsIndirectCount is not implemented (GL 4.6 core); nothing was drawn");
+    mg_indirect_count(mode, type, true, indirect, drawcount, maxdrawcount, stride);
 }
 
 #ifndef __APPLE__

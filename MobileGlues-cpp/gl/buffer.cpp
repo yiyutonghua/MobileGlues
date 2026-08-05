@@ -40,6 +40,7 @@ enum BindingIndex : int {
     BI_SHADER_STORAGE,
     BI_TRANSFORM_FEEDBACK,
     BI_UNIFORM_BUFFER,
+    BI_PARAMETER_BUFFER,
     BINDING_COUNT
 };
 static std::array<GLuint, BINDING_COUNT> g_bound_buffers_arr = {0};
@@ -156,6 +157,8 @@ static inline int binding_target_to_index(GLenum target) {
         return BI_TRANSFORM_FEEDBACK;
     case GL_UNIFORM_BUFFER:
         return BI_UNIFORM_BUFFER;
+    case GL_PARAMETER_BUFFER:
+        return BI_PARAMETER_BUFFER;
     default:
         return -1;
     }
@@ -341,6 +344,21 @@ void glBindBuffer(GLenum target, GLuint buffer) {
     LOG()
     LOG_D("glBindBuffer, target = %s, buffer = %d", glEnumToString(target), buffer)
     set_bound_buffer_by_target(target, buffer);
+
+    if (target == GL_PARAMETER_BUFFER) {
+        // GLES has no GL_PARAMETER_BUFFER. The binding is tracked here and read
+        // back by gl/multidraw.cpp for glMultiDraw*IndirectCount; forwarding the
+        // target to the driver would only raise GL_INVALID_ENUM. The backing
+        // object still has to exist, because nothing else will create it.
+        if (buffer != 0 && has_buffer(buffer) && !find_real_buffer(buffer)) {
+            GLuint real_buffer = 0;
+            GLES.glGenBuffers(1, &real_buffer);
+            modify_buffer(buffer, real_buffer);
+            CHECK_GL_ERROR
+        }
+        return;
+    }
+
     // save ibo binding to vao
     if (target == GL_ELEMENT_ARRAY_BUFFER) {
         update_vao_ibo_binding(find_bound_array(), buffer);
