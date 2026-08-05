@@ -203,8 +203,15 @@ static GLuint g_compute_program = 0;
 static GLint g_element_size_loc = -1;
 static GLint g_max_compute_groups_x = 0;
 
-// native path
-static bool g_native_failed = false;
+// native path.
+//
+// One tri-state rather than a separate "probed" flag and "failed" flag: those
+// were kept in two places, only one of which multidraw_check_context() reset, so
+// after a context change native was re-enabled but never re-probed -- and an
+// unprobed call reports success unconditionally, which loses the whole batch on
+// a driver whose entry point is a stub.
+enum class native_state_t { Unprobed, Working, Failed };
+static native_state_t g_native_state = native_state_t::Unprobed;
 
 // Invalidate every cached GL object name when the current context changes.
 //
@@ -231,9 +238,10 @@ static void multidraw_check_context() {
     g_scratch_ibo = 0;
     g_compute_inited = false;
     // The failure latches are per-context capability facts, so they are cleared
-    // together with the objects they describe.
+    // together with the objects they describe. Clearing the native latch also has
+    // to re-arm its probe, which is why it is a single tri-state.
     g_compute_failed = false;
-    g_native_failed = false;
+    g_native_state = native_state_t::Unprobed;
     g_prefixsumbuffer = 0;
     g_drawcmd_ssbo = 0;
     g_outputibo = 0;
@@ -754,31 +762,37 @@ void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei* count, GLenum
 // draw rather than every draw.
 // ---------------------------------------------------------------------------
 
+// glMultiDrawElements has no base vertex, but the extension takes a real array
+// with no "all zero" shorthand. The contents never change, so the buffer only has
+// to grow. It is thread_local because nothing in this file takes a lock and two
+// threads can each hold a current context; it holds no GL object name, so unlike
+// the scratch buffers it deliberately survives a context change.
+static const GLint* mg_zero_basevertex(GLsizei primcount) {
+    static thread_local std::vector<GLint> zeros;
+    if (zeros.size() < static_cast<size_t>(primcount)) zeros.resize(static_cast<size_t>(primcount), 0);
+    return zeros.data();
+}
+
 static bool mg_native_multidraw(GLenum mode, const GLsizei* counts, GLenum type, const void* const* indices,
                                 GLsizei primcount, const GLint* basevertex) {
-    if (g_native_failed || !GLES.glMultiDrawElementsBaseVertexEXT) return false;
+    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) return false;
 
-    static bool probed = false;
-    if (!probed) mg_md_drain();
+    const bool probing = (g_native_state == native_state_t::Unprobed);
+    if (probing) mg_md_drain();
 
-    if (basevertex) {
-        GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount, basevertex);
-    } else {
-        // The extension takes a real array; it has no "all zero" shorthand.
-        std::vector<GLint> zeros(static_cast<size_t>(primcount), 0);
-        GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount, zeros.data());
-    }
+    GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount,
+                                          basevertex ? basevertex : mg_zero_basevertex(primcount));
 
-    if (!probed) {
-        probed = true;
+    if (probing) {
         const GLenum err = mg_md_check();
         if (err != GL_NO_ERROR) {
             MD_WARN_ONCE("multidraw native: glMultiDrawElementsBaseVertexEXT failed with 0x%04x, disabling "
                          "native mode",
                          err);
-            g_native_failed = true;
+            g_native_state = native_state_t::Failed;
             return false;
         }
+        g_native_state = native_state_t::Working;
     }
     return true;
 }
@@ -786,12 +800,24 @@ static bool mg_native_multidraw(GLenum mode, const GLsizei* counts, GLenum type,
 void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices,
                                              GLsizei primcount, const GLint* basevertex) {
     LOG()
+
+    // Hand over before doing any work once native is known to be unusable,
+    // otherwise every later call would validate and prepare the batch twice.
+    // MultidrawIndirect is the next rung down in init_settings_post's ladder, and
+    // it still folds the batch into one driver call; going straight to the
+    // unrolled loop threw that away.
+    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) {
+        mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
+        return;
+    }
+
     if (!mg_multidraw_enter(counts, type, primcount, indices)) return;
 
     prepareForDraw();
 
     if (!mg_native_multidraw(mode, counts, type, indices, primcount, basevertex)) {
-        mg_glMultiDrawElementsBaseVertex_basevertex(mode, counts, type, indices, primcount, basevertex);
+        // Only reachable on the single call whose probe failed.
+        mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
         return;
     }
 
@@ -801,6 +827,12 @@ void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenu
 void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
                                    GLsizei primcount) {
     LOG()
+
+    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) {
+        mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
+        return;
+    }
+
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
 
     prepareForDraw();
@@ -814,14 +846,7 @@ void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum typ
         return;
     }
 
-    for (GLsizei i = 0; i < primcount; ++i) {
-        const GLsizei c = count[i];
-        if (c > 0) {
-            GLES.glDrawElements(mode, c, type, indices[i]);
-        }
-    }
-
-    CHECK_GL_ERROR
+    mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
 }
 
 // ---------------------------------------------------------------------------
