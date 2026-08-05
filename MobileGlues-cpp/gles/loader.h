@@ -180,6 +180,20 @@ extern "C"
         int GL_EXT_texture_rg;
         int GL_EXT_texture_query_lod;
         int GL_EXT_draw_elements_base_vertex;
+        // Needed by the virtual enable table (gl/enable.cpp): each of these
+        // supplies a GL 4.6 enable capability that GLES 3.2 core does not have,
+        // using the same enum value as the desktop one. Without them the layer
+        // cannot tell "the driver really supports this" from "the driver will
+        // reject it", and glEnable behaves differently from device to device.
+        int GL_EXT_multisample_compatibility; // GL_MULTISAMPLE, GL_SAMPLE_ALPHA_TO_ONE
+        int GL_EXT_clip_cull_distance;       // GL_CLIP_DISTANCE0..7
+        int GL_EXT_depth_clamp;              // GL_DEPTH_CLAMP
+        int GL_EXT_sRGB_write_control;       // GL_FRAMEBUFFER_SRGB
+        int GL_NV_polygon_mode;              // GL_POLYGON_OFFSET_LINE / _POINT
+        int GL_OES_sample_shading;           // GL_SAMPLE_SHADING before ES 3.2
+        // GL_EXT_multi_draw_arrays deliberately absent: glext.h defines a macro of
+        // that exact name, and gl/multidraw.cpp already probes it lazily because it
+        // needs the entry points as well as the string.
     };
 
     extern struct gles_caps_t g_gles_caps;
