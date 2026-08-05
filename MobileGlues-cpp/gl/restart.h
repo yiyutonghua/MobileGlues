@@ -45,6 +45,13 @@ extern "C"
     // form, and chose a value other than the one the fixed form would use anyway.
     bool mg_restart_needs_rewrite(GLenum type);
 
+    // True when GL_PRIMITIVE_RESTART is on, the fixed-index form is not, and the
+    // chosen value happens to be exactly the one the fixed form uses. No rewrite
+    // is needed then -- but the driver still has to be told to restart, and
+    // GL_PRIMITIVE_RESTART itself is never forwarded because GLES has no such
+    // enum. The caller brackets its ordinary draw with this.
+    bool mg_restart_needs_driver_fixed(GLenum type);
+
     // Draw one indexed primitive batch with the restart emulation applied.
     // Returns false when the batch could not be rewritten, in which case the
     // caller should issue its normal draw. instancecount < 0 means a

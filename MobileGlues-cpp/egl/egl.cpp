@@ -227,12 +227,20 @@ namespace {
                 saw_minor_version = true;
                 continue;
             }
+            // Translated into GL bits here, not stored raw. The two encodings
+            // are opposite: EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR is 0x1 and
+            // FORWARD_COMPATIBLE_BIT is 0x2, while GL_CONTEXT_FLAG_DEBUG_BIT is
+            // 0x2 and FORWARD_COMPATIBLE_BIT is 0x1. Passing the EGL value
+            // through to glGetIntegerv(GL_CONTEXT_FLAGS) would report each one as
+            // the other.
             if (attribute == EGL_CONTEXT_FLAGS_KHR) {
-                *frontend_flags |= value;
+                if (value & EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR) *frontend_flags |= GL_CONTEXT_FLAG_DEBUG_BIT;
+                if (value & EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)
+                    *frontend_flags |= GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT;
             } else if (attribute == EGL_CONTEXT_OPENGL_DEBUG && value == EGL_TRUE) {
-                *frontend_flags |= EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR;
+                *frontend_flags |= GL_CONTEXT_FLAG_DEBUG_BIT;
             } else if (attribute == EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE && value == EGL_TRUE) {
-                *frontend_flags |= EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR;
+                *frontend_flags |= GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT;
             }
 
             if (isDesktopOnlyContextAttribute(attribute)) {
@@ -540,7 +548,17 @@ extern "C"
               dpy, config, share_context, attrib_list);
         LOAD_EGL(eglCreateContext)
         if (frontend_api != EGL_OPENGL_API) {
-            return egl_eglCreateContext(dpy, config, share_context, attrib_list);
+            // An ES context still gets a record. Without one g_current_ctx stays
+            // null for the whole process on any host that never calls
+            // eglBindAPI(EGL_OPENGL_API), and everything keyed on the current
+            // context -- the enable table, gl_state, the multidraw scratch
+            // invalidation -- silently falls back to one shared instance.
+            EGLContext es_context = egl_eglCreateContext(dpy, config, share_context, attrib_list);
+            if (es_context != EGL_NO_CONTEXT) {
+                mg_context_create(dpy, es_context, share_context, EGL_OPENGL_ES_API, g_gles_caps.major,
+                                  g_gles_caps.minor, 0, 0);
+            }
+            return es_context;
         }
 
         std::vector<EGLint> backend_attributes;

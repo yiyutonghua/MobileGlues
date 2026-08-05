@@ -426,6 +426,27 @@ extern "C"
         GLES.glGetInteger64v(pname, data);
     }
 
+    // How many values glGetFloatv writes for a pname. Anything not listed writes
+    // one. See /docsgl/gl4/glGet.xhtml.
+    static int mg_get_components(GLenum pname) {
+        switch (pname) {
+        case GL_DEPTH_RANGE:
+        case GL_ALIASED_LINE_WIDTH_RANGE:
+        case GL_ALIASED_POINT_SIZE_RANGE:
+        case GL_MAX_VIEWPORT_DIMS:
+        case GL_POINT_SIZE_RANGE:
+            return 2;
+        case GL_VIEWPORT:
+        case GL_SCISSOR_BOX:
+        case GL_COLOR_CLEAR_VALUE:
+        case GL_BLEND_COLOR:
+        case GL_COLOR_WRITEMASK:
+            return 4;
+        default:
+            return 1;
+        }
+    }
+
     // GLES has no glGetDoublev at all. It used to be a stub that returned without
     // writing params, so the application read whatever was on its stack.
     GLAPI GLAPIENTRY void glGetDoublev(GLenum pname, GLdouble* data) {
@@ -440,9 +461,13 @@ extern "C"
             *data = static_cast<GLdouble>(ival);
             return;
         }
-        GLfloat f = 0.0f;
-        GLES.glGetFloatv(pname, &f);
-        *data = static_cast<GLdouble>(f);
+        // Sized by the pname, not assumed to be one. GL_DEPTH_RANGE writes two
+        // floats and GL_VIEWPORT four; handing the driver a single GLfloat on the
+        // stack let it write past it.
+        GLfloat tmp[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        GLES.glGetFloatv(pname, tmp);
+        const int n = mg_get_components(pname);
+        for (int i = 0; i < n; ++i) data[i] = static_cast<GLdouble>(tmp[i]);
     }
 
     GLAPI GLAPIENTRY void glPrimitiveRestartIndex(GLuint index) {

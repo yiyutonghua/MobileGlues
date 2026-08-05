@@ -79,17 +79,6 @@ static inline GLsizei mg_index_size(GLenum type) {
     }
 }
 
-// GL_PRIMITIVE_RESTART_FIXED_INDEX sentinel for a given index type.
-static inline GLuint mg_restart_sentinel(GLenum type) {
-    switch (type) {
-    case GL_UNSIGNED_BYTE:
-        return 0xFFu;
-    case GL_UNSIGNED_SHORT:
-        return 0xFFFFu;
-    default:
-        return 0xFFFFFFFFu;
-    }
-}
 
 // Rebase indices of any width into a 32-bit output stream.
 //
@@ -337,6 +326,10 @@ static void multidraw_check_context() {
     g_count_failed = false;
     g_count_loc_max = g_count_loc_srcwords = g_count_loc_srcoff = g_count_loc_cntoff = g_count_loc_dstwords = -1;
     g_scratch_ibo = 0;
+    // gl/restart.cpp caches a scratch index buffer of its own, created with a
+    // real driver name rather than a virtual one, so it has exactly the same
+    // cross-context reuse hazard.
+    mg_restart_invalidate();
     g_compute_inited = false;
     // The failure latches are per-context capability facts, so they are cleared
     // together with the objects they describe. Clearing a probe latch also has
@@ -596,6 +589,12 @@ void mg_glMultiDrawElementsBaseVertex_drawelements(GLenum mode, GLsizei* counts,
     // also toggled behind the application's back by the restart emulation.
     const bool restart_enabled = mg_primitive_restart_enabled();
     const GLuint restart_value = mg_primitive_restart_index_for(type);
+    // The rewritten stream carries 0xFFFFFFFF wherever a restart was, and is
+    // drawn as GL_UNSIGNED_INT, so the driver's fixed-index restart has to be on
+    // for these draws. Without it 0xFFFFFFFF is fetched as vertex 4294967295 and
+    // every enabled attribute array is read out of bounds.
+    const bool force_fixed = restart_enabled && mg_enable_get(GL_PRIMITIVE_RESTART_FIXED_INDEX, 0) != GL_TRUE;
+    if (force_fixed) GLES.glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
 
     GLint prevElementBuffer = 0;
     GLES.glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prevElementBuffer);
@@ -653,6 +652,7 @@ void mg_glMultiDrawElementsBaseVertex_drawelements(GLenum mode, GLsizei* counts,
         GLES.glDrawElements(mode, count, GL_UNSIGNED_INT, nullptr);
     }
 
+    if (force_fixed) GLES.glDisable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
     GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prevElementBuffer);
 
     CHECK_GL_ERROR

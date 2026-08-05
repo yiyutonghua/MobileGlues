@@ -98,6 +98,14 @@ bool mg_restart_needs_rewrite(GLenum type) {
     return st->primitive_restart_index != fixed_sentinel(type);
 }
 
+bool mg_restart_needs_driver_fixed(GLenum type) {
+    if (index_size(type) == 0) return false;
+    mg_enable_state_t* st = mg_enable_state();
+    if (!st->scalar[MGC_PRIMITIVE_RESTART]) return false;
+    if (st->scalar[MGC_PRIMITIVE_RESTART_FIXED_INDEX]) return false; // the driver is already doing it
+    return st->primitive_restart_index == fixed_sentinel(type);
+}
+
 bool mg_draw_elements_restart(GLenum mode, GLsizei count, GLenum type, const void* indices, GLint basevertex,
                               GLsizei instancecount) {
     const GLsizei isize = index_size(type);

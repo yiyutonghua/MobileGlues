@@ -17,6 +17,11 @@ thread_local MGContext* g_current_ctx = nullptr;
 
 namespace {
 
+// Where gl_state points when no tracked context is current. gl_state is written
+// through on the draw hot path, so it must never be left pointing at a released
+// record.
+gl_state_s g_default_gl_state;
+
 std::mutex g_ctx_mutex;
 std::unordered_map<EGLContext, std::shared_ptr<MGContext>> g_contexts;
 unsigned long long g_next_ctx_id = 1;
@@ -26,6 +31,9 @@ unsigned long long g_next_group_id = 1;
 void release_locked(const std::shared_ptr<MGContext>& ctx) {
     if (ctx->current_count > 0 || !ctx->destroy_pending) return;
     LOG_D("MGContext %llu released", ctx->id)
+    // The map is the only owner, so erasing frees the record and the gl_state_s
+    // embedded in it.
+    if (gl_state == &ctx->gl) gl_state = &g_default_gl_state;
     g_contexts.erase(ctx->handle);
 }
 
@@ -92,6 +100,7 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
             release_locked(old->second);
         }
         g_current_ctx = nullptr;
+        gl_state = &g_default_gl_state;
     }
 
     if (handle == EGL_NO_CONTEXT) {
