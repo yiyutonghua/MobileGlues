@@ -226,8 +226,243 @@ void init_settings() {
         global_settings.custom_gl_version.isEmpty() ? Version(DEFAULT_GL_VERSION) : global_settings.custom_gl_version;
 }
 
+// ---------------------------------------------------------------------------
+// Multi-draw backend selection
+//
+// One key per entry point, carrying a backend NAME rather than an index. Names
+// avoid the two problems the single "multidrawMode" integer had: a value that is
+// meaningful for one entry point but not another (BaseVertex on
+// glMultiDrawElements, which has no base vertex), and a value space that cannot
+// grow without renumbering something a user already wrote into config.json.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using B = md_backend_t;
+using E = md_entry_t;
+
+constexpr unsigned md_bit(B b) {
+    return 1u << static_cast<int>(b);
+}
+
+constexpr int MD_ENTRY_COUNT = static_cast<int>(E::MaxValue);
+constexpr int MD_LADDER_MAX = 6;
+
+struct md_backend_name_t {
+    const char* name;
+    B backend;
+};
+
+const md_backend_name_t k_md_backend_names[] = {
+    {"auto", B::Auto},           {"unroll", B::Unroll},   {"basevertex", B::BaseVertex},
+    {"indirect", B::Indirect},   {"multiindirect", B::MultiIndirect}, {"native", B::Native},
+    {"nativeext", B::NativeExt}, {"compute", B::Compute},
+};
+
+struct md_entry_desc_t {
+    const char* key;
+    const char* label;
+    unsigned allowed;             // backends that are a DISTINCT implementation here
+    B ladder[MD_LADDER_MAX];      // Auto preference order, terminated by B::MaxValue
+    const char* why;              // explains a rejection, so the log says why not just "invalid"
+};
+
+const md_entry_desc_t k_md_entries[MD_ENTRY_COUNT] = {
+    {"multidrawModeArrays", "glMultiDrawArrays",
+     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::NativeExt) | md_bit(B::MultiIndirect),
+     {B::NativeExt, B::MultiIndirect, B::Unroll, B::MaxValue},
+     "glMultiDrawArrays draws no indices, so index-side backends do not apply"},
+
+    // BaseVertex/Compute are excluded: with no base vertex to apply or rebase,
+    // they would be the same unrolled loop as Unroll.
+    {"multidrawModeElements", "glMultiDrawElements",
+     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::Indirect) | md_bit(B::MultiIndirect) | md_bit(B::Native) |
+         md_bit(B::NativeExt),
+     {B::MultiIndirect, B::NativeExt, B::Native, B::Indirect, B::Unroll, B::MaxValue},
+     "glMultiDrawElements has no base vertex, so basevertex/compute are the same loop as unroll"},
+
+    {"multidrawModeElementsBaseVertex", "glMultiDrawElementsBaseVertex",
+     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::BaseVertex) | md_bit(B::Indirect) | md_bit(B::MultiIndirect) |
+         md_bit(B::Native) | md_bit(B::Compute),
+     {B::MultiIndirect, B::Native, B::Indirect, B::BaseVertex, B::Unroll, B::MaxValue},
+     "nativeext (EXT_multi_draw_arrays) carries no base vertex"},
+
+    // These two receive a command buffer from the application; the only choice is
+    // whether to hand the whole batch to the driver or walk it one command at a
+    // time. "unroll" would mean the same thing as "indirect" here.
+    {"multidrawModeArraysIndirect", "glMultiDrawArraysIndirect",
+     md_bit(B::Auto) | md_bit(B::Indirect) | md_bit(B::MultiIndirect),
+     {B::MultiIndirect, B::Indirect, B::MaxValue},
+     "the application supplies the commands, so only indirect/multiindirect exist here"},
+
+    {"multidrawModeElementsIndirect", "glMultiDrawElementsIndirect",
+     md_bit(B::Auto) | md_bit(B::Indirect) | md_bit(B::MultiIndirect),
+     {B::MultiIndirect, B::Indirect, B::MaxValue},
+     "the application supplies the commands, so only indirect/multiindirect exist here"},
+};
+
+struct md_caps_t {
+    bool basevertex;
+    bool indirect_arrays;
+    bool indirect_elements;
+    bool multiindirect_arrays;
+    bool multiindirect_elements;
+    bool native;
+    bool nativeext;
+    bool compute;
+};
+
+bool md_is_arrays_side(E e) {
+    return e == E::Arrays || e == E::ArraysIndirect;
+}
+
+bool md_backend_available(E e, B b, const md_caps_t& c) {
+    switch (b) {
+    case B::Unroll:
+        return true;
+    case B::BaseVertex:
+        return c.basevertex;
+    case B::Indirect:
+        return md_is_arrays_side(e) ? c.indirect_arrays : c.indirect_elements;
+    case B::MultiIndirect:
+        return md_is_arrays_side(e) ? c.multiindirect_arrays : c.multiindirect_elements;
+    case B::Native:
+        return c.native;
+    case B::NativeExt:
+        return c.nativeext;
+    case B::Compute:
+        return c.compute;
+    default:
+        return false;
+    }
+}
+
+// Case-insensitive, whitespace-tolerant name lookup.
+bool md_parse_backend(const std::string& raw, B* out) {
+    std::string s;
+    for (char ch : raw) {
+        if (ch == ' ' || ch == '\t' || ch == '_' || ch == '-') continue;
+        s += static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch);
+    }
+    if (s.empty()) return false;
+    for (const auto& n : k_md_backend_names) {
+        if (s == n.name) {
+            *out = n.backend;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string md_allowed_list(unsigned allowed) {
+    std::string out;
+    for (const auto& n : k_md_backend_names) {
+        if (allowed & md_bit(n.backend)) {
+            if (!out.empty()) out += ", ";
+            out += n.name;
+        }
+    }
+    return out;
+}
+
+std::string md_config_string(const char* key) {
+    const char* v = config_get_string(const_cast<char*>(key));
+    // config_get_string hands back a pointer into the live cJSON tree; copy now.
+    return v ? std::string(v) : std::string();
+}
+
+} // namespace
+
+const char* md_backend_name(md_backend_t b) {
+    for (const auto& n : k_md_backend_names) {
+        if (n.backend == b) return n.name;
+    }
+    return "(unknown)";
+}
+
+// Parses "multidrawDisableBackends" into a bitmask. A disabled backend is
+// treated exactly like one the driver does not have, so it flows through the
+// same degradation path.
+static unsigned parse_multidraw_disable_mask() {
+    const std::string raw = md_config_string("multidrawDisableBackends");
+    unsigned mask = 0;
+    std::string token;
+    for (size_t i = 0; i <= raw.size(); ++i) {
+        const char ch = i < raw.size() ? raw[i] : ',';
+        if (ch == ',' || ch == ';') {
+            if (!token.empty()) {
+                B b;
+                if (!md_parse_backend(token, &b) || b == B::Auto) {
+                    LOG_W_FORCE("multidrawDisableBackends: '%s' is not a backend name, ignored", token.c_str())
+                } else {
+                    mask |= md_bit(b);
+                    LOG_W_FORCE("multidraw: backend '%s' disabled by configuration", md_backend_name(b))
+                }
+                token.clear();
+            }
+        } else {
+            token += ch;
+        }
+    }
+    return mask;
+}
+
+// Resolves one entry point: read its key, reject anything that is not a distinct
+// implementation there, then walk down to something the driver actually has.
+static md_backend_t resolve_multidraw_entry(md_entry_t e, const md_caps_t& caps, unsigned disabled) {
+    const md_entry_desc_t& d = k_md_entries[static_cast<int>(e)];
+
+    B want = B::Auto;
+    const std::string raw = md_config_string(d.key);
+    if (!raw.empty()) {
+        if (!md_parse_backend(raw, &want)) {
+            LOG_W_FORCE("%s: '%s' is not a backend name; using auto. Accepted: %s", d.key, raw.c_str(),
+                        md_allowed_list(d.allowed).c_str())
+            want = B::Auto;
+        } else if ((d.allowed & md_bit(want)) == 0) {
+            LOG_W_FORCE("%s: '%s' is not a distinct strategy for %s (%s); using auto. Accepted: %s", d.key,
+                        md_backend_name(want), d.label, d.why, md_allowed_list(d.allowed).c_str())
+            want = B::Auto;
+        }
+    }
+
+    const bool explicit_choice = (want != B::Auto);
+    if (explicit_choice) {
+        if ((disabled & md_bit(want)) != 0) {
+            // Disabling wins over forcing: a disabled backend is indistinguishable
+            // from one the driver does not have.
+            LOG_W_FORCE("%s: '%s' is disabled by multidrawDisableBackends; falling back", d.key,
+                        md_backend_name(want))
+        } else if (md_backend_available(e, want, caps)) {
+            LOG_V("[MobileGlues] %-32s = %s", d.key, md_backend_name(want))
+            return want;
+        } else {
+            LOG_W_FORCE("%s: '%s' is not supported by this driver; falling back", d.key, md_backend_name(want))
+        }
+    }
+
+    for (int i = 0; i < MD_LADDER_MAX && d.ladder[i] != B::MaxValue; ++i) {
+        const B cand = d.ladder[i];
+        if ((disabled & md_bit(cand)) != 0) continue;
+        if (!md_backend_available(e, cand, caps)) continue;
+        LOG_V("[MobileGlues] %-32s = %s%s", d.key, md_backend_name(cand), explicit_choice ? " (fallback)" : " (auto)")
+        return cand;
+    }
+
+    // Unroll is in every ladder and is always available, so this is unreachable
+    // unless someone disables it explicitly.
+    LOG_W_FORCE("%s: every backend is unavailable or disabled; using unroll", d.key)
+    return B::Unroll;
+}
+
 void set_multidraw_setting() { // should be called after init_gles_target()
     multidraw_mode_t multidrawMode = static_cast<multidraw_mode_t>(config_get_int("multidrawMode"));
+    if (static_cast<int>(multidrawMode) != -1) {
+        LOG_W_FORCE("multidrawMode is deprecated and will stop being read. Each entry point now has its own key: "
+                    "multidrawModeArrays, multidrawModeElements, multidrawModeElementsBaseVertex, "
+                    "multidrawModeArraysIndirect, multidrawModeElementsIndirect (values are names, e.g. "
+                    "\"multiindirect\"). See also multidrawDisableBackends.")
+    }
     if (static_cast<int>(multidrawMode) == -1) {
         multidrawMode = multidraw_mode_t::Auto;
     }
@@ -298,6 +533,24 @@ void init_settings_post() {
         // blocks, which is the GLES 3.1 guaranteed minimum.
         compute = ssbo_blocks >= 4;
         if (!compute) LOG_W_FORCE("Compute multidraw needs 4 SSBO blocks, driver reports %d", ssbo_blocks)
+    }
+
+    // ---- per-entry-point backend selection ----
+    md_caps_t md_caps = {};
+    md_caps.basevertex = basevertex;
+    md_caps.indirect_elements = indirect;
+    md_caps.indirect_arrays = GLES.glDrawArraysIndirect != nullptr;
+    md_caps.multiindirect_elements = multidraw;
+    md_caps.multiindirect_arrays =
+        g_gles_caps.GL_EXT_multi_draw_indirect && GLES.glMultiDrawArraysIndirectEXT != nullptr;
+    md_caps.native = native;
+    md_caps.nativeext = mg_multi_draw_arrays_ext_available();
+    md_caps.compute = compute;
+
+    global_settings.multidraw_disabled_mask = parse_multidraw_disable_mask();
+    for (int i = 0; i < MD_ENTRY_COUNT; ++i) {
+        global_settings.multidraw_backend[i] =
+            resolve_multidraw_entry(static_cast<md_entry_t>(i), md_caps, global_settings.multidraw_disabled_mask);
     }
 
     switch (global_settings.multidraw_mode) {

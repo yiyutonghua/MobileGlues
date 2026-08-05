@@ -158,6 +158,65 @@ static GLsizei mg_verts_per_primitive(GLenum mode) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// GL_EXT_multi_draw_arrays
+//
+// glMultiDrawArraysEXT / glMultiDrawElementsEXT are the exact GLES equivalents of
+// the GL 1.4 core commands: one driver call, no command buffer to build, no
+// synthesised base vertex array. The GLES loader does not carry them and
+// gles/loader.* is not ours to change, so they are resolved here, the same way
+// this file already calls eglGetCurrentContext() directly.
+//
+// A resolved symbol is not proof of support on Android, so the callers probe the
+// first call and latch the backend off if the driver rejects it.
+//
+// Resolution goes through the GLES library handle, NOT eglGetProcAddress: this
+// layer's own eglGetProcAddress forwards to glXGetProcAddress, which does
+// dlsym(RTLD_DEFAULT, ...) and would hand back MobileGlues' own exported
+// glMultiDrawArraysEXT -- an alias of glMultiDrawArrays -- so calling it from
+// inside glMultiDrawArrays would recurse until the stack ran out. `gles` is the
+// same handle gles/loader.cpp resolves every other entry point from.
+// ---------------------------------------------------------------------------
+
+extern "C" void* gles; // defined in gles/loader.cpp
+
+typedef void(GLAPIENTRY* mg_pfn_multi_draw_arrays_ext)(GLenum, const GLint*, const GLsizei*, GLsizei);
+typedef void(GLAPIENTRY* mg_pfn_multi_draw_elements_ext)(GLenum, const GLsizei*, GLenum, const void* const*, GLsizei);
+
+static mg_pfn_multi_draw_arrays_ext g_mda_ext = nullptr;
+static mg_pfn_multi_draw_elements_ext g_mde_ext = nullptr;
+
+static bool mg_gles_has_extension(const char* name) {
+    if (!GLES.glGetStringi || !GLES.glGetIntegerv) return false;
+    GLint count = 0;
+    GLES.glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+    for (GLint i = 0; i < count; ++i) {
+        const GLubyte* s = GLES.glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i));
+        if (s && strcmp(reinterpret_cast<const char*>(s), name) == 0) return true;
+    }
+    return false;
+}
+
+bool mg_multi_draw_arrays_ext_available() {
+    static bool resolved = false;
+    if (!resolved) {
+        resolved = true;
+        // Require the extension string as well as the symbols: a bare dlsym can
+        // pick up a platform wrapper stub that reports nothing.
+        const bool ext = mg_gles_has_extension("GL_EXT_multi_draw_arrays");
+        const bool angle = mg_gles_has_extension("GL_ANGLE_multi_draw");
+        if (gles && (ext || angle)) {
+            const char* arrays_name = ext ? "glMultiDrawArraysEXT" : "glMultiDrawArraysANGLE";
+            const char* elements_name = ext ? "glMultiDrawElementsEXT" : "glMultiDrawElementsANGLE";
+            g_mda_ext = reinterpret_cast<mg_pfn_multi_draw_arrays_ext>(dlsym(gles, arrays_name));
+            g_mde_ext = reinterpret_cast<mg_pfn_multi_draw_elements_ext>(dlsym(gles, elements_name));
+        }
+        LOG_D("multidraw: multi_draw_arrays ext=%d angle=%d arrays=%p elements=%p", (int)ext, (int)angle,
+              (void*)g_mda_ext, (void*)g_mde_ext)
+    }
+    return g_mda_ext != nullptr || g_mde_ext != nullptr;
+}
+
 static bool is_strip_like_mode(GLenum mode) {
     switch (mode) {
     case GL_LINE_STRIP:

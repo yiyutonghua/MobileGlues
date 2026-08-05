@@ -22,9 +22,14 @@ typedef unsigned long size_t;
 
 #define DEFAULT_GL_VERSION 40
 
-// The integer value of every entry is persisted in the user configuration
-// ("multidrawMode"), so new modes must be appended immediately before MaxValue.
-// Renumbering an existing entry would silently repoint every existing config.
+// DEPRECATED. The single "multidrawMode" key controlled every multi-draw entry
+// point at once, which forced meaningless combinations: glMultiDrawElements has
+// no base vertex, so PreferBaseVertex/Compute/DrawElements were three names for
+// one unrolled loop there, while glMultiDrawArrays and the two *Indirect entry
+// points ignored the setting entirely.
+//
+// Replaced by one key per entry point (md_entry_t / md_backend_t below). Kept
+// only so the transition can be staged; nothing reads the old key any more.
 enum class multidraw_mode_t : int {
     Auto = 0,
     PreferIndirect,
@@ -33,6 +38,34 @@ enum class multidraw_mode_t : int {
     DrawElements,
     Compute,
     NativeMultiDraw,
+    MaxValue
+};
+
+// The distinct multi-draw *implementations*. Which of them are actually distinct
+// differs per entry point; md_entry_desc_t::allowed encodes that.
+//
+// These integers are never persisted: config.json carries the NAMES, so adding a
+// backend or an entry point can never repoint a value a user already wrote.
+enum class md_backend_t : int {
+    Auto = 0,      // "auto"          pick the best available for this entry point
+    Unroll,        // "unroll"        N x glDraw{Arrays,Elements}
+    BaseVertex,    // "basevertex"    N x glDrawElementsBaseVertex
+    Indirect,      // "indirect"      N x glDraw{Arrays,Elements}Indirect
+    MultiIndirect, // "multiindirect" 1 x glMultiDraw{Arrays,Elements}IndirectEXT
+    Native,        // "native"        1 x glMultiDrawElementsBaseVertexEXT
+    NativeExt,     // "nativeext"     1 x glMultiDraw{Arrays,Elements}EXT
+    Compute,       // "compute"       compute-shader index fusion
+    MaxValue
+};
+
+// The entry points that have more than one implementation to choose between.
+// glMultiDraw*IndirectCount are absent on purpose: they have exactly one.
+enum class md_entry_t : int {
+    Arrays = 0,         // glMultiDrawArrays
+    Elements,           // glMultiDrawElements
+    ElementsBaseVertex, // glMultiDrawElementsBaseVertex
+    ArraysIndirect,     // glMultiDrawArraysIndirect
+    ElementsIndirect,   // glMultiDrawElementsIndirect
     MaxValue
 };
 
@@ -169,7 +202,9 @@ struct global_settings_t {
     bool ext_direct_state_access;
     bool buffer_coherent_as_flush;
     size_t max_glsl_cache_size;
-    multidraw_mode_t multidraw_mode;
+    multidraw_mode_t multidraw_mode; // deprecated, see multidraw_mode_t
+    md_backend_t multidraw_backend[static_cast<int>(md_entry_t::MaxValue)];
+    unsigned multidraw_disabled_mask; // bit (1u << md_backend_t) = user disabled it
     AngleDepthClearFixMode angle_depth_clear_fix_mode;
     Version custom_gl_version;
     FSR1_Quality_Preset fsr1_setting;
@@ -182,5 +217,17 @@ void init_settings();
 void init_settings_post();
 std::string dump_settings_string(std::string prefix = "");
 void set_multidraw_setting();
+
+// Resolved backend for one entry point. Always a concrete backend after
+// init_settings_post(); never md_backend_t::Auto.
+inline md_backend_t multidraw_backend_of(md_entry_t e) {
+    return global_settings.multidraw_backend[static_cast<int>(e)];
+}
+const char* md_backend_name(md_backend_t b);
+
+// Defined in gl/multidraw.cpp: resolves GL_EXT_multi_draw_arrays lazily, because
+// the GLES loader does not carry those entry points and gles/* is not ours to
+// change. Safe to call once a context is current.
+bool mg_multi_draw_arrays_ext_available();
 
 #endif // MOBILEGLUES_PLUGIN_SETTINGS_H
