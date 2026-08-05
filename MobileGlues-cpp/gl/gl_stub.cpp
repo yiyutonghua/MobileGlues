@@ -36,7 +36,7 @@ STUB_FUNCTION_HEAD(void, glGetClipPlane, GLenum plane, GLdouble *equation ) STUB
 
 STUB_FUNCTION_HEAD(void, glEnableClientState, GLenum cap ) STUB_FUNCTION_END_NO_RETURN(void, glEnableClientState,cap)
 STUB_FUNCTION_HEAD(void, glDisableClientState, GLenum cap ) STUB_FUNCTION_END_NO_RETURN(void, glDisableClientState,cap)
-STUB_FUNCTION_HEAD(void, glGetDoublev, GLenum pname, GLdouble *params ) STUB_FUNCTION_END_NO_RETURN(void, glGetDoublev,pname,params)
+// STUB_FUNCTION_HEAD(void, glGetDoublev, GLenum pname, GLdouble *params ) STUB_FUNCTION_END_NO_RETURN(void, glGetDoublev,pname,params)   // implemented in gl/enable.cpp (was a no-op that never wrote params)
 
 STUB_FUNCTION_HEAD(void, glPushAttrib, GLbitfield mask ) STUB_FUNCTION_END_NO_RETURN(void, glPushAttrib,mask)
 STUB_FUNCTION_HEAD(void, glPopAttrib) STUB_FUNCTION_END_NO_RETURN(void, glPopAttrib)
@@ -500,7 +500,7 @@ STUB_FUNCTION_HEAD(void, glVertexAttrib4sv, GLuint index, const GLshort* v); STU
 STUB_FUNCTION_HEAD(void, glVertexAttrib4ubv, GLuint index, const GLubyte* v); STUB_FUNCTION_END_NO_RETURN(void, glVertexAttrib4ubv,index,v)
 STUB_FUNCTION_HEAD(void, glVertexAttrib4uiv, GLuint index, const GLuint* v); STUB_FUNCTION_END_NO_RETURN(void, glVertexAttrib4uiv,index,v)
 STUB_FUNCTION_HEAD(void, glVertexAttrib4usv, GLuint index, const GLushort* v); STUB_FUNCTION_END_NO_RETURN(void, glVertexAttrib4usv,index,v)
-STUB_FUNCTION_HEAD(void, glPrimitiveRestartIndex, GLuint index); STUB_FUNCTION_END_NO_RETURN(void, glPrimitiveRestartIndex,index)
+// STUB_FUNCTION_HEAD(void, glPrimitiveRestartIndex, GLuint index); STUB_FUNCTION_END_NO_RETURN(void, glPrimitiveRestartIndex,index)   // implemented in gl/enable.cpp
 STUB_FUNCTION_HEAD(void, glGetActiveUniformName, GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei* length, GLchar* uniformName); STUB_FUNCTION_END_NO_RETURN(void, glGetActiveUniformName,program,uniformIndex,bufSize,length,uniformName)
 //STUB_FUNCTION_HEAD(void, glMultiDrawElementsBaseVertex, GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount, const GLint* basevertex); STUB_FUNCTION_END_NO_RETURN(void, glMultiDrawElementsBaseVertex,mode,count,type,indices,drawcount,basevertex)
 STUB_FUNCTION_HEAD(void, glProvokingVertex, GLenum mode); STUB_FUNCTION_END_NO_RETURN(void, glProvokingVertex,mode)

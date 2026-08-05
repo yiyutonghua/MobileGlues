@@ -6,6 +6,7 @@
 // End of Source File Header
 
 #include "getter.h"
+#include "enable.h"
 #include "buffer.h"
 #include <string>
 #include <format>
@@ -84,10 +85,23 @@ void glGetIntegerv(GLenum pname, GLint* params) {
     case GL_VERTEX_ARRAY_BINDING:
         (*params) = (int)find_bound_array();
         break;
-    default:
+    default: {
+        // The enable table owns every enable capability and the handful of limits
+        // that describe it, so glGetIntegerv can never disagree with glIsEnabled.
+        GLboolean enabled = GL_FALSE;
+        GLint ival = 0;
+        if (mg_enable_query(pname, &enabled)) {
+            (*params) = enabled ? 1 : 0;
+            break;
+        }
+        if (mg_enable_query_int(pname, &ival)) {
+            (*params) = ival;
+            break;
+        }
         GLES.glGetIntegerv(pname, params);
         LOG_D("  -> %d", *params)
         CHECK_GL_ERROR
+    }
     }
 }
 
