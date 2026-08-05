@@ -9,6 +9,7 @@
 #include "../gles/loader.h"
 #include "log.h"
 #include "mg.h"
+#include "../egl/context.h"
 #include <cstring>
 
 #define DEBUG 0
@@ -128,7 +129,10 @@ bool is_clip_distance(GLenum cap, GLuint* slot) {
     return true;
 }
 
-mg_enable_state_t g_state;
+// Fallback used before any context has been made current, and for a context this
+// layer never saw created (the bootstrap probe context, or one made before the
+// library was loaded).
+mg_enable_state_t g_default_state;
 
 } // namespace
 
@@ -162,8 +166,10 @@ void mg_enable_reset(mg_enable_state_t* state) {
 }
 
 mg_enable_state_t* mg_enable_state(void) {
-    if (!g_state.initialised) mg_enable_reset(&g_state);
-    return &g_state;
+    MGContext* ctx = g_current_ctx;
+    if (ctx != nullptr) return &ctx->enable;
+    if (!g_default_state.initialised) mg_enable_reset(&g_default_state);
+    return &g_default_state;
 }
 
 GLboolean mg_enable_get(GLenum cap, GLuint index) {
@@ -200,9 +206,27 @@ bool mg_enable_query_int(GLenum pname, GLint* out) {
     case GL_MAX_CLIP_DISTANCES:
         // Reported as the number the table can actually track. GL 4.6 requires at
         // least 8; the driver's own answer is meaningless here because GLES has no
-        // such limit and the query used to leave the output untouched.
+        // such limit, and the query used to leave the output untouched -- an
+        // application reading it got whatever was on its stack.
         *out = MG_MAX_CLIP_DISTANCES;
         return true;
+    case GL_MAX_VIEWPORTS:
+        // Viewport arrays are not implemented: glViewportIndexedf and
+        // glScissorIndexed are stubs, so only viewport 0 exists. Reporting 1 is
+        // below what GL 4.6 requires, but it is the truth, and it makes an
+        // application's own bounds check agree with this table rejecting
+        // glEnablei(GL_SCISSOR_TEST, index > 0).
+        *out = 1;
+        return true;
+    case GL_MAX_DRAW_BUFFERS: {
+        // Clamped to what blend_indexed can hold, so glEnablei(GL_BLEND, i) is
+        // never rejected for an index the application was told it could use.
+        GLint n = 0;
+        if (GLES.glGetIntegerv) GLES.glGetIntegerv(GL_MAX_DRAW_BUFFERS, &n);
+        if (n <= 0) n = 1;
+        *out = n > MG_MAX_DRAW_BUFFERS ? MG_MAX_DRAW_BUFFERS : n;
+        return true;
+    }
     default:
         return false;
     }

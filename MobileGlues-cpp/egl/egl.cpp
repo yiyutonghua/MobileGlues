@@ -6,6 +6,7 @@
 // End of Source File Header
 
 #include "egl.h"
+#include "context.h"
 #include "../config/settings.h"
 #include "../gl/FSR1/FSR1.h"
 #include "../gl/log.h"
@@ -318,7 +319,10 @@ extern "C"
         LOG_D("eglTerminate, dpy: %p", dpy);
         LOAD_EGL(eglTerminate)
         const EGLBoolean result = egl_eglTerminate(dpy);
-        if (result == EGL_TRUE) forgetDisplayContexts(dpy);
+        if (result == EGL_TRUE) {
+            forgetDisplayContexts(dpy);
+            mg_context_forget_display(dpy);
+        }
         return result;
     }
 
@@ -487,6 +491,8 @@ extern "C"
         EGLContext context = egl_eglCreateContext(dpy, config, share_context, backend_attributes.data());
         if (context != EGL_NO_CONTEXT) {
             rememberDesktopContext(context, dpy, frontend_major, frontend_minor);
+            mg_context_create(dpy, context, share_context, EGL_OPENGL_API, frontend_major, frontend_minor,
+                              kVirtualDesktopProfileMask, 0);
         }
         return context;
     }
@@ -495,14 +501,24 @@ extern "C"
         LOG_D("eglDestroyContext, dpy: %p, ctx: %p", dpy, ctx);
         LOAD_EGL(eglDestroyContext)
         const EGLBoolean result = egl_eglDestroyContext(dpy, ctx);
-        if (result == EGL_TRUE) forgetDesktopContext(ctx);
+        if (result == EGL_TRUE) {
+            forgetDesktopContext(ctx);
+            // Marked rather than dropped: GL permits destroying a context that is
+            // still current, and the record has to keep answering until the last
+            // thread makes something else current.
+            mg_context_destroy(ctx);
+        }
         return result;
     }
 
     EGL_API EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
         LOG_D("eglMakeCurrent, dpy: %p, draw: %p, read: %p, ctx: %p", dpy, draw, read, ctx);
         LOAD_EGL(eglMakeCurrent)
-        return egl_eglMakeCurrent(dpy, draw, read, ctx);
+        const EGLBoolean result = egl_eglMakeCurrent(dpy, draw, read, ctx);
+        // Only on success: a failed make-current leaves the previous context
+        // current, so re-pointing the record would describe the wrong one.
+        if (result == EGL_TRUE) mg_context_make_current(dpy, draw, read, ctx);
+        return result;
     }
 
     EGL_API EGLContext eglGetCurrentContext(void) {
