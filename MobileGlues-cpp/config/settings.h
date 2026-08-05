@@ -25,17 +25,26 @@ typedef unsigned long size_t;
 // The distinct multi-draw *implementations*. Which of them are actually distinct
 // differs per entry point; md_entry_desc_t::allowed encodes that.
 //
+// GLES core has no multi-draw command at all -- not even 3.2, which added only
+// the singular glDrawElementsBaseVertex. Every batched backend below therefore
+// comes from an extension, and each is named after the one that provides it.
+// The first three issue one driver call per sub-draw; the next three issue one
+// call for the whole batch.
+//
 // These integers are never persisted: config.json carries the NAMES, so adding a
 // backend or an entry point can never repoint a value a user already wrote.
 enum class md_backend_t : int {
-    Auto = 0,      // "auto"          pick the best available for this entry point
-    Unroll,        // "unroll"        N x glDraw{Arrays,Elements}
-    BaseVertex,    // "basevertex"    N x glDrawElementsBaseVertex
-    Indirect,      // "indirect"      N x glDraw{Arrays,Elements}Indirect
-    MultiIndirect, // "multiindirect" 1 x glMultiDraw{Arrays,Elements}IndirectEXT
-    Native,        // "native"        1 x glMultiDrawElementsBaseVertexEXT
-    NativeExt,     // "nativeext"     1 x glMultiDraw{Arrays,Elements}EXT
-    Compute,       // "compute"       compute-shader index fusion
+    Auto = 0,        // "auto"            pick the best available for this entry point
+    Unroll,          // "unroll"          N x glDraw{Arrays,Elements}
+    BaseVertex,      // "basevertex"      N x glDrawElementsBaseVertex
+    Indirect,        // "indirect"        N x glDraw{Arrays,Elements}Indirect
+    MultiArrays,     // "multiarrays"     1 x glMultiDraw{Arrays,Elements}EXT
+                     //                     (GL_EXT_multi_draw_arrays / GL_ANGLE_multi_draw)
+    MultiBaseVertex, // "multibasevertex" 1 x glMultiDrawElementsBaseVertexEXT
+                     //                     (GL_EXT/OES_draw_elements_base_vertex)
+    MultiIndirect,   // "multiindirect"   1 x glMultiDraw{Arrays,Elements}IndirectEXT
+                     //                     (GL_EXT_multi_draw_indirect)
+    Compute,         // "compute"         compute-shader index fusion
     MaxValue
 };
 

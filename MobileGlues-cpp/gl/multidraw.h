@@ -69,7 +69,7 @@ extern "C"
     GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(GLenum mode, GLsizei* counts, GLenum type,
                                                                    const void* const* indices, GLsizei primcount,
                                                                    const GLint* basevertex);
-    GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenum type,
+    GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_multibasevertex(GLenum mode, GLsizei* counts, GLenum type,
                                                                   const void* const* indices, GLsizei primcount,
                                                                   const GLint* basevertex);
 
@@ -85,9 +85,9 @@ extern "C"
                                                               const void* const* indices, GLsizei primcount);
     GLAPI GLAPIENTRY void mg_glMultiDrawElements_compute(GLenum mode, const GLsizei* count, GLenum type,
                                                          const void* const* indices, GLsizei primcount);
-    GLAPI GLAPIENTRY void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum type,
+    GLAPI GLAPIENTRY void mg_glMultiDrawElements_multibasevertex(GLenum mode, const GLsizei* count, GLenum type,
                                                         const void* const* indices, GLsizei primcount);
-    GLAPI GLAPIENTRY void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum type,
+    GLAPI GLAPIENTRY void mg_glMultiDrawElements_multiarrays(GLenum mode, const GLsizei* count, GLenum type,
                                                            const void* const* indices, GLsizei primcount);
 
     // GL 4.6 core multi-draw entry points. These used to be silent no-op stubs
@@ -96,7 +96,7 @@ extern "C"
     GLAPI GLAPIENTRY void glMultiDrawArrays(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount);
     GLAPI GLAPIENTRY void mg_glMultiDrawArrays_unroll(GLenum mode, const GLint* first, const GLsizei* count,
                                                             GLsizei drawcount);
-    GLAPI GLAPIENTRY void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsizei* count,
+    GLAPI GLAPIENTRY void mg_glMultiDrawArrays_multiarrays(GLenum mode, const GLint* first, const GLsizei* count,
                                                          GLsizei drawcount);
     GLAPI GLAPIENTRY void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const GLsizei* count,
                                                              GLsizei drawcount);

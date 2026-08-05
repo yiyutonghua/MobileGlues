@@ -250,7 +250,7 @@ static bool is_strip_like_mode(GLenum mode) {
 
 static EGLContext g_owner_ctx = EGL_NO_CONTEXT;
 
-enum class native_state_t { Unprobed, Working, Failed };
+enum class md_probe_state_t { Unprobed, Working, Failed };
 
 // indirect / multiindirect paths
 static bool g_indirect_cmds_inited = false;
@@ -263,8 +263,8 @@ static GLuint g_indirectbuffer = 0;
 // "grown" it, and then map past the end of the store.
 static GLuint g_arrays_indirectbuffer = 0;
 static GLsizei g_arrays_cmdbufsize = 0;
-static native_state_t g_arrays_mdi_state = native_state_t::Unprobed;
-static native_state_t g_arrays_nativeext_state = native_state_t::Unprobed;
+static md_probe_state_t g_arrays_mdi_state = md_probe_state_t::Unprobed;
+static md_probe_state_t g_arrays_mda_state = md_probe_state_t::Unprobed;
 
 // drawelements path
 static GLuint g_scratch_ibo = 0;
@@ -287,15 +287,15 @@ static bool g_count_failed = false;
 static GLint g_count_loc_max = -1, g_count_loc_srcwords = -1, g_count_loc_srcoff = -1, g_count_loc_cntoff = -1,
              g_count_loc_dstwords = -1;
 
-// native paths.
+// probe latches for the two extension-provided batched backends.
 //
 // One tri-state rather than a separate "probed" flag and "failed" flag: those
 // were kept in two places, only one of which multidraw_check_context() reset, so
-// after a context change native was re-enabled but never re-probed -- and an
+// after a context change the backend was re-enabled but never re-probed -- and an
 // unprobed call reports success unconditionally, which loses the whole batch on
 // a driver whose entry point is a stub.
-static native_state_t g_native_state = native_state_t::Unprobed;
-static native_state_t g_nativeext_state = native_state_t::Unprobed;
+static md_probe_state_t g_mdbv_state = md_probe_state_t::Unprobed;
+static md_probe_state_t g_mda_state = md_probe_state_t::Unprobed;
 
 // Invalidate every cached GL object name when the current context changes.
 //
@@ -321,8 +321,8 @@ static void multidraw_check_context() {
     g_indirectbuffer = 0;
     g_arrays_indirectbuffer = 0;
     g_arrays_cmdbufsize = 0;
-    g_arrays_mdi_state = native_state_t::Unprobed;
-    g_arrays_nativeext_state = native_state_t::Unprobed;
+    g_arrays_mdi_state = md_probe_state_t::Unprobed;
+    g_arrays_mda_state = md_probe_state_t::Unprobed;
     g_count_program = 0;
     g_count_scratch = 0;
     g_count_inited = false;
@@ -331,11 +331,11 @@ static void multidraw_check_context() {
     g_scratch_ibo = 0;
     g_compute_inited = false;
     // The failure latches are per-context capability facts, so they are cleared
-    // together with the objects they describe. Clearing the native latch also has
+    // together with the objects they describe. Clearing a probe latch also has
     // to re-arm its probe, which is why it is a single tri-state.
     g_compute_failed = false;
-    g_native_state = native_state_t::Unprobed;
-    g_nativeext_state = native_state_t::Unprobed;
+    g_mdbv_state = md_probe_state_t::Unprobed;
+    g_mda_state = md_probe_state_t::Unprobed;
     g_prefixsumbuffer = 0;
     g_drawcmd_ssbo = 0;
     g_outputibo = 0;
@@ -418,11 +418,11 @@ void glMultiDrawElements(GLenum mode, const GLsizei* count, GLenum type, const v
         case md_backend_t::MultiIndirect:
             func_ptr = mg_glMultiDrawElements_multiindirect;
             break;
-        case md_backend_t::Native:
-            func_ptr = mg_glMultiDrawElements_native;
+        case md_backend_t::MultiBaseVertex:
+            func_ptr = mg_glMultiDrawElements_multibasevertex;
             break;
-        case md_backend_t::NativeExt:
-            func_ptr = mg_glMultiDrawElements_nativeext;
+        case md_backend_t::MultiArrays:
+            func_ptr = mg_glMultiDrawElements_multiarrays;
             break;
         default:
             // Unroll, and anything the mask should already have rejected.
@@ -457,8 +457,8 @@ void glMultiDrawElementsBaseVertex(GLenum mode, GLsizei* counts, GLenum type, co
         case md_backend_t::Compute:
             func_ptr = mg_glMultiDrawElementsBaseVertex_compute;
             break;
-        case md_backend_t::Native:
-            func_ptr = mg_glMultiDrawElementsBaseVertex_native;
+        case md_backend_t::MultiBaseVertex:
+            func_ptr = mg_glMultiDrawElementsBaseVertex_multibasevertex;
             break;
         default:
             func_ptr = mg_glMultiDrawElementsBaseVertex_drawelements;
@@ -740,7 +740,7 @@ void mg_glMultiDrawElementsBaseVertex_multiindirect(GLenum mode, GLsizei* counts
 
     // Same pair of conditions resolution used (config/settings.cpp): the
     // extension string as well as the entry point. This function is also reached
-    // as a fallback from the native backends, so it cannot assume resolution
+    // as a fallback from the batched backends, so it cannot assume resolution
     // already vetted it. The disable mask has to be honoured here too -- the
     // whole point of the key is to keep a backend out of the driver's hands.
     if (!GLES.glMultiDrawElementsIndirectEXT || !g_gles_caps.GL_EXT_multi_draw_indirect ||
@@ -841,7 +841,7 @@ void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei* count, GLenum
 }
 
 // ---------------------------------------------------------------------------
-// Mode: NativeMultiDraw (hand the whole batch to the GLES driver)
+// Backend: MultiBaseVertex (GL_EXT/OES_draw_elements_base_vertex)
 //
 // GL_EXT_draw_elements_base_vertex provides glMultiDrawElementsBaseVertexEXT
 // with exactly the GL 3.2 core signature. It was already being loaded but had no
@@ -866,11 +866,11 @@ static const GLint* mg_zero_basevertex(GLsizei primcount) {
     return zeros.data();
 }
 
-static bool mg_native_multidraw(GLenum mode, const GLsizei* counts, GLenum type, const void* const* indices,
+static bool mg_multi_draw_basevertex(GLenum mode, const GLsizei* counts, GLenum type, const void* const* indices,
                                 GLsizei primcount, const GLint* basevertex) {
-    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) return false;
+    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) return false;
 
-    const bool probing = (g_native_state == native_state_t::Unprobed);
+    const bool probing = (g_mdbv_state == md_probe_state_t::Unprobed);
     if (probing) mg_md_drain();
 
     GLES.glMultiDrawElementsBaseVertexEXT(mode, counts, type, indices, primcount,
@@ -879,30 +879,30 @@ static bool mg_native_multidraw(GLenum mode, const GLsizei* counts, GLenum type,
     if (probing) {
         const GLenum err = mg_md_check();
         if (err != GL_NO_ERROR) {
-            MD_WARN_ONCE("multidraw native: glMultiDrawElementsBaseVertexEXT failed with 0x%04x, disabling "
-                         "native mode",
+            MD_WARN_ONCE("multidraw multibasevertex: glMultiDrawElementsBaseVertexEXT failed with 0x%04x, "
+                         "disabling it",
                          err);
-            g_native_state = native_state_t::Failed;
+            g_mdbv_state = md_probe_state_t::Failed;
             return false;
         }
-        g_native_state = native_state_t::Working;
+        g_mdbv_state = md_probe_state_t::Working;
     }
     return true;
 }
 
-void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices,
+void mg_glMultiDrawElementsBaseVertex_multibasevertex(GLenum mode, GLsizei* counts, GLenum type, const void* const* indices,
                                              GLsizei primcount, const GLint* basevertex) {
     LOG()
     // The latch read just below is per-context, so re-arm it first.
     multidraw_check_context();
 
-    // Hand over before doing any work once native is known to be unusable,
+    // Hand over before doing any work once this backend is known to be unusable,
     // otherwise every later call would validate and prepare the batch twice.
     // MultidrawIndirect is the next rung down in init_settings_post's ladder, and
     // it still folds the batch into one driver call; going straight to the
     // unrolled loop threw that away.
-    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
-        md_backend_disabled(md_backend_t::Native)) {
+    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
+        md_backend_disabled(md_backend_t::MultiBaseVertex)) {
         mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
         return;
     }
@@ -911,7 +911,7 @@ void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenu
 
     prepareForDraw();
 
-    if (!mg_native_multidraw(mode, counts, type, indices, primcount, basevertex)) {
+    if (!mg_multi_draw_basevertex(mode, counts, type, indices, primcount, basevertex)) {
         // Only reachable on the single call whose probe failed.
         mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
         return;
@@ -921,21 +921,21 @@ void mg_glMultiDrawElementsBaseVertex_native(GLenum mode, GLsizei* counts, GLenu
 }
 
 // ---------------------------------------------------------------------------
-// Backend: NativeExt (GL_EXT_multi_draw_arrays / GL_ANGLE_multi_draw)
+// Backend: MultiArrays (GL_EXT_multi_draw_arrays / GL_ANGLE_multi_draw)
 //
 // glMultiDrawElementsEXT has exactly the signature and semantics of the GL 1.4
 // core command, so this is one driver call with no command buffer to build and
-// no synthesised base vertex array. Same probe-and-latch as the Native backend,
+// no synthesised base vertex array. Same probe-and-latch as MultiBaseVertex,
 // for the same reason: a resolved symbol is not proof the driver implements it.
 // ---------------------------------------------------------------------------
 
-void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
+void mg_glMultiDrawElements_multiarrays(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
                                       GLsizei primcount) {
     LOG()
     multidraw_check_context();
 
-    if (g_nativeext_state == native_state_t::Failed || !g_mde_ext ||
-        md_backend_disabled(md_backend_t::NativeExt)) {
+    if (g_mda_state == md_probe_state_t::Failed || !g_mde_ext ||
+        md_backend_disabled(md_backend_t::MultiArrays)) {
         mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
         return;
     }
@@ -944,7 +944,7 @@ void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum 
 
     prepareForDraw();
 
-    const bool probing = (g_nativeext_state == native_state_t::Unprobed);
+    const bool probing = (g_mda_state == md_probe_state_t::Unprobed);
     if (probing) mg_md_drain();
 
     g_mde_ext(mode, count, type, indices, primcount);
@@ -952,25 +952,25 @@ void mg_glMultiDrawElements_nativeext(GLenum mode, const GLsizei* count, GLenum 
     if (probing) {
         const GLenum err = mg_md_check();
         if (err != GL_NO_ERROR) {
-            MD_WARN_ONCE("multidraw nativeext: glMultiDrawElementsEXT failed with 0x%04x, disabling nativeext", err);
-            g_nativeext_state = native_state_t::Failed;
+            MD_WARN_ONCE("multidraw multiarrays: glMultiDrawElementsEXT failed with 0x%04x, disabling it", err);
+            g_mda_state = md_probe_state_t::Failed;
             mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
             return;
         }
-        g_nativeext_state = native_state_t::Working;
+        g_mda_state = md_probe_state_t::Working;
     }
 
     CHECK_GL_ERROR
 }
 
-void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
+void mg_glMultiDrawElements_multibasevertex(GLenum mode, const GLsizei* count, GLenum type, const void* const* indices,
                                    GLsizei primcount) {
     LOG()
     // The latch read just below is per-context, so re-arm it first.
     multidraw_check_context();
 
-    if (g_native_state == native_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
-        md_backend_disabled(md_backend_t::Native)) {
+    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
+        md_backend_disabled(md_backend_t::MultiBaseVertex)) {
         mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
         return;
     }
@@ -983,7 +983,7 @@ void mg_glMultiDrawElements_native(GLenum mode, const GLsizei* count, GLenum typ
     // vertex array, so this entry point gets the same single driver call. Running
     // the unrolled loop here instead would have made Auto slower than the
     // MultiDrawIndirect path it replaced.
-    if (mg_native_multidraw(mode, count, type, indices, primcount, nullptr)) {
+    if (mg_multi_draw_basevertex(mode, count, type, indices, primcount, nullptr)) {
         CHECK_GL_ERROR
         return;
     }
@@ -1481,13 +1481,13 @@ void mg_glMultiDrawArrays_unroll(GLenum mode, const GLint* first, const GLsizei*
     CHECK_GL_ERROR
 }
 
-void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
+void mg_glMultiDrawArrays_multiarrays(GLenum mode, const GLint* first, const GLsizei* count, GLsizei drawcount) {
     LOG()
     // The latch below is per-context, so it has to be re-armed before it is read.
     multidraw_check_context();
 
-    if (g_arrays_nativeext_state == native_state_t::Failed || !g_mda_ext ||
-        md_backend_disabled(md_backend_t::NativeExt)) {
+    if (g_arrays_mda_state == md_probe_state_t::Failed || !g_mda_ext ||
+        md_backend_disabled(md_backend_t::MultiArrays)) {
         mg_glMultiDrawArrays_multiindirect(mode, first, count, drawcount);
         return;
     }
@@ -1495,7 +1495,7 @@ void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsiz
 
     prepareForDraw();
 
-    const bool probing = (g_arrays_nativeext_state == native_state_t::Unprobed);
+    const bool probing = (g_arrays_mda_state == md_probe_state_t::Unprobed);
     if (probing) mg_md_drain();
 
     g_mda_ext(mode, first, count, drawcount);
@@ -1503,12 +1503,12 @@ void mg_glMultiDrawArrays_nativeext(GLenum mode, const GLint* first, const GLsiz
     if (probing) {
         const GLenum err = mg_md_check();
         if (err != GL_NO_ERROR) {
-            MD_WARN_ONCE("multidraw arrays: glMultiDrawArraysEXT failed with 0x%04x, disabling nativeext", err);
-            g_arrays_nativeext_state = native_state_t::Failed;
+            MD_WARN_ONCE("multidraw multiarrays: glMultiDrawArraysEXT failed with 0x%04x, disabling it", err);
+            g_arrays_mda_state = md_probe_state_t::Failed;
             mg_glMultiDrawArrays_multiindirect(mode, first, count, drawcount);
             return;
         }
-        g_arrays_nativeext_state = native_state_t::Working;
+        g_arrays_mda_state = md_probe_state_t::Working;
     }
     CHECK_GL_ERROR
 }
@@ -1577,7 +1577,7 @@ void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const G
     LOG()
     multidraw_check_context();
 
-    if (g_arrays_mdi_state == native_state_t::Failed || !GLES.glMultiDrawArraysIndirectEXT ||
+    if (g_arrays_mdi_state == md_probe_state_t::Failed || !GLES.glMultiDrawArraysIndirectEXT ||
         md_backend_disabled(md_backend_t::MultiIndirect)) {
         mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
         return;
@@ -1616,7 +1616,7 @@ void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const G
         return;
     }
 
-    const bool probing = (g_arrays_mdi_state == native_state_t::Unprobed);
+    const bool probing = (g_arrays_mdi_state == md_probe_state_t::Unprobed);
     if (probing) mg_md_drain();
 
     GLES.glMultiDrawArraysIndirectEXT(mode, 0, drawcount, 0);
@@ -1625,12 +1625,12 @@ void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const G
         const GLenum err = mg_md_check();
         if (err != GL_NO_ERROR) {
             MD_WARN_ONCE("multidraw arrays: glMultiDrawArraysIndirectEXT failed with 0x%04x, disabling", err);
-            g_arrays_mdi_state = native_state_t::Failed;
+            g_arrays_mdi_state = md_probe_state_t::Failed;
             GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev_indirect);
             mg_glMultiDrawArrays_unroll(mode, first, count, drawcount);
             return;
         }
-        g_arrays_mdi_state = native_state_t::Working;
+        g_arrays_mdi_state = md_probe_state_t::Working;
     }
 
     GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev_indirect);
@@ -1644,8 +1644,8 @@ void glMultiDrawArrays(GLenum mode, const GLint* first, const GLsizei* count, GL
 
     if (func_ptr == nullptr) {
         switch (multidraw_backend_of(md_entry_t::Arrays)) {
-        case md_backend_t::NativeExt:
-            func_ptr = mg_glMultiDrawArrays_nativeext;
+        case md_backend_t::MultiArrays:
+            func_ptr = mg_glMultiDrawArrays_multiarrays;
             break;
         case md_backend_t::MultiIndirect:
             func_ptr = mg_glMultiDrawArrays_multiindirect;

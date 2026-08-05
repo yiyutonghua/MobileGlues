@@ -254,8 +254,8 @@ struct md_backend_name_t {
 
 const md_backend_name_t k_md_backend_names[] = {
     {"auto", B::Auto},           {"unroll", B::Unroll},   {"basevertex", B::BaseVertex},
-    {"indirect", B::Indirect},   {"multiindirect", B::MultiIndirect}, {"native", B::Native},
-    {"nativeext", B::NativeExt}, {"compute", B::Compute},
+    {"indirect", B::Indirect},   {"multiindirect", B::MultiIndirect}, {"multibasevertex", B::MultiBaseVertex},
+    {"multiarrays", B::MultiArrays}, {"compute", B::Compute},
 };
 
 struct md_entry_desc_t {
@@ -268,23 +268,23 @@ struct md_entry_desc_t {
 
 const md_entry_desc_t k_md_entries[MD_ENTRY_COUNT] = {
     {"multidrawModeArrays", "glMultiDrawArrays",
-     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::NativeExt) | md_bit(B::MultiIndirect),
-     {B::NativeExt, B::MultiIndirect, B::Unroll, B::MaxValue},
+     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::MultiArrays) | md_bit(B::MultiIndirect),
+     {B::MultiArrays, B::MultiIndirect, B::Unroll, B::MaxValue},
      "glMultiDrawArrays draws no indices, so index-side backends do not apply"},
 
     // BaseVertex/Compute are excluded: with no base vertex to apply or rebase,
     // they would be the same unrolled loop as Unroll.
     {"multidrawModeElements", "glMultiDrawElements",
-     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::Indirect) | md_bit(B::MultiIndirect) | md_bit(B::Native) |
-         md_bit(B::NativeExt),
-     {B::MultiIndirect, B::NativeExt, B::Native, B::Indirect, B::Unroll, B::MaxValue},
+     md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::Indirect) | md_bit(B::MultiIndirect) | md_bit(B::MultiBaseVertex) |
+         md_bit(B::MultiArrays),
+     {B::MultiIndirect, B::MultiArrays, B::MultiBaseVertex, B::Indirect, B::Unroll, B::MaxValue},
      "glMultiDrawElements has no base vertex, so basevertex/compute are the same loop as unroll"},
 
     {"multidrawModeElementsBaseVertex", "glMultiDrawElementsBaseVertex",
      md_bit(B::Auto) | md_bit(B::Unroll) | md_bit(B::BaseVertex) | md_bit(B::Indirect) | md_bit(B::MultiIndirect) |
-         md_bit(B::Native) | md_bit(B::Compute),
-     {B::MultiIndirect, B::Native, B::Indirect, B::BaseVertex, B::Unroll, B::MaxValue},
-     "nativeext (EXT_multi_draw_arrays) carries no base vertex"},
+         md_bit(B::MultiBaseVertex) | md_bit(B::Compute),
+     {B::MultiIndirect, B::MultiBaseVertex, B::Indirect, B::BaseVertex, B::Unroll, B::MaxValue},
+     "multiarrays (EXT_multi_draw_arrays) carries no base vertex"},
 
     // These two receive a command buffer from the application; the only choice is
     // whether to hand the whole batch to the driver or walk it one command at a
@@ -306,8 +306,8 @@ struct md_caps_t {
     bool indirect_elements;
     bool multiindirect_arrays;
     bool multiindirect_elements;
-    bool native;
-    bool nativeext;
+    bool multibasevertex;
+    bool multiarrays;
     bool compute;
 };
 
@@ -325,10 +325,10 @@ bool md_backend_available(E e, B b, const md_caps_t& c) {
         return md_is_arrays_side(e) ? c.indirect_arrays : c.indirect_elements;
     case B::MultiIndirect:
         return md_is_arrays_side(e) ? c.multiindirect_arrays : c.multiindirect_elements;
-    case B::Native:
-        return c.native;
-    case B::NativeExt:
-        return c.nativeext;
+    case B::MultiBaseVertex:
+        return c.multibasevertex;
+    case B::MultiArrays:
+        return c.multiarrays;
     case B::Compute:
         return c.compute;
     default:
@@ -389,10 +389,10 @@ const char* md_backend_suffix(md_backend_t b) {
         return "_indirect";
     case B::MultiIndirect:
         return "_multiindirect";
-    case B::Native:
-        return "_native";
-    case B::NativeExt:
-        return "_nativeext";
+    case B::MultiBaseVertex:
+        return "_multibasevertex";
+    case B::MultiArrays:
+        return "_multiarrays";
     case B::Compute:
         return "_compute";
     default:
@@ -519,7 +519,7 @@ void init_settings_post() {
     // resolved symbol can still be a wrapper stub -- so this is a candidate, not a
     // guarantee. gl/multidraw.cpp probes the first call and latches the mode off
     // if the driver rejects it.
-    const bool native = has_bv_ext && GLES.glMultiDrawElementsBaseVertexEXT != nullptr;
+    const bool multibasevertex = has_bv_ext && GLES.glMultiDrawElementsBaseVertexEXT != nullptr;
 
     // Compute mode used to be accepted without checking anything at all.
     bool compute = false;
@@ -540,8 +540,8 @@ void init_settings_post() {
     md_caps.multiindirect_elements = multidraw;
     md_caps.multiindirect_arrays =
         g_gles_caps.GL_EXT_multi_draw_indirect && GLES.glMultiDrawArraysIndirectEXT != nullptr;
-    md_caps.native = native;
-    md_caps.nativeext = mg_multi_draw_arrays_ext_available();
+    md_caps.multibasevertex = multibasevertex;
+    md_caps.multiarrays = mg_multi_draw_arrays_ext_available();
     md_caps.compute = compute;
 
     global_settings.multidraw_disabled_mask = parse_multidraw_disable_mask();
