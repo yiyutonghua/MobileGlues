@@ -128,11 +128,15 @@ void destroy_temp_egl_ctx() {
     LOAD_EGL(eglDestroySurface);
     LOAD_EGL(eglDestroyContext);
     LOAD_EGL(eglMakeCurrent);
-    LOAD_EGL(eglTerminate);
 
     egl_eglMakeCurrent(eglDisplay, 0, 0, EGL_NO_CONTEXT);
     egl_eglDestroySurface(eglDisplay, eglSurface);
     egl_eglDestroyContext(eglDisplay, eglContext);
 
-    egl_eglTerminate(eglDisplay);
+    // Deliberately no eglTerminate. EGL does not reference-count initialisation
+    // per caller: terminating EGL_DEFAULT_DISPLAY marks every resource on it for
+    // destruction, including contexts and surfaces the host process created
+    // before this library was loaded. The probe only has to give back what it
+    // took, which the three calls above do. The display stays initialised for the
+    // life of the process, which is what happens anyway.
 }

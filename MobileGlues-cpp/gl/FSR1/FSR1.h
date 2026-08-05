@@ -57,7 +57,7 @@ namespace FSR1_Context {
 extern bool fsrInitialized;
 void ApplyFSR();
 void InitFSRResources();
-void CheckResolutionChange();
+void CheckResolutionChange(EGLDisplay display, EGLSurface surface);
 void OnResize(int width, int height);
 
 extern "C"

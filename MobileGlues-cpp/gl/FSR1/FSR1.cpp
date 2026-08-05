@@ -344,12 +344,14 @@ void ApplyFSR() {
     GLES.glViewport(0, 0, FSR1_Context::g_renderWidth, FSR1_Context::g_renderHeight);
 }
 
-void CheckResolutionChange() {
+void CheckResolutionChange(EGLDisplay display, EGLSurface surface) {
     GLsizei width = 0, height = 0;
     LOAD_EGL(eglQuerySurface);
-    static EGLDisplay display;
-    static EGLSurface surface;
-    if (!display || !surface) {
+    // Taken from the swap this is hooked into rather than latched into statics on
+    // first use. The old code kept the first display and surface it ever saw, so
+    // after a rotation or a surface rebuild it queried a destroyed surface every
+    // frame and the resolution never changed again.
+    if (display == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) {
         display = eglGetCurrentDisplay();
         surface = eglGetCurrentSurface(EGL_DRAW);
     }

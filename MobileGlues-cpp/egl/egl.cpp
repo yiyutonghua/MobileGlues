@@ -72,10 +72,15 @@ namespace {
         return frontend_mask;
     }
 
+    // Adds the desktop bit; it must not remove the ES ones.
+    //
+    // Stripping them broke the standard "choose configs, then verify each with
+    // eglGetConfigAttrib" loop for any application that asked for ES: the config
+    // it had just been given came back claiming it could not render ES at all.
+    // The config really can do both -- desktop GL on it is this layer's
+    // virtualisation of the very ES support being reported.
     EGLint frontendRenderableMask(EGLint backend_mask) {
-        constexpr EGLint kBackendGlesBits = EGL_OPENGL_ES_BIT | EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT;
         if ((backend_mask & kBackendDesktopGlRenderableBit) != 0) {
-            backend_mask &= ~kBackendGlesBits;
             backend_mask |= EGL_OPENGL_BIT;
         }
         return backend_mask;
@@ -311,13 +316,37 @@ namespace {
         return false;
     }
 
-    const char* frontendExtensionString(const char* backend_extensions) {
-        frontend_extensions = backend_extensions;
-        if (!hasExtension(frontend_extensions, "EGL_KHR_create_context")) {
-            if (!frontend_extensions.empty()) frontend_extensions += ' ';
-            frontend_extensions += "EGL_KHR_create_context";
-        }
-        return frontend_extensions.c_str();
+    // Built once per display and kept, so the pointer stays valid.
+    //
+    // It used to be written into one thread_local string and returned as c_str():
+    // the next query for any display overwrote it in place, which can reallocate,
+    // leaving the caller holding freed memory. Applications routinely keep the
+    // pointer eglQueryString returned -- that is the documented contract, the
+    // string belongs to EGL and lives as long as the display.
+    std::mutex ext_strings_mutex;
+    std::unordered_map<EGLDisplay, std::string> ext_strings;
+
+    const char* frontendExtensionString(EGLDisplay dpy, const char* backend_extensions) {
+        std::lock_guard<std::mutex> lock(ext_strings_mutex);
+        auto it = ext_strings.find(dpy);
+        if (it != ext_strings.end()) return it->second.c_str();
+
+        std::string built = backend_extensions ? backend_extensions : "";
+        auto add = [&built](const char* name) {
+            if (hasExtension(built, name)) return;
+            if (!built.empty()) built += ' ';
+            built += name;
+        };
+        // Advertised because this layer implements them, whatever the backend says.
+        add("EGL_KHR_create_context");
+        // True now that eglGetProcAddress resolves every EGL and GL entry point
+        // itself. It is the flag GLFW and LWJGL test to decide they do not have to
+        // dlopen a client library of their own.
+        add("EGL_KHR_get_all_proc_addresses");
+        add("EGL_KHR_client_get_all_proc_addresses");
+
+        auto res = ext_strings.emplace(dpy, std::move(built));
+        return res.first->second.c_str();
     }
 
 } // namespace
@@ -367,8 +396,11 @@ extern "C"
         LOAD_EGL(eglQueryString)
         const char* result = egl_eglQueryString(dpy, name);
         if (!result) return nullptr;
-        if (name == EGL_CLIENT_APIS) return "OpenGL";
-        if (name == EGL_EXTENSIONS) return frontendExtensionString(result);
+        // Both APIs are reachable: a desktop context is virtualised on top of the
+        // ES backend, and an application that binds EGL_OPENGL_ES_API still gets
+        // the backend unchanged.
+        if (name == EGL_CLIENT_APIS) return "OpenGL OpenGL_ES";
+        if (name == EGL_EXTENSIONS) return frontendExtensionString(dpy, result);
         return result;
     }
 
@@ -615,7 +647,7 @@ extern "C"
         if (global_settings.fsr1_setting != FSR1_Quality_Preset::Disabled) {
             ApplyFSR();
             result = egl_eglSwapBuffers(dpy, surface);
-            CheckResolutionChange();
+            CheckResolutionChange(dpy, surface);
         } else {
             result = egl_eglSwapBuffers(dpy, surface);
         }
@@ -675,7 +707,138 @@ extern "C"
         return egl_eglCreatePlatformPixmapSurfaceEXT(dpy, config, native_pixmap, attrib_list);
     }
 
+    // EGL 1.5 sync and image objects. Straight passthroughs -- there is no
+    // desktop-versus-ES semantic difference to translate -- but they have to be
+    // exported so eglGetProcAddress hands back this layer's symbol. Resolving
+    // them to the driver behind the layer's back is a crash under ANGLE, where
+    // the wrapper and the backend are different implementations.
+    EGL_API EGLSync eglCreateSync(EGLDisplay dpy, EGLenum type, const EGLAttrib* attrib_list) {
+        LOG_D("eglCreateSync, dpy: %p, type: %d", dpy, type);
+        LOAD_EGL_OR(eglCreateSync, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_SYNC)
+        return egl_eglCreateSync(dpy, type, attrib_list);
+    }
+
+    EGL_API EGLBoolean eglDestroySync(EGLDisplay dpy, EGLSync sync) {
+        LOG_D("eglDestroySync, dpy: %p, sync: %p", dpy, sync);
+        LOAD_EGL_OR(eglDestroySync, setFrontendError(EGL_BAD_PARAMETER), EGL_FALSE)
+        return egl_eglDestroySync(dpy, sync);
+    }
+
+    EGL_API EGLint eglClientWaitSync(EGLDisplay dpy, EGLSync sync, EGLint flags, EGLTime timeout) {
+        LOG_D("eglClientWaitSync, dpy: %p, sync: %p", dpy, sync);
+        LOAD_EGL_OR(eglClientWaitSync, setFrontendError(EGL_BAD_PARAMETER), EGL_FALSE)
+        return egl_eglClientWaitSync(dpy, sync, flags, timeout);
+    }
+
+    EGL_API EGLBoolean eglGetSyncAttrib(EGLDisplay dpy, EGLSync sync, EGLint attribute, EGLAttrib* value) {
+        LOG_D("eglGetSyncAttrib, dpy: %p, sync: %p, attribute: %d", dpy, sync, attribute);
+        LOAD_EGL_OR(eglGetSyncAttrib, setFrontendError(EGL_BAD_PARAMETER), EGL_FALSE)
+        return egl_eglGetSyncAttrib(dpy, sync, attribute, value);
+    }
+
+    EGL_API EGLBoolean eglWaitSync(EGLDisplay dpy, EGLSync sync, EGLint flags) {
+        LOG_D("eglWaitSync, dpy: %p, sync: %p", dpy, sync);
+        LOAD_EGL_OR(eglWaitSync, setFrontendError(EGL_BAD_PARAMETER), EGL_FALSE)
+        return egl_eglWaitSync(dpy, sync, flags);
+    }
+
+    EGL_API EGLImage eglCreateImage(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer,
+                                    const EGLAttrib* attrib_list) {
+        LOG_D("eglCreateImage, dpy: %p, ctx: %p, target: %d", dpy, ctx, target);
+        LOAD_EGL_OR(eglCreateImage, setFrontendError(EGL_BAD_PARAMETER), EGL_NO_IMAGE)
+        return egl_eglCreateImage(dpy, ctx, target, buffer, attrib_list);
+    }
+
+    EGL_API EGLBoolean eglDestroyImage(EGLDisplay dpy, EGLImage image) {
+        LOG_D("eglDestroyImage, dpy: %p, image: %p", dpy, image);
+        LOAD_EGL_OR(eglDestroyImage, setFrontendError(EGL_BAD_PARAMETER), EGL_FALSE)
+        return egl_eglDestroyImage(dpy, image);
+    }
+
+    // An EGL name must resolve to THIS layer's wrapper.
+    //
+    // Forwarding everything to glXGetProcAddress meant dlsym(RTLD_DEFAULT, ...),
+    // which can be answered by the system libEGL before it ever reaches here --
+    // and then the application drives the driver directly, bypassing the context
+    // records, the virtual attributes and the surface bookkeeping. Under ANGLE
+    // that is worse than a bypass: the handles it would be given belong to a
+    // different EGL implementation than the one holding them.
+    //
+    // GL names still go through glXGetProcAddress, which applies the multi-draw
+    // backend mangling.
     EGL_API EGLAPI __eglMustCastToProperFunctionPointerType EGLAPIENTRY eglGetProcAddress(const char* procname) {
+        if (procname == nullptr) return nullptr;
+
+        struct egl_entry_t {
+            const char* name;
+            void* fn;
+        };
+        static const egl_entry_t k_egl_entries[] = {
+            {"eglBindAPI", (void*)eglBindAPI},
+            {"eglBindTexImage", (void*)eglBindTexImage},
+            {"eglChooseConfig", (void*)eglChooseConfig},
+            {"eglClientWaitSync", (void*)eglClientWaitSync},
+            {"eglCopyBuffers", (void*)eglCopyBuffers},
+            {"eglCreateContext", (void*)eglCreateContext},
+            {"eglCreateImage", (void*)eglCreateImage},
+            {"eglCreatePbufferFromClientBuffer", (void*)eglCreatePbufferFromClientBuffer},
+            {"eglCreatePbufferSurface", (void*)eglCreatePbufferSurface},
+            {"eglCreatePixmapSurface", (void*)eglCreatePixmapSurface},
+            {"eglCreatePlatformPixmapSurface", (void*)eglCreatePlatformPixmapSurface},
+            {"eglCreatePlatformPixmapSurfaceEXT", (void*)eglCreatePlatformPixmapSurfaceEXT},
+            {"eglCreatePlatformWindowSurface", (void*)eglCreatePlatformWindowSurface},
+            {"eglCreatePlatformWindowSurfaceEXT", (void*)eglCreatePlatformWindowSurfaceEXT},
+            {"eglCreateSync", (void*)eglCreateSync},
+            {"eglCreateWindowSurface", (void*)eglCreateWindowSurface},
+            {"eglDestroyContext", (void*)eglDestroyContext},
+            {"eglDestroyImage", (void*)eglDestroyImage},
+            {"eglDestroySurface", (void*)eglDestroySurface},
+            {"eglDestroySync", (void*)eglDestroySync},
+            {"eglGetConfigAttrib", (void*)eglGetConfigAttrib},
+            {"eglGetConfigs", (void*)eglGetConfigs},
+            {"eglGetCurrentContext", (void*)eglGetCurrentContext},
+            {"eglGetCurrentDisplay", (void*)eglGetCurrentDisplay},
+            {"eglGetCurrentSurface", (void*)eglGetCurrentSurface},
+            {"eglGetDisplay", (void*)eglGetDisplay},
+            {"eglGetError", (void*)eglGetError},
+            {"eglGetPlatformDisplay", (void*)eglGetPlatformDisplay},
+            {"eglGetPlatformDisplayEXT", (void*)eglGetPlatformDisplayEXT},
+            {"eglGetProcAddress", (void*)eglGetProcAddress},
+            {"eglGetSyncAttrib", (void*)eglGetSyncAttrib},
+            {"eglInitialize", (void*)eglInitialize},
+            {"eglMakeCurrent", (void*)eglMakeCurrent},
+            {"eglQueryAPI", (void*)eglQueryAPI},
+            {"eglQueryContext", (void*)eglQueryContext},
+            {"eglQueryString", (void*)eglQueryString},
+            {"eglQuerySurface", (void*)eglQuerySurface},
+            {"eglReleaseTexImage", (void*)eglReleaseTexImage},
+            {"eglReleaseThread", (void*)eglReleaseThread},
+            {"eglSurfaceAttrib", (void*)eglSurfaceAttrib},
+            {"eglSwapBuffers", (void*)eglSwapBuffers},
+            {"eglSwapInterval", (void*)eglSwapInterval},
+            {"eglTerminate", (void*)eglTerminate},
+            {"eglWaitClient", (void*)eglWaitClient},
+            {"eglWaitGL", (void*)eglWaitGL},
+            {"eglWaitNative", (void*)eglWaitNative},
+            {"eglWaitSync", (void*)eglWaitSync},
+        };
+
+        if (procname[0] == 'e' && procname[1] == 'g' && procname[2] == 'l') {
+            for (const auto& e : k_egl_entries) {
+                if (strcmp(procname, e.name) == 0) {
+                    return reinterpret_cast<__eglMustCastToProperFunctionPointerType>(e.fn);
+                }
+            }
+            // An EGL name this layer does not wrap. Ask the backend directly
+            // rather than RTLD_DEFAULT, so an extension entry point comes from the
+            // same implementation that owns the handles it will be given.
+            LOAD_EGL(eglGetProcAddress);
+            if (egl_eglGetProcAddress != nullptr) {
+                return reinterpret_cast<__eglMustCastToProperFunctionPointerType>(egl_eglGetProcAddress(procname));
+            }
+            return nullptr;
+        }
+
         return reinterpret_cast<__eglMustCastToProperFunctionPointerType>(glXGetProcAddress(procname));
     }
 }
