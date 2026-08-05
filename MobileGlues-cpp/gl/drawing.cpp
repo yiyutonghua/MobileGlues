@@ -6,6 +6,7 @@
 // End of Source File Header
 
 #include "drawing.h"
+#include "restart.h"
 #include "buffer.h"
 #include "framebuffer.h"
 #include "mg.h"
@@ -102,6 +103,7 @@ void glDrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const void
     LOG_D("glDrawElementsInstanced, mode: %d, count: %d, type: %d, indices: %p, primcount: %d", mode, count, type,
           indices, primcount)
     prepareForDraw();
+    if (mg_restart_needs_rewrite(type) && mg_draw_elements_restart(mode, count, type, indices, 0, primcount)) return;
     GLES.glDrawElementsInstanced(mode, count, type, indices, primcount);
     CHECK_GL_ERROR
 }
@@ -110,6 +112,7 @@ void glDrawElements(GLenum mode, GLsizei count, GLenum type, const void* indices
     LOG()
     LOG_D("glDrawElements, mode: %d, count: %d, type: %d, indices: %p", mode, count, type, indices)
     prepareForDraw();
+    if (mg_restart_needs_rewrite(type) && mg_draw_elements_restart(mode, count, type, indices, 0, -1)) return;
     GLES.glDrawElements(mode, count, type, indices);
     CHECK_GL_ERROR
 }
@@ -150,6 +153,9 @@ void glDrawElementsBaseVertex(GLenum mode, GLsizei count, GLenum type, const voi
     LOG_D("glDrawElementsBaseVertex, mode: %d, count: %d, type: %d, indices: %p, basevertex: %d", mode, count, type,
           indices, basevertex);
     prepareForDraw();
+    // The rewrite applies the base vertex itself, so it covers both the emulated
+    // and the driver-supported branch below.
+    if (mg_restart_needs_rewrite(type) && mg_draw_elements_restart(mode, count, type, indices, basevertex, -1)) return;
     if (hardware->es_version < 320 && !g_gles_caps.GL_EXT_draw_elements_base_vertex &&
         !g_gles_caps.GL_OES_draw_elements_base_vertex) {
         // TODO: use indirect drawing for GLES 3.1

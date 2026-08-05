@@ -8,6 +8,8 @@
 #include "multidraw.h"
 #include "../config/settings.h"
 #include "buffer.h"
+#include "enable.h"
+#include "restart.h"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -106,8 +108,7 @@ static inline GLuint mg_restart_sentinel(GLenum type) {
 // Translating it unconditionally would turn a legitimate vertex reference into an
 // out-of-range one.
 static void mg_rebase_indices_to_u32(GLuint* dst, const void* src, GLsizei count, GLenum type, GLint basevertex,
-                                     bool restart_enabled) {
-    const GLuint sentinel = mg_restart_sentinel(type);
+                                     bool restart_enabled, GLuint sentinel) {
     const GLuint bv = static_cast<GLuint>(basevertex);
 
 #define MG_REBASE_LOOP(SRCTYPE)                                                                                        \
@@ -583,7 +584,11 @@ void mg_glMultiDrawElementsBaseVertex_drawelements(GLenum mode, GLsizei* counts,
 
     // Queried once per multi-draw rather than per sub-draw: it decides whether the
     // sentinel value is special or an ordinary vertex index.
-    const bool restart_enabled = GLES.glIsEnabled && GLES.glIsEnabled(GL_PRIMITIVE_RESTART_FIXED_INDEX) == GL_TRUE;
+    // Read from the virtual table, not the driver: GL_PRIMITIVE_RESTART with a
+    // custom index is invisible to GLES, and the driver's fixed-index flag is
+    // also toggled behind the application's back by the restart emulation.
+    const bool restart_enabled = mg_primitive_restart_enabled();
+    const GLuint restart_value = mg_primitive_restart_index_for(type);
 
     GLint prevElementBuffer = 0;
     GLES.glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prevElementBuffer);
@@ -628,10 +633,10 @@ void mg_glMultiDrawElementsBaseVertex_drawelements(GLenum mode, GLsizei* counts,
                 }
                 continue;
             }
-            mg_rebase_indices_to_u32(rebased.data(), srcData, count, type, bv, restart_enabled);
+            mg_rebase_indices_to_u32(rebased.data(), srcData, count, type, bv, restart_enabled, restart_value);
             GLES.glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
         } else {
-            mg_rebase_indices_to_u32(rebased.data(), indices[i], count, type, bv, restart_enabled);
+            mg_rebase_indices_to_u32(rebased.data(), indices[i], count, type, bv, restart_enabled, restart_value);
         }
 
         GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_scratch_ibo);
@@ -1151,7 +1156,7 @@ GLAPI GLAPIENTRY void mg_glMultiDrawElementsBaseVertex_compute(GLenum mode, GLsi
     // Every sub-draw ends up in a single fused stream, so an 8- or 16-bit restart
     // sentinel would be widened into an ordinary 32-bit value and offset by
     // baseVertex, silently disabling restart. The CPU path handles sentinels.
-    if (GLES.glIsEnabled && GLES.glIsEnabled(GL_PRIMITIVE_RESTART_FIXED_INDEX)) {
+    if (mg_primitive_restart_enabled()) {
         LOG_D("multidraw compute: primitive restart enabled, fallback")
         mg_glMultiDrawElementsBaseVertex_drawelements(mode, counts, type, indices, primcount, basevertex);
         return;
@@ -1597,7 +1602,7 @@ void mg_glMultiDrawArrays_multiindirect(GLenum mode, const GLint* first, const G
 
     // Indirect draws are not allowed while transform feedback is active and not
     // paused; the unrolled loop is.
-    if (GLES.glIsEnabled) {
+    {
         GLint tf_active = 0, tf_paused = 0;
         GLES.glGetIntegerv(GL_TRANSFORM_FEEDBACK_ACTIVE, &tf_active);
         GLES.glGetIntegerv(GL_TRANSFORM_FEEDBACK_PAUSED, &tf_paused);
