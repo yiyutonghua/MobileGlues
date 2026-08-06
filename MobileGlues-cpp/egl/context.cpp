@@ -80,6 +80,27 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
     return ctx.get();
 }
 
+namespace {
+std::unordered_map<EGLDisplay, int> g_display_refs;
+}
+
+void mg_display_initialised(EGLDisplay dpy) {
+    if (dpy == EGL_NO_DISPLAY) return;
+    std::lock_guard<std::mutex> lock(g_ctx_mutex);
+    ++g_display_refs[dpy];
+    LOG_D("EGLDisplay %p initialise count -> %d", dpy, g_display_refs[dpy])
+}
+
+bool mg_display_release(EGLDisplay dpy) {
+    if (dpy == EGL_NO_DISPLAY) return false;
+    std::lock_guard<std::mutex> lock(g_ctx_mutex);
+    const auto it = g_display_refs.find(dpy);
+    if (it == g_display_refs.end()) return false;
+    if (--it->second > 0) return false;
+    g_display_refs.erase(it);
+    return true;
+}
+
 MGContext* mg_context_find(EGLContext handle) {
     if (handle == EGL_NO_CONTEXT) return nullptr;
     std::lock_guard<std::mutex> lock(g_ctx_mutex);

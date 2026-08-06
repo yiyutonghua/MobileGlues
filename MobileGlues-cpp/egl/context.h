@@ -75,4 +75,14 @@ void mg_context_destroy(EGLContext handle);
 void mg_context_forget_display(EGLDisplay dpy);
 MGContext* mg_context_find(EGLContext handle);
 
+// Per-display eglInitialize accounting.
+//
+// EGL does not reference-count initialisation per caller: whoever calls
+// eglTerminate marks EVERY resource on the display for destruction, including
+// ones another part of the process created. The bootstrap probe used to do
+// exactly that to EGL_DEFAULT_DISPLAY. These let it terminate only a display it
+// actually brought up itself.
+void mg_display_initialised(EGLDisplay dpy);
+bool mg_display_release(EGLDisplay dpy); // true when this was the last holder
+
 #endif // MOBILEGLUES_EGL_CONTEXT_H

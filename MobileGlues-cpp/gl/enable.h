@@ -69,11 +69,12 @@ extern "C"
     // GL 4.6 requires at least 8 clip distances and at least 8 draw buffers.
     // Anything the driver reports above these is clamped; the layer never claims
     // more than it can store.
-    enum { MG_MAX_CLIP_DISTANCES = 8, MG_MAX_DRAW_BUFFERS = 16 };
+    enum { MG_MAX_CLIP_DISTANCES = 8, MG_MAX_DRAW_BUFFERS = 16, MG_MAX_VIEWPORTS = 16 };
 
     struct mg_enable_state_t {
         GLboolean scalar[MGC_COUNT];
-        GLboolean blend_indexed[MG_MAX_DRAW_BUFFERS]; // GL_BLEND per draw buffer
+        GLboolean blend_indexed[MG_MAX_DRAW_BUFFERS];   // GL_BLEND per draw buffer
+        GLboolean scissor_indexed[MG_MAX_VIEWPORTS];    // GL_SCISSOR_TEST per viewport
         GLuint clip_distance_mask;                    // GL_CLIP_DISTANCE0..7
         GLuint primitive_restart_index;               // glPrimitiveRestartIndex
         bool initialised;

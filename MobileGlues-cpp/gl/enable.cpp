@@ -158,8 +158,10 @@ void mg_enable_reset(mg_enable_state_t* state) {
         state->scalar[MGC_MULTISAMPLE] = GL_TRUE;
     }
 
-    // GL_BLEND is per draw buffer; the scalar form is draw buffer 0.
+    // GL_BLEND is per draw buffer and GL_SCISSOR_TEST per viewport; the scalar
+    // form of each is index 0.
     for (int i = 0; i < MG_MAX_DRAW_BUFFERS; ++i) state->blend_indexed[i] = GL_FALSE;
+    for (int i = 0; i < MG_MAX_VIEWPORTS; ++i) state->scissor_indexed[i] = GL_FALSE;
 
     state->primitive_restart_index = 0;
     state->initialised = true;
@@ -184,6 +186,7 @@ GLboolean mg_enable_get(GLenum cap, GLuint index) {
     if (!d) return GL_FALSE;
 
     if (d->cap == GL_BLEND && index < MG_MAX_DRAW_BUFFERS) return st->blend_indexed[index];
+    if (d->cap == GL_SCISSOR_TEST && index < MG_MAX_VIEWPORTS) return st->scissor_indexed[index];
     return st->scalar[d->index];
 }
 
@@ -211,12 +214,12 @@ bool mg_enable_query_int(GLenum pname, GLint* out) {
         *out = MG_MAX_CLIP_DISTANCES;
         return true;
     case GL_MAX_VIEWPORTS:
-        // Viewport arrays are not implemented: glViewportIndexedf and
-        // glScissorIndexed are stubs, so only viewport 0 exists. Reporting 1 is
-        // below what GL 4.6 requires, but it is the truth, and it makes an
-        // application's own bounds check agree with this table rejecting
-        // glEnablei(GL_SCISSOR_TEST, index > 0).
-        *out = 1;
+        // GL 4.6 requires at least 16. The state for all of them is tracked so an
+        // application that reads this number and then indexes up to it gets
+        // consistent answers back. Only viewport 0 reaches the driver, because
+        // glViewportIndexedf and glScissorIndexed are still stubs -- a scissor
+        // test enabled on viewport 3 is remembered and reported, not applied.
+        *out = MG_MAX_VIEWPORTS;
         return true;
     case GL_MAX_DRAW_BUFFERS: {
         // Clamped to what blend_indexed can hold, so glEnablei(GL_BLEND, i) is
@@ -316,8 +319,17 @@ static void mg_set_enabled(GLenum cap, GLuint index, bool indexed, GLboolean val
             return;
         }
         if (d->cap == GL_SCISSOR_TEST) {
+            if (index >= MG_MAX_VIEWPORTS) {
+                EN_WARN_ONCE("glEnablei(GL_SCISSOR_TEST, %u): index is past GL_MAX_VIEWPORTS, ignored", index);
+                return;
+            }
+            st->scissor_indexed[index] = value;
             if (index != 0) {
-                EN_WARN_ONCE("glEnablei(GL_SCISSOR_TEST, %u): viewport arrays are not implemented, ignored", index);
+                // Recorded so the query agrees, but nothing applies it: the
+                // viewport array entry points are stubs.
+                EN_WARN_ONCE("glEnablei(GL_SCISSOR_TEST, %u): viewport arrays are not implemented, the state is "
+                             "tracked but has no effect",
+                             index);
                 return;
             }
         } else {
@@ -329,6 +341,9 @@ static void mg_set_enabled(GLenum cap, GLuint index, bool indexed, GLboolean val
     st->scalar[d->index] = value;
     if (d->cap == GL_BLEND) {
         for (int i = 0; i < MG_MAX_DRAW_BUFFERS; ++i) st->blend_indexed[i] = value;
+    }
+    if (d->cap == GL_SCISSOR_TEST) {
+        for (int i = 0; i < MG_MAX_VIEWPORTS; ++i) st->scissor_indexed[i] = value;
     }
 
     if (forwards_to_driver(*d)) {

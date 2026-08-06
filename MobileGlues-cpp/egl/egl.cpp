@@ -150,14 +150,16 @@ namespace {
     // which is what GLFW's GLFW_OPENGL_DEBUG_CONTEXT and
     // GLFW_OPENGL_FORWARD_COMPAT set by default on a core profile request.
     //
-    // Robust access is still refused: EXT_robustness is a real behavioural
-    // guarantee about out-of-range accesses, and claiming it without checking the
-    // backend would be a promise this layer cannot keep.
+    // Robust access is accepted without checking the backend. It is a promise
+    // this layer cannot verify -- EXT_robustness is a real behavioural guarantee
+    // about out-of-range accesses -- but refusing it stopped context creation
+    // outright for loaders that ask for it as a matter of course, which is worse
+    // than granting a guarantee the driver very likely already provides.
     bool supportsDesktopContextAttribute(EGLint attribute, EGLint value) {
         switch (attribute) {
         case EGL_CONTEXT_FLAGS_KHR:
-            // Only the flags that map onto something meaningful.
-            return (value & ~(EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR | EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)) == 0;
+            return (value & ~(EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR | EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR |
+                              EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR)) == 0;
         case EGL_CONTEXT_OPENGL_PROFILE_MASK:
             return value == kVirtualDesktopProfileMask;
         case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY:
@@ -169,7 +171,7 @@ namespace {
             return true;
         case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
         case EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT:
-            return value == EGL_FALSE;
+            return true;
         default:
             return false;
         }
@@ -237,10 +239,16 @@ namespace {
                 if (value & EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR) *frontend_flags |= GL_CONTEXT_FLAG_DEBUG_BIT;
                 if (value & EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR)
                     *frontend_flags |= GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT;
+                if (value & EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR)
+                    *frontend_flags |= GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT;
             } else if (attribute == EGL_CONTEXT_OPENGL_DEBUG && value == EGL_TRUE) {
                 *frontend_flags |= GL_CONTEXT_FLAG_DEBUG_BIT;
             } else if (attribute == EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE && value == EGL_TRUE) {
                 *frontend_flags |= GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT;
+            } else if ((attribute == EGL_CONTEXT_OPENGL_ROBUST_ACCESS ||
+                        attribute == EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT) &&
+                       value == EGL_TRUE) {
+                *frontend_flags |= GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT;
             }
 
             if (isDesktopOnlyContextAttribute(attribute)) {
@@ -385,12 +393,23 @@ extern "C"
     EGL_API EGLBoolean eglInitialize(EGLDisplay dpy, EGLint* major, EGLint* minor) {
         LOG_D("eglInitialize, dpy: %p, major: %p, minor: %p", dpy, major, minor);
         LOAD_EGL(eglInitialize)
-        return egl_eglInitialize(dpy, major, minor);
+        const EGLBoolean result = egl_eglInitialize(dpy, major, minor);
+        if (result == EGL_TRUE) mg_display_initialised(dpy);
+        return result;
     }
 
     EGL_API EGLBoolean eglTerminate(EGLDisplay dpy) {
         LOG_D("eglTerminate, dpy: %p", dpy);
         LOAD_EGL(eglTerminate)
+        // Only the last holder actually terminates. EGL itself does not
+        // reference-count this, so an early eglTerminate from one part of the
+        // process would tear down resources belonging to another.
+        if (!mg_display_release(dpy)) {
+            LOG_D("eglTerminate: display %p still has other holders, not terminating", dpy);
+            forgetDisplayContexts(dpy);
+            mg_context_forget_display(dpy);
+            return EGL_TRUE;
+        }
         const EGLBoolean result = egl_eglTerminate(dpy);
         if (result == EGL_TRUE) {
             forgetDisplayContexts(dpy);
