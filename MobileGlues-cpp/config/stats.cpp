@@ -26,7 +26,10 @@ char* stats_file_path = nullptr;
 // newer one recorded.
 static const char* LAUNCH_COUNT_KEY = "launchCount";
 
-static const char* SKIP_ENV_VAR = "MG_SKIP_LAUNCH_COUNT";
+// Opt in, not out: this library gets loaded by benchmarks, by tools and by the
+// plugin app itself, and none of those is a game launch. Only a launcher that
+// says so counts.
+static const char* COUNT_ENV_VAR = "MG_COUNT_LAUNCH";
 
 static cJSON* read_stats() {
     FILE* file = fopen(stats_file_path, "r");
@@ -77,8 +80,8 @@ static void write_stats(cJSON* json) {
 }
 
 void bump_launch_count() {
-    if (IsEnvVarTrue(SKIP_ENV_VAR)) {
-        LOG_D("%s is set, not counting this load as a launch", SKIP_ENV_VAR);
+    if (!IsEnvVarTrue(COUNT_ENV_VAR)) {
+        LOG_D("%s is not set, not counting this load as a launch", COUNT_ENV_VAR);
         return;
     }
 

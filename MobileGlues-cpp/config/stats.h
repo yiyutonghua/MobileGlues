@@ -24,8 +24,10 @@ extern "C"
     // Read the current count, add one, write it back. Called once per process,
     // from init_config(), before anything else can fail.
     //
-    // Does nothing when MG_SKIP_LAUNCH_COUNT is set: the plugin app loads this
-    // library itself to read GL information, and that is not a launch either.
+    // Only counts when MG_COUNT_LAUNCH is set, and the launchers set it through
+    // the plugin manifest. Anything else that loads this library -- a benchmark,
+    // a tool, the plugin app reading GL information -- is not a game launch, and
+    // opting in is the only way to tell those apart from one.
     void bump_launch_count();
 
 #ifdef __cplusplus
