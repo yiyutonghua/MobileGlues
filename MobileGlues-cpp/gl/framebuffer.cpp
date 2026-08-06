@@ -50,6 +50,15 @@ void mg_framebuffer_bind_context(unsigned long long ctx_id) {
     g_fc = &g_fbo_ctxs[ctx_id];
 }
 
+void mg_framebuffer_forget_context(unsigned long long ctx_id) {
+    if (ctx_id == 0) return;
+    std::lock_guard<std::mutex> lock(g_fbo_mutex);
+    const auto it = g_fbo_ctxs.find(ctx_id);
+    if (it == g_fbo_ctxs.end()) return;
+    if (g_fc == &it->second) g_fc = &g_fbo_default;
+    g_fbo_ctxs.erase(it);
+}
+
 // The bodies below are unchanged: the names now resolve into the per-context
 // record instead of to file-scope globals.
 #define framebuffers (g_fc->table)

@@ -226,6 +226,18 @@ void mg_texture_bind_context(unsigned long long ctx_id, unsigned long long group
     g_tc->group = group_id;
 }
 
+void mg_texture_forget_context(unsigned long long ctx_id) {
+    if (ctx_id == 0) return;
+    std::lock_guard<std::mutex> lock(g_tex_mutex);
+    const auto it = g_tex_ctxs.find(ctx_id);
+    if (it == g_tex_ctxs.end()) return;
+    if (g_tc == &it->second) g_tc = &g_tex_ctx_default;
+    g_tex_ctxs.erase(it);
+    // The object table is not dropped: it belongs to the share group, whose other
+    // contexts may still be alive, and the objects in it are owned by GL names the
+    // application is still entitled to delete.
+}
+
 #define BufferObjectsVec (g_tg->objects)
 #define TextureUnits (g_tc->units)
 #define CurrentTextureUnitIndex (g_tc->current_unit)

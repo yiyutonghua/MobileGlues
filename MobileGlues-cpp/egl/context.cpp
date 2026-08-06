@@ -57,6 +57,13 @@ void release_locked(const std::shared_ptr<MGContext>& ctx) {
     // The map is the only owner, so erasing frees the record and the gl_state_s
     // embedded in it.
     if (gl_state == &ctx->gl) gl_state = &g_default_gl_state;
+    // Drop the per-context bookkeeping each subsystem keeps for this id. Safe
+    // here and only here: current_count has reached zero, so no thread still has
+    // a pointer into the entries being erased.
+    mg_buffer_forget_context(ctx->id);
+    mg_texture_forget_context(ctx->id);
+    mg_framebuffer_forget_context(ctx->id);
+    mg_fsr1_forget_context(ctx->id);
     g_contexts.erase(ctx->handle);
 }
 
