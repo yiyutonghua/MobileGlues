@@ -99,6 +99,7 @@ void mg_buffer_forget_context(unsigned long long ctx_id);
 void mg_texture_forget_context(unsigned long long ctx_id);
 void mg_framebuffer_forget_context(unsigned long long ctx_id);
 void mg_fsr1_forget_context(unsigned long long ctx_id);
+void mg_depth_clear_forget_context(unsigned long long ctx_id);
 
 // Per-display eglInitialize accounting.
 //

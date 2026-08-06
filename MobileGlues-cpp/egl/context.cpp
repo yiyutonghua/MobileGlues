@@ -64,6 +64,7 @@ void release_locked(const std::shared_ptr<MGContext>& ctx) {
     mg_texture_forget_context(ctx->id);
     mg_framebuffer_forget_context(ctx->id);
     mg_fsr1_forget_context(ctx->id);
+    mg_depth_clear_forget_context(ctx->id);
     g_contexts.erase(ctx->handle);
 }
 
