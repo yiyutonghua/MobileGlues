@@ -107,6 +107,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     gl/restart.cpp
     egl/context.cpp
     gl/pixel.cpp
+    gl/transfer.cpp
     gl/random_string_gen.cpp
     gl/ExtWrappers/DSAWrapper.cpp
     gl/ExtWrappers/MultiBindWrapper.cpp
