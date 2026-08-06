@@ -85,6 +85,7 @@ MGContext* mg_context_find(EGLContext handle);
 void mg_buffer_bind_context(unsigned long long ctx_id, unsigned long long group_id);
 void mg_texture_bind_context(unsigned long long ctx_id, unsigned long long group_id);
 void mg_framebuffer_bind_context(unsigned long long ctx_id);
+void mg_fsr1_bind_context(unsigned long long ctx_id);
 
 // Per-display eglInitialize accounting.
 //
