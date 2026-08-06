@@ -17,12 +17,6 @@ thread_local MGContext* g_current_ctx = nullptr;
 
 namespace {
 
-// Where gl_state points when no tracked context is current. gl_state is written
-// through on the draw hot path, so it must never be left pointing at a released
-// record. Every member is a scalar, so this is constant-initialised and is
-// already usable when the library's constructors run.
-gl_state_s g_default_gl_state;
-
 // The library initialises itself from a static constructor, and that
 // constructor reaches these tables through mg_display_initialised. A namespace
 // scope std::unordered_map is dynamically initialised, so whether it had been
