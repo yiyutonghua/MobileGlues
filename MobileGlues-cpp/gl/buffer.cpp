@@ -6,6 +6,10 @@
 // End of Source File Header
 
 #include "buffer.h"
+#include "../egl/context.h"
+#include <mutex>
+#include <unordered_map>
+#include <array>
 #include "ankerl/unordered_dense.h"
 #include "texture.h"
 
@@ -15,17 +19,70 @@ GLuint bound_array;
 static GLint maxBufferId = 0;
 static GLint maxArrayId = 0;
 
-static std::vector<GLuint> g_gen_buffers;
-static std::vector<char> g_gen_buffer_exists;
-static std::vector<GLuint> g_free_buffer_ids;
+// ---------------------------------------------------------------------------
+// Per-share-group and per-context storage
+//
+// GL scopes buffer names to the share group -- two contexts created against each
+// other see one set of names -- while vertex array objects and the current
+// bindings are container state and belong to the context alone, even inside a
+// share group. All of it used to be one process-wide set, so a second context
+// inherited the first one's names, sizes and bindings.
+//
+// The tables stay private to this file and are selected by a thread_local
+// pointer that eglMakeCurrent swaps, which is why the ~90 access sites only
+// changed shape rather than routing through an accessor on every use.
+// std::unordered_map keeps references stable, so these pointers survive the
+// insertion of another group.
+// ---------------------------------------------------------------------------
 
-static std::vector<GLuint> g_gen_arrays;
-static std::vector<char> g_gen_array_exists;
-static std::vector<GLuint> g_free_array_ids;
+namespace {
 
-static std::vector<size_t> g_buffer_datasize;
+struct buffer_group_state_t { // shared across a share group
+    std::vector<GLuint> gen_buffers;
+    std::vector<char> gen_buffer_exists;
+    std::vector<GLuint> free_buffer_ids;
+    std::vector<size_t> buffer_datasize;
+};
 
-static std::vector<GLuint> g_element_array_buffer_per_vao;
+struct buffer_ctx_state_t { // private to one context
+    std::vector<GLuint> gen_arrays;
+    std::vector<char> gen_array_exists;
+    std::vector<GLuint> free_array_ids;
+    std::vector<GLuint> element_array_buffer_per_vao;
+    std::array<GLuint, 13> bound_buffers{};
+};
+
+std::mutex g_buf_mutex;
+std::unordered_map<unsigned long long, buffer_group_state_t> g_buf_groups;
+std::unordered_map<unsigned long long, buffer_ctx_state_t> g_buf_ctxs;
+
+buffer_group_state_t g_buf_group_default;
+buffer_ctx_state_t g_buf_ctx_default;
+
+thread_local buffer_group_state_t* g_bg = &g_buf_group_default;
+thread_local buffer_ctx_state_t* g_bc = &g_buf_ctx_default;
+
+} // namespace
+
+void mg_buffer_bind_context(unsigned long long ctx_id, unsigned long long group_id) {
+    if (ctx_id == 0) {
+        g_bg = &g_buf_group_default;
+        g_bc = &g_buf_ctx_default;
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_buf_mutex);
+    g_bg = &g_buf_groups[group_id];
+    g_bc = &g_buf_ctxs[ctx_id];
+}
+
+#define g_gen_buffers (g_bg->gen_buffers)
+#define g_gen_buffer_exists (g_bg->gen_buffer_exists)
+#define g_free_buffer_ids (g_bg->free_buffer_ids)
+#define g_buffer_datasize (g_bg->buffer_datasize)
+#define g_gen_arrays (g_bc->gen_arrays)
+#define g_gen_array_exists (g_bc->gen_array_exists)
+#define g_free_array_ids (g_bc->free_array_ids)
+#define g_element_array_buffer_per_vao (g_bc->element_array_buffer_per_vao)
 
 enum BindingIndex : int {
     BI_ARRAY_BUFFER = 0,
@@ -43,7 +100,8 @@ enum BindingIndex : int {
     BI_PARAMETER_BUFFER,
     BINDING_COUNT
 };
-static std::array<GLuint, BINDING_COUNT> g_bound_buffers_arr = {0};
+#define g_bound_buffers_arr (g_bc->bound_buffers)
+static_assert(BINDING_COUNT == 13, "buffer_ctx_state_t::bound_buffers must match BindingIndex");
 
 static inline int ensure_buffer_capacity(GLuint id) {
     if ((int)g_gen_buffers.size() <= (int)id) {

@@ -122,6 +122,11 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
         }
         g_current_ctx = nullptr;
         gl_state = &g_default_gl_state;
+        // 0 selects each subsystem's fallback instance, the one used before any
+        // tracked context is current.
+        mg_buffer_bind_context(0, 0);
+        mg_texture_bind_context(0, 0);
+        mg_framebuffer_bind_context(0);
     }
 
     if (handle == EGL_NO_CONTEXT) {
@@ -144,6 +149,9 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     it->second->read = read;
     ++it->second->current_count;
     g_current_ctx = it->second.get();
+    mg_buffer_bind_context(g_current_ctx->id, g_current_ctx->share_group->id);
+    mg_texture_bind_context(g_current_ctx->id, g_current_ctx->share_group->id);
+    mg_framebuffer_bind_context(g_current_ctx->id);
     // Repoint the shared gl_state at this context's copy. Everything that reads
     // gl_state-> keeps working unchanged; it simply stops being one set of values
     // for every context in the process.

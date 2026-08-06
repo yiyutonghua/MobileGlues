@@ -75,6 +75,17 @@ void mg_context_destroy(EGLContext handle);
 void mg_context_forget_display(EGLDisplay dpy);
 MGContext* mg_context_find(EGLContext handle);
 
+// Per-context / per-share-group state owned by other translation units.
+//
+// The containers stay private to the file that uses them -- moving them into
+// MGContext would drag gl/texture.h and friends into this header and back. Each
+// subsystem keeps its own table keyed by id and swaps a thread_local pointer
+// when the current context changes. std::unordered_map keeps references stable,
+// so a pointer handed out here stays valid until the entry is erased.
+void mg_buffer_bind_context(unsigned long long ctx_id, unsigned long long group_id);
+void mg_texture_bind_context(unsigned long long ctx_id, unsigned long long group_id);
+void mg_framebuffer_bind_context(unsigned long long ctx_id);
+
 // Per-display eglInitialize accounting.
 //
 // EGL does not reference-count initialisation per caller: whoever calls
