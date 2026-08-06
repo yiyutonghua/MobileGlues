@@ -28,7 +28,7 @@ NATIVE_FUNCTION_HEAD(void, glBlendEquationSeparate, GLenum modeRGB, GLenum modeA
 NATIVE_FUNCTION_HEAD(void, glBlendFunc, GLenum sfactor, GLenum dfactor) NATIVE_FUNCTION_END_NO_RETURN(void, glBlendFunc, sfactor,dfactor)
 NATIVE_FUNCTION_HEAD(void, glBlendFuncSeparate, GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha) NATIVE_FUNCTION_END_NO_RETURN(void, glBlendFuncSeparate, sfactorRGB,dfactorRGB,sfactorAlpha,dfactorAlpha)
 //NATIVE_FUNCTION_HEAD(void, glBufferData, GLenum target, GLsizeiptr size, const void *data, GLenum usage) NATIVE_FUNCTION_END_NO_RETURN(void, glBufferData, target,size,data,usage)
-NATIVE_FUNCTION_HEAD(void, glBufferSubData, GLenum target, GLintptr offset, GLsizeiptr size, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glBufferSubData, target,offset,size,data)
+// NATIVE_FUNCTION_HEAD(void, glBufferSubData, GLenum target, GLintptr offset, GLsizeiptr size, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glBufferSubData, target,offset,size,data)   // moved to gl/buffer.cpp so GL_PARAMETER_BUFFER reaches a target GLES understands
 //NATIVE_FUNCTION_HEAD(GLenum, glCheckFramebufferStatus, GLenum target) NATIVE_FUNCTION_END(GLenum, glCheckFramebufferStatus, target)
 //NATIVE_FUNCTION_HEAD(void, glClear, GLbitfield mask) NATIVE_FUNCTION_END_NO_RETURN(void, glClear, mask)
 NATIVE_FUNCTION_HEAD(void, glClearColor, GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) NATIVE_FUNCTION_END_NO_RETURN(void, glClearColor, red,green,blue,alpha)
@@ -74,7 +74,7 @@ NATIVE_FUNCTION_HEAD(void, glGetActiveUniform, GLuint program, GLuint index, GLs
 NATIVE_FUNCTION_HEAD(void, glGetAttachedShaders, GLuint program, GLsizei maxCount, GLsizei *count, GLuint *shaders) NATIVE_FUNCTION_END_NO_RETURN(void, glGetAttachedShaders, program,maxCount,count,shaders)
 NATIVE_FUNCTION_HEAD(GLint, glGetAttribLocation, GLuint program, const GLchar *name) NATIVE_FUNCTION_END(GLint, glGetAttribLocation, program,name)
 // NATIVE_FUNCTION_HEAD(void, glGetBooleanv, GLenum pname, GLboolean *data) NATIVE_FUNCTION_END_NO_RETURN(void, glGetBooleanv, pname,data)   // moved to gl/enable.cpp so it agrees with glIsEnabled
-NATIVE_FUNCTION_HEAD(void, glGetBufferParameteriv, GLenum target, GLenum pname, GLint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glGetBufferParameteriv, target,pname,params)
+// NATIVE_FUNCTION_HEAD(void, glGetBufferParameteriv, GLenum target, GLenum pname, GLint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glGetBufferParameteriv, target,pname,params)   // moved to gl/buffer.cpp so GL_PARAMETER_BUFFER reaches a target GLES understands
 //NATIVE_FUNCTION_HEAD(GLenum, glGetError) NATIVE_FUNCTION_END(GLenum, glGetError)
 // NATIVE_FUNCTION_HEAD(void, glGetFloatv, GLenum pname, GLfloat *data) NATIVE_FUNCTION_END_NO_RETURN(void, glGetFloatv, pname,data)   // moved to gl/enable.cpp so it agrees with glIsEnabled
 NATIVE_FUNCTION_HEAD(void, glGetFramebufferAttachmentParameteriv, GLenum target, GLenum attachment, GLenum pname, GLint *params) NATIVE_FUNCTION_END_NO_RETURN(void, glGetFramebufferAttachmentParameteriv, target,attachment,pname,params)

@@ -755,12 +755,64 @@ void glTexBufferRange(GLenum target, GLenum internalformat, GLuint buffer, GLint
     CHECK_GL_ERROR
 }
 
+// GLES has no GL_PARAMETER_BUFFER, so glBindBuffer above tracks the binding
+// without ever handing that target to the driver. GL 4.6 still lets an
+// application fill and query the buffer through it, which used to reach GLES
+// verbatim and come back GL_INVALID_ENUM -- the buffer stayed empty, and
+// glMultiDraw*IndirectCount then found a zero-byte parameter buffer and drew
+// nothing.
+//
+// GL_COPY_WRITE_BUFFER is borrowed for the duration of one call and put back
+// afterwards. GLES defines it as a generic target with no meaning of its own, so
+// the swap is invisible: nothing observes it, and no draw depends on it.
+namespace {
+struct borrowed_target_t {
+    GLenum target;
+    GLint saved = 0;
+    bool borrowed = false;
+
+    explicit borrowed_target_t(GLenum requested) : target(requested) {
+        if (requested != GL_PARAMETER_BUFFER) return;
+        const GLuint real = find_real_buffer(find_bound_buffer(GL_PARAMETER_BUFFER_BINDING));
+        GLES.glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &saved);
+        GLES.glBindBuffer(GL_COPY_WRITE_BUFFER, real);
+        target = GL_COPY_WRITE_BUFFER;
+        borrowed = true;
+    }
+    ~borrowed_target_t() {
+        if (borrowed) GLES.glBindBuffer(GL_COPY_WRITE_BUFFER, static_cast<GLuint>(saved));
+    }
+
+    borrowed_target_t(const borrowed_target_t&) = delete;
+    borrowed_target_t& operator=(const borrowed_target_t&) = delete;
+};
+} // namespace
+
 void glBufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage) {
     LOG()
     LOG_D("glBufferData, target = %s, size = %d, data = 0x%x, usage = %s", glEnumToString(target), size, data,
           glEnumToString(usage))
-    GLES.glBufferData(target, size, data, usage);
+    borrowed_target_t t(target);
+    GLES.glBufferData(t.target, size, data, usage);
     set_buffer_data_size(find_bound_buffer(target), size);
+    CHECK_GL_ERROR
+}
+
+// Both of these were plain pass-throughs in gl/gl_native.cpp. They live here now
+// so that GL_PARAMETER_BUFFER reaches the driver as a target it understands.
+void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void* data) {
+    LOG()
+    LOG_D("glBufferSubData, target = %s, offset = %p, size = %zi", glEnumToString(target), (void*)offset, size)
+    borrowed_target_t t(target);
+    GLES.glBufferSubData(t.target, offset, size, data);
+    CHECK_GL_ERROR
+}
+
+void glGetBufferParameteriv(GLenum target, GLenum pname, GLint* params) {
+    LOG()
+    LOG_D("glGetBufferParameteriv, target = %s, pname = %s", glEnumToString(target), glEnumToString(pname))
+    borrowed_target_t t(target);
+    GLES.glGetBufferParameteriv(t.target, pname, params);
     CHECK_GL_ERROR
 }
 
@@ -768,10 +820,11 @@ void* glMapBuffer(GLenum target, GLenum access) {
     LOG()
     LOG_D("glMapBuffer, target = %s, access = %s", glEnumToString(target), glEnumToString(access))
     if (g_gles_caps.GL_OES_mapbuffer) {
-        return GLES.glMapBufferOES(target, access);
+        borrowed_target_t t(target);
+        return GLES.glMapBufferOES(t.target, access);
     }
     GLint buffer_size;
-    GLES.glGetBufferParameteriv(target, GL_BUFFER_SIZE, &buffer_size);
+    glGetBufferParameteriv(target, GL_BUFFER_SIZE, &buffer_size);
     if (buffer_size <= 0 || glGetError() != GL_NO_ERROR) {
         return nullptr;
     }
@@ -815,15 +868,17 @@ void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitf
     LOG()
     if (global_settings.buffer_coherent_as_flush) access &= ~GL_MAP_FLUSH_EXPLICIT_BIT;
     //    access |= GL_MAP_UNSYNCHRONIZED_BIT;
-    return GLES.glMapBufferRange(target, offset, length, access);
+    borrowed_target_t t(target);
+    return GLES.glMapBufferRange(t.target, offset, length, access);
 }
 
 GLboolean glUnmapBuffer(GLenum target) {
     LOG()
     LOG_D("%s(%s)", __func__, glEnumToString(target));
-    if (g_gles_caps.GL_OES_mapbuffer) return GLES.glUnmapBuffer(target);
+    borrowed_target_t t(target);
+    if (g_gles_caps.GL_OES_mapbuffer) return GLES.glUnmapBuffer(t.target);
 
-    GLboolean result = GLES.glUnmapBuffer(target);
+    GLboolean result = GLES.glUnmapBuffer(t.target);
     CHECK_GL_ERROR
     return result;
 }
@@ -834,14 +889,18 @@ void glBufferStorage(GLenum target, GLsizeiptr size, const void* data, GLbitfiel
         if (global_settings.buffer_coherent_as_flush &&
             ((flags & GL_MAP_PERSISTENT_BIT) != 0 || (flags & GL_DYNAMIC_STORAGE_BIT) != 0))
             flags |= (GL_MAP_WRITE_BIT | GL_MAP_COHERENT_BIT | GL_MAP_PERSISTENT_BIT);
-        GLES.glBufferStorageEXT(target, size, data, flags);
+        borrowed_target_t t(target);
+        GLES.glBufferStorageEXT(t.target, size, data, flags);
     }
     CHECK_GL_ERROR
 }
 
 void glFlushMappedBufferRange(GLenum target, GLintptr offset, GLsizeiptr length) {
     LOG()
-    if (!global_settings.buffer_coherent_as_flush) GLES.glFlushMappedBufferRange(target, offset, length);
+    if (!global_settings.buffer_coherent_as_flush) {
+        borrowed_target_t t(target);
+        GLES.glFlushMappedBufferRange(t.target, offset, length);
+    }
 }
 
 void glGenVertexArrays(GLsizei n, GLuint* arrays) {

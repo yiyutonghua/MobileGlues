@@ -231,5 +231,6 @@ const char* md_backend_suffix(md_backend_t b);
 // the GLES loader does not carry those entry points and gles/* is not ours to
 // change. Safe to call once a context is current.
 bool mg_multi_draw_arrays_ext_available();
+bool mg_multi_draw_elements_basevertex_ext_available();
 
 #endif // MOBILEGLUES_PLUGIN_SETTINGS_H

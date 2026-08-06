@@ -514,12 +514,11 @@ void init_settings_post() {
     const bool basevertex = (has_bv_ext || has_es32) && GLES.glDrawElementsBaseVertex != nullptr;
     const bool indirect = has_es31 && GLES.glDrawElementsIndirect != nullptr;
     // EXT/OES_draw_elements_base_vertex also define the multi-draw form, whose
-    // signature matches GL 3.2 core exactly. Both specs make it conditional on
-    // EXT_multi_draw_arrays, which g_gles_caps does not track, and on Android a
-    // resolved symbol can still be a wrapper stub -- so this is a candidate, not a
-    // guarantee. gl/multidraw.cpp probes the first call and latches the mode off
-    // if the driver rejects it.
-    const bool multibasevertex = has_bv_ext && GLES.glMultiDrawElementsBaseVertexEXT != nullptr;
+    // signature matches GL 3.2 core exactly -- but only when EXT_multi_draw_arrays
+    // is supported as well. gl/multidraw.cpp checks that string, because neither
+    // the resolved symbol nor a runtime probe can: a driver without the extension
+    // accepts the call, draws nothing, and reports no error.
+    const bool multibasevertex = mg_multi_draw_elements_basevertex_ext_available();
 
     // Compute mode used to be accepted without checking anything at all.
     bool compute = false;

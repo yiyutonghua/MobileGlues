@@ -214,6 +214,32 @@ bool mg_multi_draw_arrays_ext_available() {
     return g_mda_ext != nullptr || g_mde_ext != nullptr;
 }
 
+// glMultiDrawElementsBaseVertexEXT is not part of EXT/OES_draw_elements_base_vertex
+// on its own. Both specs define the multi-draw form only when
+// GL_EXT_multi_draw_arrays is *also* supported, and a driver that has the base
+// vertex extension without it is an ordinary configuration -- Mali r32p1 is one.
+//
+// Neither of the two things this code used to rely on can see the difference.
+// Android's EGL wrapper resolves the symbol whether or not the driver behind it
+// implements anything, so a non-null pointer proves nothing; and such a driver
+// accepts the call, draws nothing, and raises no error, so the probe-and-latch
+// in mg_multi_draw_basevertex latches Working and every sub-draw is silently
+// dropped for the rest of the process. Only the extension string can tell.
+bool mg_multi_draw_elements_basevertex_ext_available() {
+    static bool resolved = false;
+    static bool available = false;
+    if (!resolved) {
+        resolved = true;
+        available = GLES.glMultiDrawElementsBaseVertexEXT != nullptr &&
+                    (g_gles_caps.GL_EXT_draw_elements_base_vertex || g_gles_caps.GL_OES_draw_elements_base_vertex) &&
+                    mg_gles_has_extension("GL_EXT_multi_draw_arrays");
+        LOG_D("multidraw: multibasevertex available=%d (ptr=%p bv_ext=%d/%d)", (int)available,
+              (void*)GLES.glMultiDrawElementsBaseVertexEXT, g_gles_caps.GL_EXT_draw_elements_base_vertex,
+              g_gles_caps.GL_OES_draw_elements_base_vertex)
+    }
+    return available;
+}
+
 static bool is_strip_like_mode(GLenum mode) {
     switch (mode) {
     case GL_LINE_STRIP:
@@ -375,6 +401,53 @@ static bool mg_multidraw_enter(const GLsizei* counts, GLenum type, GLsizei primc
         return false;
     }
     multidraw_check_context();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// GL_PRIMITIVE_RESTART across a multi-draw
+//
+// Restart is per-index state, so it applies to every sub-draw of an indexed
+// multi-draw exactly as it would to the equivalent loop of single draws. GLES
+// only implements the fixed-index form, and nothing here used to account for
+// either half of that, so a batch drawn with restart enabled came out with its
+// strips joined end to end.
+//
+// Two cases, matching the two predicates gl/restart.cpp exposes:
+//
+//   the chosen value is the fixed one -- no rewrite is needed, but GLES still
+//     has to be told, because GL_PRIMITIVE_RESTART itself is never forwarded.
+//     One enable around the whole batch covers every sub-draw.
+//
+//   the chosen value is something else -- the index stream has to be rewritten,
+//     and mg_glMultiDrawElementsBaseVertex_drawelements is the only backend that
+//     rewrites. Every other backend hands the application's indices to the
+//     driver untouched, so for the duration of such a draw they defer to it.
+//
+// Both live in the backends rather than in the dispatchers because
+// glXGetProcAddress hands out the mg_* symbols directly.
+// ---------------------------------------------------------------------------
+
+namespace {
+struct md_restart_scope_t {
+    bool forced;
+    explicit md_restart_scope_t(GLenum type) : forced(mg_restart_needs_driver_fixed(type)) {
+        if (forced) GLES.glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+    }
+    ~md_restart_scope_t() {
+        if (forced) GLES.glDisable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+    }
+    md_restart_scope_t(const md_restart_scope_t&) = delete;
+    md_restart_scope_t& operator=(const md_restart_scope_t&) = delete;
+};
+} // namespace
+
+// True when this call was handed to the rewriting backend and the caller is done.
+static bool mg_multidraw_restart_takeover(GLenum mode, const GLsizei* counts, GLenum type, const void* const* indices,
+                                          GLsizei primcount, const GLint* basevertex) {
+    if (!mg_restart_needs_rewrite(type)) return false;
+    mg_glMultiDrawElementsBaseVertex_drawelements(mode, const_cast<GLsizei*>(counts), type, indices, primcount,
+                                                  basevertex);
     return true;
 }
 
@@ -663,6 +736,9 @@ void mg_glMultiDrawElements_drawelements(GLenum mode, const GLsizei* count, GLen
     LOG()
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
 
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
+
     prepareForDraw();
 
     // GL 4.6 sec. 10.5 defines glMultiDrawElements as exactly this loop; there is
@@ -685,6 +761,9 @@ void mg_glMultiDrawElementsBaseVertex_indirect(GLenum mode, GLsizei* counts, GLe
                                                GLsizei primcount, const GLint* basevertex) {
     LOG()
     if (!mg_multidraw_enter(counts, type, primcount, indices)) return;
+
+    if (mg_multidraw_restart_takeover(mode, counts, type, indices, primcount, basevertex)) return;
+    md_restart_scope_t restart_scope(type);
 
     if (!GLES.glDrawElementsIndirect || md_backend_disabled(md_backend_t::Indirect)) {
         MD_WARN_ONCE("multidraw indirect: unavailable or disabled, falling back");
@@ -715,6 +794,9 @@ void mg_glMultiDrawElements_indirect(GLenum mode, const GLsizei* count, GLenum t
                                      GLsizei primcount) {
     LOG()
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
+
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
 
     if (!GLES.glDrawElementsIndirect || md_backend_disabled(md_backend_t::Indirect)) {
         MD_WARN_ONCE("multidraw indirect: unavailable or disabled, falling back");
@@ -750,6 +832,9 @@ void mg_glMultiDrawElementsBaseVertex_multiindirect(GLenum mode, GLsizei* counts
     LOG()
     if (!mg_multidraw_enter(counts, type, primcount, indices)) return;
 
+    if (mg_multidraw_restart_takeover(mode, counts, type, indices, primcount, basevertex)) return;
+    md_restart_scope_t restart_scope(type);
+
     // Same pair of conditions resolution used (config/settings.cpp): the
     // extension string as well as the entry point. This function is also reached
     // as a fallback from the batched backends, so it cannot assume resolution
@@ -782,6 +867,9 @@ void mg_glMultiDrawElements_multiindirect(GLenum mode, const GLsizei* count, GLe
     LOG()
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
 
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
+
     if (!GLES.glMultiDrawElementsIndirectEXT || !g_gles_caps.GL_EXT_multi_draw_indirect ||
         md_backend_disabled(md_backend_t::MultiIndirect)) {
         MD_WARN_ONCE("multidraw multiindirect: unavailable or disabled, falling back");
@@ -813,6 +901,9 @@ void mg_glMultiDrawElementsBaseVertex_basevertex(GLenum mode, GLsizei* counts, G
     LOG()
     if (!mg_multidraw_enter(counts, type, primcount, indices)) return;
 
+    if (mg_multidraw_restart_takeover(mode, counts, type, indices, primcount, basevertex)) return;
+    md_restart_scope_t restart_scope(type);
+
     if (!GLES.glDrawElementsBaseVertex || md_backend_disabled(md_backend_t::BaseVertex)) {
         MD_WARN_ONCE("multidraw basevertex: unavailable or disabled, falling back");
         mg_glMultiDrawElementsBaseVertex_drawelements(mode, counts, type, indices, primcount, basevertex);
@@ -837,6 +928,9 @@ void mg_glMultiDrawElements_basevertex(GLenum mode, const GLsizei* count, GLenum
                                        GLsizei primcount) {
     LOG()
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
+
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
 
     prepareForDraw();
 
@@ -880,7 +974,7 @@ static const GLint* mg_zero_basevertex(GLsizei primcount) {
 
 static bool mg_multi_draw_basevertex(GLenum mode, const GLsizei* counts, GLenum type, const void* const* indices,
                                 GLsizei primcount, const GLint* basevertex) {
-    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT) return false;
+    if (g_mdbv_state == md_probe_state_t::Failed || !mg_multi_draw_elements_basevertex_ext_available()) return false;
 
     const bool probing = (g_mdbv_state == md_probe_state_t::Unprobed);
     if (probing) mg_md_drain();
@@ -913,13 +1007,16 @@ void mg_glMultiDrawElementsBaseVertex_multibasevertex(GLenum mode, GLsizei* coun
     // MultidrawIndirect is the next rung down in init_settings_post's ladder, and
     // it still folds the batch into one driver call; going straight to the
     // unrolled loop threw that away.
-    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
+    if (g_mdbv_state == md_probe_state_t::Failed || !mg_multi_draw_elements_basevertex_ext_available() ||
         md_backend_disabled(md_backend_t::MultiBaseVertex)) {
         mg_glMultiDrawElementsBaseVertex_multiindirect(mode, counts, type, indices, primcount, basevertex);
         return;
     }
 
     if (!mg_multidraw_enter(counts, type, primcount, indices)) return;
+
+    if (mg_multidraw_restart_takeover(mode, counts, type, indices, primcount, basevertex)) return;
+    md_restart_scope_t restart_scope(type);
 
     prepareForDraw();
 
@@ -954,6 +1051,9 @@ void mg_glMultiDrawElements_multiarrays(GLenum mode, const GLsizei* count, GLenu
 
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
 
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
+
     prepareForDraw();
 
     const bool probing = (g_mda_state == md_probe_state_t::Unprobed);
@@ -981,13 +1081,16 @@ void mg_glMultiDrawElements_multibasevertex(GLenum mode, const GLsizei* count, G
     // The latch read just below is per-context, so re-arm it first.
     multidraw_check_context();
 
-    if (g_mdbv_state == md_probe_state_t::Failed || !GLES.glMultiDrawElementsBaseVertexEXT ||
+    if (g_mdbv_state == md_probe_state_t::Failed || !mg_multi_draw_elements_basevertex_ext_available() ||
         md_backend_disabled(md_backend_t::MultiBaseVertex)) {
         mg_glMultiDrawElements_multiindirect(mode, count, type, indices, primcount);
         return;
     }
 
     if (!mg_multidraw_enter(count, type, primcount, indices)) return;
+
+    if (mg_multidraw_restart_takeover(mode, count, type, indices, primcount, nullptr)) return;
+    md_restart_scope_t restart_scope(type);
 
     prepareForDraw();
 
@@ -1715,6 +1818,15 @@ void glMultiDrawElementsIndirect(GLenum mode, GLenum type, const void* indirect,
 
     prepareForDraw();
 
+    // Indexed, so restart applies here too. The commands live in a GPU buffer and
+    // may have been written by the GPU, so the index stream cannot be rewritten
+    // on the way past; the fixed-index form is all that can be honoured.
+    md_restart_scope_t restart_scope(type);
+    if (mg_restart_needs_rewrite(type)) {
+        MD_WARN_ONCE("glMultiDrawElementsIndirect: GL_PRIMITIVE_RESTART with a custom index cannot be emulated "
+                     "on an indirect draw; restarts will be ignored");
+    }
+
     const bool want_batch = multidraw_backend_of(md_entry_t::ElementsIndirect) == md_backend_t::MultiIndirect;
 
     if (want_batch && g_gles_caps.GL_EXT_multi_draw_indirect && GLES.glMultiDrawElementsIndirectEXT) {
@@ -2005,6 +2117,13 @@ void glMultiDrawArraysIndirectCount(GLenum mode, const void* indirect, GLintptr 
 void glMultiDrawElementsIndirectCount(GLenum mode, GLenum type, const void* indirect, GLintptr drawcount,
                                       GLsizei maxdrawcount, GLsizei stride) {
     LOG()
+    // Same as glMultiDrawElementsIndirect: indexed, so restart applies, but the
+    // stream is not reachable for rewriting.
+    md_restart_scope_t restart_scope(type);
+    if (mg_restart_needs_rewrite(type)) {
+        MD_WARN_ONCE("glMultiDrawElementsIndirectCount: GL_PRIMITIVE_RESTART with a custom index cannot be emulated "
+                     "on an indirect draw; restarts will be ignored");
+    }
     mg_indirect_count(mode, type, true, indirect, drawcount, maxdrawcount, stride);
 }
 
