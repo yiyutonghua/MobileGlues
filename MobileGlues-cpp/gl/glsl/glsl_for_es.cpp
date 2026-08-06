@@ -723,39 +723,92 @@ std::vector<unsigned int> glsl_to_spirv(GLenum shader_type, int glsl_version, co
     return spirv_code;
 }
 
-std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, int& errc) {
+// The context owns the ParsedIR, the compiler and every string they hand back, and the only
+// destroy used to sit past the early return. A shader the ES backend rejects is a normal
+// outcome and failed translations are not cached, so that leaked the lot again on every
+// resource-pack reload. Scoped so no exit can skip it.
+namespace {
+struct spvc_context_guard_t {
     spvc_context context = nullptr;
+    spvc_context_guard_t() = default;
+    ~spvc_context_guard_t() {
+        if (context) spvc_context_destroy(context);
+    }
+    spvc_context_guard_t(const spvc_context_guard_t&) = delete;
+    spvc_context_guard_t& operator=(const spvc_context_guard_t&) = delete;
+};
+} // namespace
+
+// SPIRV-Cross throws internally and turns that into a result code at its C boundary; on failure
+// it leaves the out-parameter untouched. Dropping the code therefore hands the next call a
+// handle that was never written, which crashes rather than reporting anything.
+static bool spvc_ok(spvc_context context, spvc_result res, const char* what) {
+    if (res == SPVC_SUCCESS) {
+        return true;
+    }
+    LOG_E("Error: %s failed in spirv-cross: %s", what, spvc_context_get_last_error_string(context))
+    return false;
+}
+
+std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, int& errc) {
     spvc_parsed_ir ir = nullptr;
     spvc_compiler compiler_glsl = nullptr;
     spvc_compiler_options options = nullptr;
-    spvc_resources resources = nullptr;
     const char* result = nullptr;
-    size_t count;
 
     const SpvId* p_spirv = spirv.data();
     size_t word_count = spirv.size();
 
     LOG_D("spirv_code.size(): %d", spirv.size())
-    spvc_context_create(&context);
-    spvc_context_parse_spirv(context, p_spirv, word_count, &ir);
-    spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &compiler_glsl);
-    spvc_compiler_create_shader_resources(compiler_glsl, &resources);
-    spvc_compiler_create_compiler_options(compiler_glsl, &options);
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION,
-                                   essl_version >= 300 ? essl_version : 300);
-    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
-    spvc_compiler_install_compiler_options(compiler_glsl, options);
-    spvc_compiler_compile(compiler_glsl, &result);
 
-    if (!result) {
-        LOG_E("Error: unexpected error in spirv-cross.")
+    // Declared before 'essl': the compiled source lives in context-owned memory and is only
+    // copied out when the std::string is constructed, so the guard has to outlive it.
+    spvc_context_guard_t guard;
+    if (spvc_context_create(&guard.context) != SPVC_SUCCESS || !guard.context) {
+        LOG_E("Error: could not create a spirv-cross context.")
+        errc = -1;
+        return "";
+    }
+    spvc_context context = guard.context;
+
+    if (!spvc_ok(context, spvc_context_parse_spirv(context, p_spirv, word_count, &ir), "spvc_context_parse_spirv") ||
+        !ir) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context,
+                 spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP,
+                                              &compiler_glsl),
+                 "spvc_context_create_compiler") ||
+        !compiler_glsl) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context, spvc_compiler_create_compiler_options(compiler_glsl, &options),
+                 "spvc_compiler_create_compiler_options") ||
+        !options) {
+        errc = -1;
+        return "";
+    }
+    // A silently dropped GLSL_ES option would emit desktop GLSL and hand it straight to the
+    // driver, so these are checked too.
+    if (!spvc_ok(context,
+                 spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION,
+                                                essl_version >= 300 ? essl_version : 300),
+                 "spvc_compiler_options_set_uint") ||
+        !spvc_ok(context, spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE),
+                 "spvc_compiler_options_set_bool") ||
+        !spvc_ok(context, spvc_compiler_install_compiler_options(compiler_glsl, options),
+                 "spvc_compiler_install_compiler_options")) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context, spvc_compiler_compile(compiler_glsl, &result), "spvc_compiler_compile") || !result) {
         errc = -1;
         return "";
     }
 
     std::string essl = result;
-
-    spvc_context_destroy(context);
 
     errc = 0;
     return essl;
