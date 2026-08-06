@@ -20,7 +20,11 @@ struct attachment_t {
 struct framebuffer_t {
     bool initialized = false;
     bool color_attachments_all_none = false;
-    attachment_t* color_attachments = nullptr;
+    // A vector rather than a raw new[]: these records live in a std::vector that
+    // reallocates as framebuffer names grow, and the struct has no destructor or
+    // copy control, so an owning raw pointer here both leaked every array it ever
+    // allocated and made the type unsafe to copy. Indexing syntax is unchanged.
+    std::vector<attachment_t> color_attachments;
     attachment_t depth_attachment = {0};
     attachment_t stencil_attachment = {0};
 };

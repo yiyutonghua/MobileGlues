@@ -84,8 +84,7 @@ void InitFramebufferMap(size_t expectedSize) {
 void init_framebuffer(framebuffer_t& fbo) {
     ensure_max_attachments();
     if (!fbo.initialized) {
-        fbo.color_attachments = new attachment_t[MAX_COLOR_ATTACHMENTS];
-        memset(fbo.color_attachments, 0, sizeof(attachment_t) * MAX_COLOR_ATTACHMENTS);
+        fbo.color_attachments.assign(MAX_COLOR_ATTACHMENTS, attachment_t{});
         fbo.initialized = true;
     }
 }
