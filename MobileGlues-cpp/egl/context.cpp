@@ -19,13 +19,42 @@ namespace {
 
 // Where gl_state points when no tracked context is current. gl_state is written
 // through on the draw hot path, so it must never be left pointing at a released
-// record.
+// record. Every member is a scalar, so this is constant-initialised and is
+// already usable when the library's constructors run.
 gl_state_s g_default_gl_state;
 
-std::mutex g_ctx_mutex;
-std::unordered_map<EGLContext, std::shared_ptr<MGContext>> g_contexts;
+// The library initialises itself from a static constructor, and that
+// constructor reaches these tables through mg_display_initialised. A namespace
+// scope std::unordered_map is dynamically initialised, so whether it had been
+// constructed by then came down to the order the linker happened to emit the
+// translation units in -- and it did not: the first insertion ran against an
+// all zero map, whose zero max_load_factor asked for an infinite bucket count
+// and aborted the process before main. Constructing on first use removes the
+// ordering question instead of relying on it.
+std::mutex& ctx_mutex() {
+    static std::mutex m;
+    return m;
+}
+std::unordered_map<EGLContext, std::shared_ptr<MGContext>>& contexts() {
+    static std::unordered_map<EGLContext, std::shared_ptr<MGContext>> m;
+    return m;
+}
+std::unordered_map<EGLDisplay, int>& display_refs() {
+    static std::unordered_map<EGLDisplay, int> m;
+    return m;
+}
+
 unsigned long long g_next_ctx_id = 1;
 unsigned long long g_next_group_id = 1;
+
+} // namespace
+
+// Access sites read the same way they did when these were plain globals.
+#define g_ctx_mutex ctx_mutex()
+#define g_contexts contexts()
+#define g_display_refs display_refs()
+
+namespace {
 
 // Caller holds g_ctx_mutex.
 void release_locked(const std::shared_ptr<MGContext>& ctx) {
@@ -78,10 +107,6 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
           minor)
     g_contexts[handle] = ctx;
     return ctx.get();
-}
-
-namespace {
-std::unordered_map<EGLDisplay, int> g_display_refs;
 }
 
 void mg_display_initialised(EGLDisplay dpy) {
