@@ -907,6 +907,15 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     cJSON_AddNumberToObject(root, "sections", BENCH_SECTIONS);
     cJSON_AddNumberToObject(root, "budgetMs", budget_us / 1000.0);
 
+    // Which driver these numbers describe. The renderer falls back to the system
+    // driver when ANGLE was asked for but could not be opened, and an order
+    // measured on the wrong one of those is worse than no order at all.
+    cJSON_AddBoolToObject(root, "angleRequested", global_settings.angle == AngleMode::Enabled);
+    cJSON_AddBoolToObject(root, "angleInUse", g_angle_in_use);
+    if (const GLubyte* renderer = GLES.glGetString ? GLES.glGetString(GL_RENDERER) : nullptr) {
+        cJSON_AddStringToObject(root, "renderer", reinterpret_cast<const char*>(renderer));
+    }
+
     bench_scene_t scene;
     bench_scene_build(scene);
     cJSON_AddNumberToObject(root, "width", scene.width);

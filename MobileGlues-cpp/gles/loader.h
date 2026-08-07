@@ -39,6 +39,10 @@ extern "C"
     void* proc_address(void* lib, const char* name);
     extern void *gles, *egl;
 
+    // True only when the ANGLE image is the one that actually got loaded --
+    // load_libs() falls back to the system driver when it cannot be opened.
+    extern bool g_angle_in_use;
+
     void init_target_gles();
 
     void load_libs();

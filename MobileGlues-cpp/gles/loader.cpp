@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstdio>
 #include <limits.h>
+#include <string>
 #include "loader.h"
 #include "../includes.h"
 #include "loader.h"
@@ -50,6 +51,25 @@ static const char* egl_lib[] = {
 const char* GLES_ANGLE = "libGLESv2_angle.so";
 const char* EGL_ANGLE = "libEGL_angle.so";
 
+// Whether ANGLE was actually the library that got loaded. load_libs() falls back
+// to the system driver when ANGLE cannot be opened, which is the right thing for
+// a game -- rendering on the system driver beats not rendering -- but anything
+// that reports on the environment has to be able to tell the two apart.
+bool g_angle_in_use = false;
+
+// ANGLE ships with the launcher, not with us. Inside the game's process it is
+// simply on the search path; a tool that loads this library on its own (the
+// plugin app's benchmark) has to say where the launcher keeps it, or it would
+// silently measure the system driver instead of the one the game will use.
+static std::string angle_library(const char* name) {
+    const char* dir = getenv("MG_ANGLE_DIR");
+    if (dir == nullptr || *dir == '\0') return std::string(name);
+    std::string path(dir);
+    if (!path.empty() && path.back() != '/') path.push_back('/');
+    path.append(name);
+    return path;
+}
+
 void* open_lib(const char** names, const char* override) {
     void* lib = nullptr;
 
@@ -79,10 +99,18 @@ void* open_lib(const char** names, const char* override) {
 
 void load_libs() {
 #ifndef __APPLE__
-    const char* gles_override = global_settings.angle == AngleMode::Enabled ? GLES_ANGLE : nullptr;
-    const char* egl_override = global_settings.angle == AngleMode::Enabled ? EGL_ANGLE : nullptr;
-    gles = open_lib(gles3_lib, gles_override);
-    egl = open_lib(egl_lib, egl_override);
+    const bool want_angle = global_settings.angle == AngleMode::Enabled;
+    const std::string gles_angle = want_angle ? angle_library(GLES_ANGLE) : std::string();
+    const std::string egl_angle = want_angle ? angle_library(EGL_ANGLE) : std::string();
+    gles = open_lib(gles3_lib, want_angle ? gles_angle.c_str() : nullptr);
+    egl = open_lib(egl_lib, want_angle ? egl_angle.c_str() : nullptr);
+    // open_lib() returns the fallback just as happily as the override, so ask
+    // the loader whether the ANGLE image itself is what ended up open.
+    g_angle_in_use = want_angle && gles != nullptr &&
+                     dlsym(gles, "ANGLEGetDisplayPlatform") != nullptr;
+    if (want_angle && !g_angle_in_use) {
+        LOG_E("ANGLE was requested but could not be loaded; running on the system driver\n")
+    }
 #else
     gles = (void*)(~(uintptr_t)0);
     egl = (void*)(~(uintptr_t)0);
