@@ -1121,6 +1121,25 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempDrawFBO);
+
+        // Known limitation, Adreno 750 only; Mali-G77 is unaffected.
+        //
+        // The blit reports no error and the depth really does arrive -- one test
+        // sequence reads the copied 0.25 back correctly after the application
+        // writes GL_DEPTH_STENCIL_TEXTURE_MODE again (with the value it already
+        // holds; GL_DEPTH_COMPONENT is the GLES 3.1 default), which it could only
+        // do if the blit had landed. Yet another sequence that looks equivalent
+        // still samples 0, and issuing those same calls from inside this function
+        // -- through GLES.* or through this file's own wrappers, before or after
+        // deleting the temporary framebuffer, with or without an explicit rebind
+        // -- never has any effect at all.
+        //
+        // So the copy works and the readback is unreliable, and which of the two
+        // a given sequence gets has not been isolated. Nothing is attempted here:
+        // a workaround that was measured not to work is worse than the honest
+        // gap, and one that papers over a mechanism nobody understands is worse
+        // still.
+
     } else {
         GLES.glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
     }
