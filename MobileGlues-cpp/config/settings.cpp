@@ -63,8 +63,23 @@ void init_settings() {
         maxGlslCacheSize = success ? config_get_int("maxGlslCacheSize") * 1024 * 1024 : 0;
     }
 
+    // config_get_int returns -1 for a key that is absent, so a config.json written
+    // without "enableANGLE" -- what a launcher that sets only some keys produces --
+    // arrives here, as does any out-of-range value. Both mean "the config did not
+    // say", and that resolves to the same thing as having no config at all.
+    //
+    // It used to resolve to EnableIfPossible instead, which made an absent key mean
+    // the opposite of an absent file. That never showed, because off Adreno 730/740
+    // checkIfANGLESupported reduces to hasVulkan12(), and hasVulkan12 could not
+    // succeed while config/gpu_utils.cpp handed dlopen library names with no ".so".
+    // Fixing those names would have turned ANGLE on by itself, for the first time,
+    // on any device whose *physical device* reports Vulkan 1.2 or newer -- so the
+    // fallback is written down rather than left to a sign convention.
+    //
+    // The two range checks below already fall back to their neutral value; this one
+    // was the exception.
     if (static_cast<int>(angleConfig) < 0 || static_cast<int>(angleConfig) > 3) {
-        angleConfig = AngleConfig::EnableIfPossible;
+        angleConfig = AngleConfig::DisableIfPossible;
     }
     if (static_cast<int>(noErrorConfig) < 0 || static_cast<int>(noErrorConfig) > 3) {
         noErrorConfig = NoErrorConfig::Auto;

@@ -115,10 +115,7 @@ void temporarilyBindBuffer(GLuint bufferID, GLenum target = GL_ARRAY_BUFFER) {
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
     glGetIntegerv(bindingQuery, &prev);
-    if (prev == bufferID) {
-        bufferBindingStack[target].push_back(-1);
-        // return;
-    }
+    // Push prev even when it is already bound: restore always pops once, and rebinding the same object is a no-op.
     bufferBindingStack[target].push_back(static_cast<GLuint>(prev));
 
     LOG_D("[DSA] [TempBind] target=0x%X, prev=%u -> bind=%u", target, prev, bufferID);
@@ -431,10 +428,7 @@ void temporarilyBindFramebuffer(GLuint framebufferID, GLenum target = GL_DRAW_FR
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
     glGetIntegerv(bindingQuery, &prev);
-    if (prev == framebufferID) {
-        framebufferBindingStack[target].push_back(-1);
-        // return;
-    }
+    // Push prev even when it is already bound: restore always pops once, and rebinding the same object is a no-op.
     framebufferBindingStack[target].push_back(static_cast<GLuint>(prev));
     LOG_D("[DSA] [TempBind] target=0x%X, prev=%u -> bind=%u", target, prev, framebufferID);
     CHECK_GL_ERROR;
@@ -760,10 +754,7 @@ void temporarilyBindRenderbuffer(GLuint renderbufferID) {
     GLenum bindingQuery = GetBindingQuery(GL_RENDERBUFFER);
     GLint prev = 0;
     glGetIntegerv(bindingQuery, &prev);
-    if (prev == renderbufferID) {
-        renderbufferBindingStack[GL_RENDERBUFFER].push_back(-1);
-        // return;
-    }
+    // Push prev even when it is already bound: restore always pops once, and rebinding the same object is a no-op.
     renderbufferBindingStack[GL_RENDERBUFFER].push_back(static_cast<GLuint>(prev));
     LOG_D("[DSA] [TempBind] prev=%u -> bind=%u", prev, renderbufferID);
     CHECK_GL_ERROR;
@@ -880,10 +871,7 @@ void temporarilyBindTexture(GLuint textureID, GLenum possibleTarget = 0) {
     GLenum bindingQuery = GetBindingQuery(target, true);
     GLint prev = 0;
     glGetIntegerv(bindingQuery, &prev);
-    if (prev == static_cast<GLint>(textureID)) {
-        textureBindingStack[target].push_back(-1);
-        // return;
-    }
+    // Push prev even when it is already bound: restore always pops once, and rebinding the same object is a no-op.
     textureBindingStack[target].push_back(static_cast<GLuint>(prev));
     LOG_D("[DSA] [TempBind] target=0x%X, prev=%u -> bind=%u", target, prev, textureID);
     CHECK_GL_ERROR;
@@ -1641,10 +1629,7 @@ static void pushXFB(GLuint xfb) {
     LOG_D("[DSA] pushXFB, xfb: %u", xfb);
     GLint prev = 0;
     glGetIntegerv(GL_TRANSFORM_FEEDBACK_BINDING, &prev);
-    if (xfb == prev) {
-        g_xfbBindingStack.push_back(-1);
-        // return;
-    }
+    // Push prev even when it is already bound: popXFB always pops once, and rebinding the same object is a no-op.
     g_xfbBindingStack.push_back(prev);
     glBindTransformFeedback(GL_TRANSFORM_FEEDBACK, xfb);
     CHECK_GL_ERROR;
@@ -1704,6 +1689,10 @@ GLAPI void glTransformFeedbackBufferRange(GLuint xfb, GLuint index, GLuint buffe
     LOG_D("[DSA] Bound buffer %u to TFBO %u at index %u (offset=%lld, size=%lld)", buffer, xfb, index, offset, size);
 }
 
+// ES has no glGetTransformFeedback*v, so the three queries below read the object pushXFB has just made
+// current through the glGetInteger* family instead. They used to call themselves with GL_TRANSFORM_FEEDBACK
+// as the object name -- nothing broke the recursion, so any call ran the stack out and rebound the XFB object
+// on the way down.
 GLAPI void glGetTransformFeedbackiv(GLuint xfb, GLenum pname, GLint* param) {
     LOG();
     LOG_D("[DSA] glGetTransformFeedbackiv, xfb=%u, pname=0x%X, param=%p", xfb, pname, param);
@@ -1712,7 +1701,7 @@ GLAPI void glGetTransformFeedbackiv(GLuint xfb, GLenum pname, GLint* param) {
         // return;
     }
     pushXFB(xfb);
-    glGetTransformFeedbackiv(GL_TRANSFORM_FEEDBACK, pname, param);
+    GLES.glGetIntegerv(pname, param);
     CHECK_GL_ERROR;
     popXFB();
     LOG_D("[DSA] Retrieved TFBO %u param 0x%X = %d", xfb, pname, *param);
@@ -1726,7 +1715,7 @@ GLAPI void glGetTransformFeedbacki_v(GLuint xfb, GLenum pname, GLuint index, GLi
         // return;
     }
     pushXFB(xfb);
-    glGetTransformFeedbacki_v(GL_TRANSFORM_FEEDBACK, pname, index, param);
+    GLES.glGetIntegeri_v(pname, index, param);
     CHECK_GL_ERROR;
     popXFB();
     LOG_D("[DSA] Retrieved TFBO %u param 0x%X at index %u = %d", xfb, pname, index, *param);
@@ -1740,7 +1729,7 @@ GLAPI void glGetTransformFeedbacki64_v(GLuint xfb, GLenum pname, GLuint index, G
         // return;
     }
     pushXFB(xfb);
-    glGetTransformFeedbacki64_v(GL_TRANSFORM_FEEDBACK, pname, index, param);
+    GLES.glGetInteger64i_v(pname, index, param);
     CHECK_GL_ERROR;
     popXFB();
     LOG_D("[DSA] Retrieved TFBO %u param 0x%X at index %u = %lld", xfb, pname, index, *param);
