@@ -45,6 +45,11 @@
 // Total wall time is a budget (MG_BENCH_BUDGET_MS, default 8 s) rather than a
 // fixed amount of work: a slow device does fewer rounds instead of making the
 // user wait proportionally longer.
+//
+// If a pass still comes out too shaky to rank anything by, it is repeated with
+// longer batches -- up to four passes. When even the fourth misses the target,
+// the calmest of the four is reported with noisy=true and the app puts the
+// decision to the user rather than presenting noise as a measurement.
 
 #include "multidraw.h"
 #include "../config/settings.h"
@@ -63,8 +68,10 @@
 
 extern std::atomic<uint32_t> g_md_fallback_tick;
 
-// 0..1000 while a run is in progress, so the UI can show how far along it is.
-// Read from another thread through mg_multidraw_bench_progress().
+// Progress of the current run, as attempt * 1000 + permille within that attempt
+// (attempt is 0-based). A retry restarts the bar, which is what actually
+// happened; keeping both numbers in one atomic keeps them consistent for the
+// thread reading them through mg_multidraw_bench_progress().
 static std::atomic<int> g_bench_progress{0};
 
 namespace {
@@ -90,6 +97,20 @@ constexpr int BENCH_MAX_ROUNDS = 101;
 constexpr double BENCH_DEFAULT_BUDGET_US = 8.0e6;
 constexpr double BENCH_MIN_BUDGET_US = 1.0e6;
 constexpr double BENCH_MAX_BUDGET_US = 120.0e6;
+
+// A spread wider than this means candidates within a few percent of each other
+// cannot be told apart, so the pass is retried with longer batches.
+constexpr double BENCH_NOISE_TARGET = 0.15;
+constexpr int BENCH_MAX_ATTEMPTS = 4;
+constexpr double BENCH_MIN_RETRY_SCALE = 2.0;
+constexpr double BENCH_MAX_RETRY_SCALE = 8.0;
+// How much longer than the base budget a single retry may take, and how long
+// the whole thing may take before giving up on ever settling down.
+constexpr double BENCH_MAX_BUDGET_SCALE = 3.0;
+constexpr double BENCH_TOTAL_BUDGET_US = 75.0e6;
+
+// Written when a run finishes, past any value a real attempt can produce.
+constexpr int BENCH_PROGRESS_DONE = BENCH_MAX_ATTEMPTS * 1000;
 
 struct bench_scene_t {
     GLuint program = 0;
@@ -410,6 +431,82 @@ double bench_mad(const std::vector<double>& v, double median) {
     return 1.4826 * bench_median(std::move(dev));
 }
 
+// One complete pass over every candidate, and how well it came out.
+struct bench_attempt_t {
+    std::vector<bench_candidate_t> candidates;
+    int rounds = 0;
+    double worst_rsd = 0.0;
+};
+
+// The spread of the shakiest candidate is the grade for the whole pass: the
+// ranking is only as trustworthy as its least stable member.
+double bench_worst_rsd(const std::vector<bench_candidate_t>& candidates) {
+    double worst = 0.0;
+    for (const bench_candidate_t& c : candidates) {
+        // Fewer than three samples cannot say anything about spread, and a
+        // candidate that kept falling back never really ran.
+        if (c.samples.size() < 3) continue;
+        if (c.samples.size() * 2 <= static_cast<size_t>(c.discarded)) continue;
+        const double median = bench_median(c.samples);
+        if (median <= 0.0) continue;
+        worst = std::max(worst, bench_mad(c.samples, median) / median);
+    }
+    return worst;
+}
+
+// One round-robin pass. `templ` supplies the candidate list and the per-candidate
+// batch size; samples come back in the returned copy.
+bench_attempt_t bench_measure(bench_scene_t& scene, const std::vector<bench_candidate_t>& templ,
+                              double budget_us, int attempt) {
+    bench_attempt_t result;
+    result.candidates = templ;
+    for (bench_candidate_t& c : result.candidates) {
+        c.samples.clear();
+        c.discarded = 0;
+    }
+
+    double per_round_us = 0.0;
+    for (const bench_candidate_t& c : result.candidates) {
+        per_round_us += c.probe_us * c.iterations;
+    }
+    // Two glFinish round trips per batch, generously accounted for.
+    per_round_us += static_cast<double>(result.candidates.size()) * 400.0;
+
+    int rounds = per_round_us > 0.0 ? static_cast<int>(budget_us / per_round_us) : BENCH_MIN_ROUNDS;
+    rounds = std::min(std::max(rounds, BENCH_MIN_ROUNDS), BENCH_MAX_ROUNDS);
+    if (rounds % 2 == 0) ++rounds;
+
+    const double start_us = now_us();
+    const int total_batches = rounds * static_cast<int>(result.candidates.size());
+    int completed = 0;
+    for (int r = 0; r < rounds; ++r) {
+        const bool forward = (r % 2) == 0;
+        for (size_t i = 0; i < result.candidates.size(); ++i) {
+            bench_candidate_t& c =
+                result.candidates[forward ? i : result.candidates.size() - 1 - i];
+            const double us = bench_timed_batch(scene, c.entry, c.backend, c.iterations);
+            if (us < 0.0) {
+                ++c.discarded;
+            } else {
+                c.samples.push_back(us);
+            }
+            ++completed;
+            g_bench_progress.store(attempt * 1000 + completed * 1000 / total_batches,
+                                   std::memory_order_relaxed);
+        }
+        // Overrunning the budget is worse than one round short: the user is
+        // staring at a spinner, and the median is already stable by now.
+        if (r + 1 >= BENCH_MIN_ROUNDS && now_us() - start_us > budget_us) {
+            rounds = r + 1;
+            break;
+        }
+    }
+
+    result.rounds = rounds;
+    result.worst_rsd = bench_worst_rsd(result.candidates);
+    return result;
+}
+
 double bench_budget_us() {
     double budget = BENCH_DEFAULT_BUDGET_US;
     if (const char* raw = getenv("MG_BENCH_BUDGET_MS")) {
@@ -439,8 +536,8 @@ const char* bench_entry_label(md_entry_t e) {
 
 } // namespace
 
-// How far along the current run is, 0..1000. Stays at its last value once the
-// run returns; the caller decides what to do with that.
+// attempt * 1000 + permille within that attempt, attempt 0-based. Stays at its
+// last value once the run returns; the caller decides what to do with that.
 extern "C" __attribute__((visibility("default"))) int mg_multidraw_bench_progress() {
     return g_bench_progress.load(std::memory_order_relaxed);
 }
@@ -468,7 +565,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         cJSON_free(text);
         cJSON_Delete(root);
         bench_scene_destroy(scene);
-        g_bench_progress.store(1000, std::memory_order_relaxed);
+        g_bench_progress.store(BENCH_PROGRESS_DONE, std::memory_order_relaxed);
         return result.c_str();
     }
 
@@ -520,48 +617,54 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         cJSON_free(text);
         cJSON_Delete(root);
         bench_scene_destroy(scene);
-        g_bench_progress.store(1000, std::memory_order_relaxed);
+        g_bench_progress.store(BENCH_PROGRESS_DONE, std::memory_order_relaxed);
         return result.c_str();
     }
 
-    // ---- Rounds: spend the remaining budget, but keep the count odd ----
+    // ---- Measure, and measure again if the numbers are too shaky ----
+    //
+    // The spread being fought here is between rounds, so adding rounds does not
+    // shrink it -- it only pins it down more precisely. What shrinks it is a
+    // longer timed batch, which averages the jitter away inside each sample:
+    // spread falls as 1/sqrt(batch length), so reaching the target from a
+    // spread k times too large means batches roughly k^2 times longer.
+    //
+    // Four passes at most. If none of them lands under the target, the calmest
+    // one is reported with noisy=true, and the caller asks the user whether an
+    // order that shaky is worth adopting.
 
-    double per_round_us = 0.0;
-    for (const bench_candidate_t& c : candidates) {
-        per_round_us += c.probe_us * c.iterations;
-    }
-    // Two glFinish round trips per batch, generously accounted for.
-    per_round_us += static_cast<double>(candidates.size()) * 400.0;
-
-    const double remaining_us = budget_us - (now_us() - started_us);
-    int rounds = per_round_us > 0.0 ? static_cast<int>(remaining_us / per_round_us) : BENCH_MIN_ROUNDS;
-    rounds = std::min(std::max(rounds, BENCH_MIN_ROUNDS), BENCH_MAX_ROUNDS);
-    if (rounds % 2 == 0) ++rounds;
-
-    // ---- Measure ----
-
-    int completed = 0;
-    const int total_batches = rounds * static_cast<int>(candidates.size());
-    for (int r = 0; r < rounds; ++r) {
-        const bool forward = (r % 2) == 0;
-        for (size_t i = 0; i < candidates.size(); ++i) {
-            bench_candidate_t& c = candidates[forward ? i : candidates.size() - 1 - i];
-            const double us = bench_timed_batch(scene, c.entry, c.backend, c.iterations);
-            if (us < 0.0) {
-                ++c.discarded;
-            } else {
-                c.samples.push_back(us);
-            }
-            ++completed;
-            g_bench_progress.store(completed * 1000 / total_batches, std::memory_order_relaxed);
+    bench_attempt_t best;
+    bool have_best = false;
+    double budget_scale = 1.0;
+    int attempt = 0;
+    for (; attempt < BENCH_MAX_ATTEMPTS; ++attempt) {
+        const double attempt_budget = budget_us * budget_scale;
+        bench_attempt_t pass = bench_measure(scene, candidates, attempt_budget, attempt);
+        if (!have_best || pass.worst_rsd < best.worst_rsd) {
+            best = std::move(pass);
+            have_best = true;
         }
-        // Overrunning the budget is worse than one round short: the user is
-        // staring at a spinner, and the median is already stable by now.
-        if (r + 1 >= BENCH_MIN_ROUNDS && now_us() - started_us > budget_us) {
-            rounds = r + 1;
-            break;
+        if (best.worst_rsd <= BENCH_NOISE_TARGET) break;
+        if (attempt + 1 >= BENCH_MAX_ATTEMPTS) break;
+        // A device this busy will not settle down within any budget we are
+        // willing to make the user sit through.
+        if (now_us() - started_us > BENCH_TOTAL_BUDGET_US) break;
+
+        double scale = best.worst_rsd / BENCH_NOISE_TARGET;
+        scale = std::min(std::max(scale * scale, BENCH_MIN_RETRY_SCALE), BENCH_MAX_RETRY_SCALE);
+        for (bench_candidate_t& c : candidates) {
+            c.iterations = static_cast<int>(std::min(c.iterations * scale,
+                                                     static_cast<double>(BENCH_MAX_ITERATIONS)));
         }
+        // Longer batches with the same budget would just mean fewer rounds, so
+        // the budget grows with them -- up to a cap, since the user is waiting.
+        budget_scale = std::min(budget_scale * scale, BENCH_MAX_BUDGET_SCALE);
     }
+
+    const int attempts = attempt + 1;
+    const bool noisy = best.worst_rsd > BENCH_NOISE_TARGET;
+    candidates = std::move(best.candidates);
+    const int rounds = best.rounds;
 
     // ---- Report ----
 
@@ -598,6 +701,10 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     }
 
     cJSON_AddNumberToObject(root, "rounds", rounds);
+    cJSON_AddNumberToObject(root, "attempts", attempts);
+    cJSON_AddNumberToObject(root, "worstNoise", best.worst_rsd);
+    cJSON_AddNumberToObject(root, "noiseTarget", BENCH_NOISE_TARGET);
+    cJSON_AddBoolToObject(root, "noisy", noisy);
     cJSON_AddNumberToObject(root, "elapsedMs", (now_us() - started_us) / 1000.0);
 
     GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
@@ -607,6 +714,6 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     result = text ? text : "{\"error\":\"print failed\"}";
     cJSON_free(text);
     cJSON_Delete(root);
-    g_bench_progress.store(1000, std::memory_order_relaxed);
+    g_bench_progress.store(BENCH_PROGRESS_DONE, std::memory_order_relaxed);
     return result.c_str();
 }
