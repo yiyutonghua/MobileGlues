@@ -25,6 +25,12 @@ struct framebuffer_t {
     // copy control, so an owning raw pointer here both leaked every array it ever
     // allocated and made the type unsafe to copy. Indexing syntax is unchanged.
     std::vector<attachment_t> color_attachments;
+    // Where glDrawBuffers physically put each logical colour attachment. GLES only
+    // accepts GL_COLOR_ATTACHMENTi in slot i of the draw buffer list, so a shuffled
+    // glDrawBuffers has to re-attach; this records the result so a later
+    // glReadBuffer can find the texture instead of moving it again. Empty means no
+    // shuffle is in effect and every attachment is where the application put it.
+    std::vector<GLenum> draw_buffer_map;
     attachment_t depth_attachment = {0};
     attachment_t stencil_attachment = {0};
 };
