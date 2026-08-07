@@ -9,6 +9,7 @@
 #include "enable.h"
 #include "../egl/context.h"
 #include "buffer.h"
+#include "texture.h"
 #include <string>
 #include <format>
 #include <vector>
@@ -64,6 +65,20 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         GLES.glGetIntegerv(pname, &es_params);
         CHECK_GL_ERROR(*params) = es_params * 2;
         // Why is the real GL_MAX_TEXTURE_IMAGE_UNITS bigger than what GLES.glGetIntegerv returns?
+        break;
+    }
+    case GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: {
+        // This is the bound on glActiveTexture, and drivers report generously --
+        // Mali-G77 says 96. Forwarding it unchanged promised more units than the
+        // layer keeps bindings for, and the units past the end were accepted by
+        // the driver but dropped here, so a glBindTexture after one of them went
+        // to the wrong unit with nothing reporting it. Promise only what
+        // gl/texture.cpp can actually track.
+        int es_params = 32;
+        GLES.glGetIntegerv(pname, &es_params);
+        CHECK_GL_ERROR
+        const int tracked = mg_max_texture_units();
+        (*params) = es_params < tracked ? es_params : tracked;
         break;
     }
     case GL_CONTEXT_FLAGS: {

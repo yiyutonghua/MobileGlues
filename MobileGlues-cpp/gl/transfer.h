@@ -92,6 +92,14 @@ struct mg_upload_fix_t {
     GLint prev_img_h_ = 0, prev_skip_img_ = 0;
 };
 
+// The same predicate mg_upload_fix_t::has_data() answers, asked before the
+// conversion exists. internal_convert() in gl/texture.cpp has to know whether a
+// call carries bytes -- an allocation's `type` describes nothing, so nothing may
+// be derived from it -- but it runs first, because the conversion needs the
+// destination format it produces. Both go through here so the two can never
+// disagree about the same call.
+bool mg_upload_has_data(const void* pixels);
+
 #endif // __cplusplus
 
 #ifdef __cplusplus

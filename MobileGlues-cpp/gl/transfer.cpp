@@ -190,12 +190,19 @@ bool is_reversed_family(GLenum format, GLenum type) {
 
 } // namespace
 
+bool mg_upload_has_data(const void* pixels) {
+    if (pixels != nullptr) return true;
+    // A null pointer still carries bytes when an unpack buffer is bound: there it
+    // is an offset into that buffer, not "no data".
+    GLint pbo_probe = 0;
+    GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo_probe);
+    return pbo_probe != 0;
+}
+
 mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
                                  const void* pixels_in, GLenum want_format, bool three_d)
     : format(format_in), type(type_in), pixels(pixels_in) {
-    GLint pbo_probe = 0;
-    GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo_probe);
-    has_data_ = !(pixels_in == nullptr && pbo_probe == 0);
+    has_data_ = mg_upload_has_data(pixels_in);
 
     const upload_rule_t* rule = find_upload_rule(format_in, type_in, want_format);
     if (!rule) {

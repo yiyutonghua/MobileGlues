@@ -167,7 +167,15 @@ TextureTarget ConvertGLEnumToTextureTarget(GLenum target) {
     }
 }
 
-const int MAX_TEXTURE_IMAGE_UNITS = 32;
+// glActiveTexture is bounded by GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, not by
+// GL_MAX_TEXTURE_IMAGE_UNITS, and that combined figure is routinely far larger:
+// Mali-G77 reports 96. At 32 this table was smaller than the limit the layer
+// itself advertised, so glActiveTexture(GL_TEXTURE32..95) -- legal by that
+// advertisement, and accepted by the driver -- returned early without telling
+// the driver anything, and the glBindTexture that followed silently landed on
+// whichever unit was active before. mg_max_texture_units() now also caps what
+// the layer is willing to promise, so the two can no longer disagree.
+const int MAX_TEXTURE_IMAGE_UNITS = 128;
 
 class TextureBindingSlot {
 public:
@@ -334,6 +342,8 @@ void MarkTextureObjectForDeletion(unsigned texture) {
     delete textureObject;
 }
 
+int mg_max_texture_units(void) { return MAX_TEXTURE_IMAGE_UNITS; }
+
 TextureObject* mgGetTexObjectByTarget(GLenum target) {
     return GetTextureUnit(GetCurrentTextureUnitIndex())
         .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
@@ -348,8 +358,14 @@ TextureObject* mgGetTexObjectByID(unsigned texture) {
     return BufferObjectsVec[texture];
 }
 
-// Inline mapping for various internal formats to format and type
-void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
+// Inline mapping for various internal formats to format and type.
+//
+// has_data says whether this call carries bytes for `type` to describe -- the
+// same thing mg_upload_fix_t::has_data() reports, asked early because this runs
+// first. It matters only where an unsized internalformat has to be resolved: an
+// allocation's `type` describes nothing, so resolving storage from it means
+// resolving it from decoration.
+void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format, bool has_data) {
     // GL_BGRA is deliberately not renamed here: a rename converts the enum and
     // not the data. Every pixel-transfer entry point routes through
     // mg_upload_fix_t (gl/transfer.h) before calling this, which converts both.
@@ -362,7 +378,17 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         if (type) *type = GL_UNSIGNED_INT;
         break;
     case GL_DEPTH_COMPONENT32:
-        *internal_format = GL_DEPTH_COMPONENT;
+        // No GLES driver accepts GL_DEPTH_COMPONENT32 as an internalformat --
+        // GL_OES_depth32 is absent on both Mali and Adreno -- so it has to become
+        // something else. GL_DEPTH_COMPONENT24 is that something: it keeps the
+        // unorm distribution the name promises (GL_DEPTH_COMPONENT32F does not),
+        // and it is the only depth-only form a depth blit will accept, because
+        // glBlitFramebuffer compares the declared internalformat rather than the
+        // bit count. Going through the unsized GL_DEPTH_COMPONENT instead made
+        // the driver answer GL_DEPTH_COMPONENT32 (Mali) or GL_DEPTH_COMPONENT
+        // (Adreno) to GL_TEXTURE_INTERNAL_FORMAT, neither of which ever matches a
+        // framebuffer, so glCopyTexSubImage2D copied nothing at all.
+        *internal_format = GL_DEPTH_COMPONENT24;
         if (type) *type = GL_UNSIGNED_INT;
         break;
     case GL_DEPTH_COMPONENT32F:
@@ -370,10 +396,54 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
         break;
     case GL_DEPTH_COMPONENT:
         LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format),
-              glEnumToString(*format), glEnumToString(*type));
-        if (type) {
+              format ? glEnumToString(*format) : "(none)", type ? glEnumToString(*type) : "(none)");
+        if (type && has_data) {
+            // A glTexImage* that carries bytes. Deliberately left unsized:
+            // deriving a sized format from format/type here is what used to make
+            // drivers reject otherwise valid uploads, and ES2 compatibility --
+            // which every ES3 driver carries -- accepts the unsized form with
+            // data.
+            //
+            // GL_FLOAT is the one type that compatibility does not reach. ES2
+            // depth textures predate float depth entirely, so the unsized form
+            // with GL_FLOAT is rejected outright, and a rejected glTexImage2D
+            // leaves the level at its defaults -- the application is then holding
+            // a GL_RGBA texture with no depth bits, and nothing says so.
+            // Measured on Mali-G77: GL_TEXTURE_INTERNAL_FORMAT came back 0x1908
+            // with GL_TEXTURE_DEPTH_SIZE 0, and sampling it returned 0.
+            // GL_DEPTH_COMPONENT32F is the only destination ES 3.0 offers for
+            // float depth, and here the type is evidence: there really are float
+            // bits, and GL 4.6 sec. 8.5 lets the effective internal format of a
+            // base internal format depend on format and type.
+            if (*type == GL_FLOAT) {
+                *internal_format = GL_DEPTH_COMPONENT32F;
+            } else {
+                *internal_format = GL_DEPTH_COMPONENT;
+                *type = GL_UNSIGNED_INT;
+            }
+        } else if (type) {
+            // An allocation-only glTexImage*. The type describes no bytes, so it
+            // must not choose the storage class: the ordinary shadow-map
+            // allocation is glTexImage2D(GL_DEPTH_COMPONENT, ..., GL_FLOAT, NULL)
+            // with GL_FLOAT written out of habit, and honouring it there silently
+            // makes the whole texture floating-point. That matters because
+            // glTexSubImage2D never revisits this function and never inspects the
+            // level, so every later fixed-point upload into a level turned 32F is
+            // rejected by ES -- which binds GL_DEPTH_COMPONENT32F to GL_FLOAT
+            // alone, where GL 4.6 converts -- and the rejection is invisible.
+            // Measured on Mali-G77: the allocation and a following
+            // glTexSubImage2D(GL_UNSIGNED_INT) both succeed as written here, and
+            // resolving to 32F turned that second call into GL_INVALID_OPERATION
+            // with the texture left holding its old contents.
             *internal_format = GL_DEPTH_COMPONENT;
             *type = GL_UNSIGNED_INT;
+        } else {
+            // glTexStorage*. There is no data and no type to be wrong about, and
+            // the unsized form is rejected outright by both vendors -- it is not
+            // in the sized-internalformat table that glTexStorage* requires.
+            // Leaving it alone allocated no storage at all while the layer went
+            // on recording the texture as complete.
+            *internal_format = GL_DEPTH_COMPONENT24;
         }
         break;
     case GL_DEPTH_STENCIL:
@@ -636,7 +706,7 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, "
           "border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type)
-    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format);
+    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format, mg_upload_has_data(pixels));
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_1D) {
@@ -680,7 +750,7 @@ void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     // from the conversion, which is the one thing that knows what the bytes are.
     // An allocation has no bytes to describe, so there both are adopted.
     GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
-    internal_convert(&want_if, &want_type, &want_fmt);
+    internal_convert(&want_if, &want_type, &want_fmt, mg_upload_has_data(pixels));
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, 1, format, type, pixels, want_fmt, /*three_d=*/false);
@@ -733,7 +803,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 
     // Same ordering as glTexImage2D; see the note there.
     GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
-    internal_convert(&want_if, &want_type, &want_fmt);
+    internal_convert(&want_if, &want_type, &want_fmt, mg_upload_has_data(pixels));
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, depth, format, type, pixels, want_fmt);
@@ -776,7 +846,7 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage1D not implemented!")
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d", target, levels, internalFormat,
           width)
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
 
     GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
@@ -798,7 +868,7 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
           "%d, height: %d",
           target, levels, internalFormat, width, height)
 
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
     GLES.glTexStorage2D(target, levels, internalFormat, width, height);
 
     GET_TEXTURE_OBJECT(target);
@@ -823,7 +893,7 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
           "%d, height: %d, depth: %d",
           target, levels, internalFormat, width, height, depth)
 
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
 
     GLES.glTexStorage3D(target, levels, internalFormat, width, height, depth);
 
@@ -863,12 +933,33 @@ void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x
     CHECK_GL_ERROR
 }
 
+// Depth without stencil. GL_DEPTH_COMPONENT32 belongs here even though no GLES
+// driver accepts it as an internalformat: this predicate is fed by
+// GL_TEXTURE_INTERNAL_FORMAT, and a level created from the unsized
+// GL_DEPTH_COMPONENT is reported back as exactly GL_DEPTH_COMPONENT32 by Mali.
+// Leaving it out sent those levels down the colour path, where
+// glCopyTexSubImage2D silently copied nothing.
 static int is_depth_format(GLenum format) {
     switch (format) {
     case GL_DEPTH_COMPONENT:
     case GL_DEPTH_COMPONENT16:
     case GL_DEPTH_COMPONENT24:
+    case GL_DEPTH_COMPONENT32:
     case GL_DEPTH_COMPONENT32F:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+// Combined depth+stencil. Kept apart from is_depth_format() because these need a
+// different attachment point and a different blit mask -- treating them as plain
+// depth attaches only half the texture and drops the stencil half on the floor.
+static int is_depth_stencil_format(GLenum format) {
+    switch (format) {
+    case GL_DEPTH_STENCIL:
+    case GL_DEPTH24_STENCIL8:
+    case GL_DEPTH32F_STENCIL8:
         return 1;
     default:
         return 0;
@@ -919,7 +1010,7 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
     if (is_depth_format(internalFormat)) {
         GLenum format = GL_DEPTH_COMPONENT;
         GLenum type = GL_UNSIGNED_INT;
-        internal_convert(&internalFormat, &type, &format);
+        internal_convert(&internalFormat, &type, &format, /*has_data=*/false);
         GLES.glTexImage2D(target, level, (GLint)internalFormat, width, height, border, format, type, nullptr);
         CHECK_GL_ERROR_NO_INIT
         GLint prevDrawFBO;
@@ -946,6 +1037,9 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
         }
         CHECK_GL_ERROR_NO_INIT
 
+        // Flush before reading depth through a blit -- see the note in
+        // glCopyTexSubImage2D for the Adreno measurement behind this.
+        if (GLES.glFlush != nullptr) GLES.glFlush();
         GLES.glBlitFramebuffer(x, y, x + width, y + height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         CHECK_GL_ERROR_NO_INIT
 
@@ -982,9 +1076,14 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
           "x: %d, y: %d, width: %d, height: %d",
           glEnumToString(target), level, xoffset, yoffset, x, y, width, height)
 
-    if (is_depth_format((GLenum)internalFormat)) {
-        GLint prevReadFBO, prevDrawFBO;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+    const int depth_stencil = is_depth_stencil_format((GLenum)internalFormat);
+    if (depth_stencil || is_depth_format((GLenum)internalFormat)) {
+        const GLenum attachment = depth_stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
+        const GLbitfield mask = depth_stencil ? (GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT) : GL_DEPTH_BUFFER_BIT;
+
+        // The read framebuffer is the source and is left exactly as the caller
+        // had it; only the draw binding is borrowed and put back.
+        GLint prevDrawFBO;
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
 
         GLuint tempDrawFBO;
@@ -993,19 +1092,50 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
 
         GLint currentTex;
         glGetIntegerv(get_binding_for_target(target), &currentTex);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, target, currentTex, level);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, attachment, target, currentTex, level);
 
         if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            TX_WARN_ONCE("glCopyTexSubImage2D: depth destination (internalformat 0x%04X) will not make a complete "
+                         "framebuffer; the copy was skipped",
+                         (unsigned)internalFormat);
             glDeleteFramebuffers(1, &tempDrawFBO);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
             return;
         }
 
-        GLES.glBlitFramebuffer(x, y, x + width, y + height, xoffset, yoffset, xoffset + width, yoffset + height,
-                               GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        // glBlitFramebuffer is far stricter than glCopyTexSubImage2D: for the
+        // depth and stencil bits GLES demands the source and destination formats
+        // be identical, where GL 4.6 converts. A depth-only texture cannot be
+        // filled from a depth+stencil framebuffer, nor the reverse, and the
+        // failure is invisible from here -- this layer's glGetError never
+        // reports. Say so once rather than copying nothing in silence.
+        if (GLES.glGetError != nullptr) {
+            while (GLES.glGetError() != GL_NO_ERROR) {
+            }
+        }
+        // The flush is load-bearing. Adreno keeps the source's pending depth
+        // writes in an unsubmitted tile pass, and this blit reads the buffer as
+        // it is in memory -- for the first depth blit from a fresh default
+        // framebuffer that is garbage, silently, with no error raised. Measured
+        // on Adreno 750: without this, the first copy in a context reads junk
+        // (two back-to-back blits BOTH read junk, so retrying is no fix) while a
+        // single glFlush beforehand makes the same copy read the true values,
+        // reproducibly. glFinish also works but synchronizes the CPU; the flush
+        // is enough. Mali needs neither and is unaffected. Copies are rare
+        // operations, so one flush here is cheap.
+        if (GLES.glFlush != nullptr) GLES.glFlush();
+        GLES.glBlitFramebuffer(x, y, x + width, y + height, xoffset, yoffset, xoffset + width, yoffset + height, mask,
+                               GL_NEAREST);
+        if (GLES.glGetError != nullptr && GLES.glGetError() != GL_NO_ERROR) {
+            TX_WARN_ONCE("glCopyTexSubImage2D: the driver refused a depth blit into internalformat 0x%04X -- GLES "
+                         "requires the source framebuffer to have exactly the same depth/stencil format, so nothing "
+                         "was copied",
+                         (unsigned)internalFormat);
+        }
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempDrawFBO);
+
     } else {
         GLES.glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
     }
@@ -1197,6 +1327,12 @@ void glActiveTexture(GLenum texture) {
     LOG()
     LOG_D("glActiveTexture, texture = %s", glEnumToString(texture))
     if (texture < GL_TEXTURE0 || texture >= GL_TEXTURE0 + MAX_TEXTURE_IMAGE_UNITS) {
+        // Returning here leaves the active unit where it was, so the caller's
+        // next glBindTexture goes somewhere it did not ask for. Nothing can
+        // report that -- this layer's glGetError never does -- so say it once.
+        TX_WARN_ONCE("glActiveTexture: unit %d is past the %d this layer tracks; the call was ignored and the active "
+                     "unit left unchanged",
+                     (int)(texture - GL_TEXTURE0), MAX_TEXTURE_IMAGE_UNITS);
         LOG_E("Invalid texture enum: %s", glEnumToString(texture))
         return;
     }
