@@ -100,7 +100,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     gl/texture.cpp
     gl/drawing.cpp
     gl/multidraw.cpp
-    gl/multidraw_bench.cpp
+    bench/multidraw_bench.cpp
     gl/mg.cpp
     gl/buffer.cpp
     gl/getter.cpp
