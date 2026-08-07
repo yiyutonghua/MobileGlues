@@ -107,6 +107,11 @@ public:
     GLsizei depth;
 };
 
+// How many texture units this layer can actually track. Anything the driver
+// offers beyond this the layer cannot honour, so it must not be advertised
+// either -- see the GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS case in gl/getter.cpp.
+int mg_max_texture_units(void);
+
 TextureObject* mgGetTexObjectByTarget(GLenum target);
 TextureObject* mgGetTexObjectByID(unsigned texture);
 void InitTextureMap(size_t expectedSize);

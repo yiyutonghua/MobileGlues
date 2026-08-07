@@ -167,7 +167,15 @@ TextureTarget ConvertGLEnumToTextureTarget(GLenum target) {
     }
 }
 
-const int MAX_TEXTURE_IMAGE_UNITS = 32;
+// glActiveTexture is bounded by GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, not by
+// GL_MAX_TEXTURE_IMAGE_UNITS, and that combined figure is routinely far larger:
+// Mali-G77 reports 96. At 32 this table was smaller than the limit the layer
+// itself advertised, so glActiveTexture(GL_TEXTURE32..95) -- legal by that
+// advertisement, and accepted by the driver -- returned early without telling
+// the driver anything, and the glBindTexture that followed silently landed on
+// whichever unit was active before. mg_max_texture_units() now also caps what
+// the layer is willing to promise, so the two can no longer disagree.
+const int MAX_TEXTURE_IMAGE_UNITS = 128;
 
 class TextureBindingSlot {
 public:
@@ -333,6 +341,8 @@ void MarkTextureObjectForDeletion(unsigned texture) {
     BufferObjectsVec[texture] = nullptr;
     delete textureObject;
 }
+
+int mg_max_texture_units(void) { return MAX_TEXTURE_IMAGE_UNITS; }
 
 TextureObject* mgGetTexObjectByTarget(GLenum target) {
     return GetTextureUnit(GetCurrentTextureUnitIndex())
@@ -1263,6 +1273,12 @@ void glActiveTexture(GLenum texture) {
     LOG()
     LOG_D("glActiveTexture, texture = %s", glEnumToString(texture))
     if (texture < GL_TEXTURE0 || texture >= GL_TEXTURE0 + MAX_TEXTURE_IMAGE_UNITS) {
+        // Returning here leaves the active unit where it was, so the caller's
+        // next glBindTexture goes somewhere it did not ask for. Nothing can
+        // report that -- this layer's glGetError never does -- so say it once.
+        TX_WARN_ONCE("glActiveTexture: unit %d is past the %d this layer tracks; the call was ignored and the active "
+                     "unit left unchanged",
+                     (int)(texture - GL_TEXTURE0), MAX_TEXTURE_IMAGE_UNITS);
         LOG_E("Invalid texture enum: %s", glEnumToString(texture))
         return;
     }
