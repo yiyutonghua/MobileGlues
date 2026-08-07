@@ -632,6 +632,20 @@ size_t get_internal_format_size(GLenum internalformat) {
 }
 
 extern std::string bufSampelerName;
+
+// Report a rejected argument once per site. This layer cannot raise a GL error
+// -- glGetError always answers GL_NO_ERROR by design -- so an unusable argument
+// means "do nothing" plus one line a user can paste into a bug report. LOG_W and
+// LOG_E compile to nothing in release builds, hence LOG_W_FORCE.
+#define BU_WARN_ONCE(...)                                                                                              \
+    do {                                                                                                               \
+        static bool mg_bu_warned = false;                                                                              \
+        if (!mg_bu_warned) {                                                                                           \
+            mg_bu_warned = true;                                                                                       \
+            LOG_W_FORCE(__VA_ARGS__)                                                                                   \
+        }                                                                                                              \
+    } while (0)
+
 // Todo: any glGet* related to this function?
 void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
     LOG()
@@ -654,6 +668,20 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
     if (hardware->emulate_texture_buffer) {
         LOG_D("Emulating glTexBuffer");
 
+        // internalformat arrives unvalidated -- a format outside GL 4.6 table 8.16
+        // is GL_INVALID_ENUM in real GL and this layer raises nothing -- so
+        // get_internal_format_size answers 0 for it, as its own default case says.
+        // That 0 used to reach "bufferSize / pixelSize" below: undefined, and on
+        // arm64 it divides to zero, giving a 0 x 1 texture that the emulated
+        // texelFetch then indexes modulo zero. Size the texel first and drop the
+        // call if we cannot, before any binding is disturbed.
+        GLuint pixelSize = get_internal_format_size(internalformat);
+        if (pixelSize == 0) {
+            BU_WARN_ONCE("glTexBuffer: no texel size known for internalformat %s, texture buffer left untouched",
+                         glEnumToString(internalformat));
+            return;
+        }
+
         GLint boundTexture = 0;
         GLint prev_pixel_buffer_binding = 0;
 
@@ -666,6 +694,10 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
 
         if (!boundTexture) {
             LOG_D("No texture bound to GL_TEXTURE_BUFFER, skipping emulation.");
+            // Unit 15 is only ever borrowed for the emulated buffer texture; every
+            // other borrower hands it back. Returning from here without doing so
+            // left the app's next glBindTexture landing on unit 15.
+            GLES.glActiveTexture(GL_TEXTURE0 + gl_state->current_tex_unit);
             return;
         }
 
@@ -682,7 +714,6 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
         LOG_D("Binding texture %u to GL_TEXTURE_2D", boundTexture);
 
         const GLuint MAX_WIDTH = 8192;
-        GLuint pixelSize = get_internal_format_size(internalformat);
         GLuint numElements = bufferSize / pixelSize;
 
         GLuint width = numElements;

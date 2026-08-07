@@ -25,7 +25,6 @@
 #include "../glsl/glsl_for_es.h"
 #include "../log.h"
 #include "../mg.h"
-#include "../pixel.h"
 #include <GL/gl.h>
 #include <ankerl/unordered_dense.h>
 

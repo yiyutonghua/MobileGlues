@@ -105,27 +105,40 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
     // record, while the id that actually became current was g_renderFBO -- so
     // framebuffers[g_renderFBO].color_attachments stayed null and the per-fbo
     // state written later landed on the wrong record.
+    //
+    // The redirect is the draw binding only. GL_READ_FRAMEBUFFER was already left
+    // alone, but GL_FRAMEBUFFER is two bindings in one call, so the target test
+    // moved the read binding to g_renderFBO as well: the two ways of saying "read
+    // framebuffer 0" then meant different framebuffers, and restoring a saved read
+    // binding of 0 -- which gl/texture.cpp does around its blits -- landed on the
+    // FSR1 target or not depending on which spelling the caller used.
+    GLuint draw_fb = framebuffer;
     if (framebuffer == 0 && target != GL_READ_FRAMEBUFFER) {
-        framebuffer = FSR1_Context::g_renderFBO;
+        draw_fb = FSR1_Context::g_renderFBO;
         FSR1_Context::g_dirty = true;
     }
 
-    framebuffer_t& fbo = get_framebuffer(framebuffer);
+    if (draw_fb != 0) {
+        init_framebuffer(get_framebuffer(draw_fb));
+    }
 
     if (target != GL_READ_FRAMEBUFFER) {
-        set_gl_state_current_draw_fbo(framebuffer);
+        set_gl_state_current_draw_fbo(draw_fb);
     }
 
-    if (framebuffer != 0) {
-        init_framebuffer(fbo);
-    }
     if (target == GL_DRAW_FRAMEBUFFER || target == GL_FRAMEBUFFER) {
-        current_draw_fbo = framebuffer;
+        current_draw_fbo = draw_fb;
     }
     if (target == GL_READ_FRAMEBUFFER || target == GL_FRAMEBUFFER) {
         current_read_fbo = framebuffer;
     }
-    GLES.glBindFramebuffer(target, framebuffer);
+
+    if (target == GL_FRAMEBUFFER && draw_fb != framebuffer) {
+        GLES.glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fb);
+        GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
+    } else {
+        GLES.glBindFramebuffer(target, draw_fb);
+    }
 }
 void update_attachment(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
     GLuint current_fbo = (target == GL_READ_FRAMEBUFFER) ? current_read_fbo : current_draw_fbo;
@@ -204,6 +217,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     }
 
     std::vector<GLenum> new_bufs(n);
+    fbo.draw_buffer_map.assign(MAX_COLOR_ATTACHMENTS, 0);
     for (int i = 0; i < n; i++) {
         if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] < GL_COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENTS) {
             GLenum logical_attachment = bufs[i];
@@ -213,6 +227,9 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
             attachment_t& attach = fbo.color_attachments[index];
             GLES.glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, physical_attachment, attach.textarget, attach.texture,
                                         attach.level);
+            // Remember where it went, so glReadBuffer can read it where it is
+            // rather than moving it a second time.
+            fbo.draw_buffer_map[index] = physical_attachment;
         } else {
             new_bufs[i] = bufs[i];
         }
@@ -223,14 +240,24 @@ void glReadBuffer(GLenum src) {
     if (current_read_fbo != 0 && src >= GL_COLOR_ATTACHMENT0 && src < GL_COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENTS) {
         framebuffer_t& fbo = get_framebuffer(current_read_fbo);
         init_framebuffer(fbo);
-        int index = src - GL_COLOR_ATTACHMENT0;
-        attachment_t& attach = fbo.color_attachments[index];
-        GLES.glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, attach.textarget, attach.texture,
-                                    attach.level);
-        GLES.glReadBuffer(GL_COLOR_ATTACHMENT0);
-    } else {
-        GLES.glReadBuffer(src);
+        const int index = src - GL_COLOR_ATTACHMENT0;
+        // glDrawBuffers has to move logical attachment i onto physical
+        // GL_COLOR_ATTACHMENTi, because GLES only accepts COLOR_ATTACHMENTi in slot
+        // i of the draw buffer list. After such a shuffle the texture the
+        // application calls attachment n is somewhere else, so read it there.
+        //
+        // This used to re-attach it onto GL_COLOR_ATTACHMENT0 instead, which
+        // destroyed whatever was on attachment 0 -- and did so even for a
+        // framebuffer that had never been shuffled, and even when the record was
+        // empty because the application had attached with glFramebufferRenderbuffer
+        // or one of the layered entry points, which do not reach update_attachment.
+        // Reading where the texture already is moves nothing and cannot clobber.
+        if (index < (int)fbo.draw_buffer_map.size() && fbo.draw_buffer_map[index] != 0) {
+            GLES.glReadBuffer(fbo.draw_buffer_map[index]);
+            return;
+        }
     }
+    GLES.glReadBuffer(src);
 }
 GLenum glCheckFramebufferStatus(GLenum target) {
     GLenum status = GLES.glCheckFramebufferStatus(target);

@@ -118,29 +118,67 @@ void dec_bgra_4444_rev(const uint8_t* s, uint8_t* d) { // B=3..0 G=7..4 R=11..8 
     d[3] = ((v >> 12) & 0x0f) * 17;
 }
 
+// Straight copies. GLES accepts these pairs already, so they are only ever
+// selected when the destination format needs a different number of channels than
+// the source carries -- see the note on want_format below.
+void dec_rgb_u8(const uint8_t* s, uint8_t* d) {
+    d[0] = s[0];
+    d[1] = s[1];
+    d[2] = s[2];
+}
+
+void dec_rgba_u8(const uint8_t* s, uint8_t* d) {
+    memcpy(d, s, 4);
+}
+
 struct upload_rule_t {
     GLenum format, type;
     void (*dec)(const uint8_t*, uint8_t*);
     int src_size;
     GLenum out_format;
-    int out_size;
+    int channels; // how many 8-bit components dec writes
+    bool adapt_only; // selected only to change the channel count, never on its own
 };
 
 const upload_rule_t k_upload_rules[] = {
-    {GL_BGRA, GL_UNSIGNED_BYTE, dec_bgra_u8, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_bgra_8888_rev, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, dec_bgra_8888, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, dec_bgra_1555_rev, 2, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, dec_bgra_4444_rev, 2, GL_RGBA, 4},
-    {GL_BGR, GL_UNSIGNED_BYTE, dec_bgr_u8, 3, GL_RGB, 3},
+    {GL_BGRA, GL_UNSIGNED_BYTE, dec_bgra_u8, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_bgra_8888_rev, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, dec_bgra_8888, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, dec_bgra_1555_rev, 2, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, dec_bgra_4444_rev, 2, GL_RGBA, 4, false},
+    {GL_BGR, GL_UNSIGNED_BYTE, dec_bgr_u8, 3, GL_RGB, 3, false},
     // Not reversed, but the packed 8888 types themselves do not exist in GLES.
-    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_rgba_8888_rev, 4, GL_RGBA, 4},
-    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, dec_rgba_8888, 4, GL_RGBA, 4},
+    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_rgba_8888_rev, 4, GL_RGBA, 4, false},
+    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, dec_rgba_8888, 4, GL_RGBA, 4, false},
+    {GL_RGB, GL_UNSIGNED_BYTE, dec_rgb_u8, 3, GL_RGB, 3, true},
+    {GL_RGBA, GL_UNSIGNED_BYTE, dec_rgba_u8, 4, GL_RGBA, 4, true},
 };
 
-const upload_rule_t* find_upload_rule(GLenum format, GLenum type) {
+int channels_of(GLenum format) {
+    switch (format) {
+    case GL_RGBA:
+    case GL_BGRA:
+        return 4;
+    case GL_RGB:
+    case GL_BGR:
+        return 3;
+    default:
+        return 0; // not a format this file adapts between
+    }
+}
+
+const upload_rule_t* find_upload_rule(GLenum format, GLenum type, GLenum want_format) {
+    const upload_rule_t* adapt = nullptr;
     for (const auto& r : k_upload_rules) {
-        if (r.format == format && r.type == type) return &r;
+        if (r.format != format || r.type != type) continue;
+        if (!r.adapt_only) return &r;
+        adapt = &r;
+    }
+    // An adapt-only rule earns its keep only when the caller has told us the
+    // destination wants a different channel count than the source carries.
+    if (adapt && want_format != 0) {
+        const int want = channels_of(want_format);
+        if (want != 0 && want != adapt->channels) return adapt;
     }
     return nullptr;
 }
@@ -153,9 +191,13 @@ bool is_reversed_family(GLenum format, GLenum type) {
 } // namespace
 
 mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
-                                 const void* pixels_in)
+                                 const void* pixels_in, GLenum want_format, bool three_d)
     : format(format_in), type(type_in), pixels(pixels_in) {
-    const upload_rule_t* rule = find_upload_rule(format_in, type_in);
+    GLint pbo_probe = 0;
+    GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo_probe);
+    has_data_ = !(pixels_in == nullptr && pbo_probe == 0);
+
+    const upload_rule_t* rule = find_upload_rule(format_in, type_in, want_format);
     if (!rule) {
         if (is_reversed_family(format_in, type_in)) {
             TR_WARN_ONCE("pixel transfer: unhandled combination %s + %s, the driver will reject this upload",
@@ -164,13 +206,23 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         return;
     }
 
-    format = rule->out_format;
+    // The emitted stream carries as many channels as the destination asked for,
+    // when it asked for something this file can adapt to. Anything else keeps the
+    // source's own channel count -- the enum must describe the bytes, so it is
+    // never allowed to run ahead of them.
+    int out_channels = rule->channels;
+    if (want_format != 0) {
+        const int want = channels_of(want_format);
+        if (want != 0) out_channels = want;
+    }
+    format = out_channels == 4 ? GL_RGBA : GL_RGB;
     type = GL_UNSIGNED_BYTE;
 
     // With an unpack PBO bound, pixels is an offset -- and offset 0 is real
     // data, so nullptr only means "no data" when no PBO is bound.
     GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &prev_pbo_);
-    if (pixels_in == nullptr && prev_pbo_ == 0) return; // allocation only: the enums were all that needed fixing
+    has_data_ = !(pixels_in == nullptr && prev_pbo_ == 0);
+    if (!has_data_) return; // allocation only: the enums were all that needed fixing
     if (width <= 0 || height <= 0 || depth <= 0) return;
 
     GLES.glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align_);
@@ -180,12 +232,19 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     GLES.glGetIntegerv(GL_UNPACK_IMAGE_HEIGHT, &prev_img_h_);
     GLES.glGetIntegerv(GL_UNPACK_SKIP_IMAGES, &prev_skip_img_);
 
+    // IMAGE_HEIGHT and SKIP_IMAGES only describe a three-dimensional transfer, so a
+    // 2D upload must read past them however the application left them set -- it
+    // cannot be told apart from a one-slice 3D upload by its depth alone. The saved
+    // copies stay as they are: they are what the destructor gives back.
+    const GLint eff_img_h = three_d ? prev_img_h_ : 0;
+    const GLint eff_skip_img = three_d ? prev_skip_img_ : 0;
+
     const size_t ss = static_cast<size_t>(rule->src_size);
     const size_t row_px = prev_row_len_ > 0 ? static_cast<size_t>(prev_row_len_) : static_cast<size_t>(width);
     const size_t row_stride = widthalign(row_px * ss, static_cast<size_t>(prev_align_));
-    const size_t img_rows = prev_img_h_ > 0 ? static_cast<size_t>(prev_img_h_) : static_cast<size_t>(height);
+    const size_t img_rows = eff_img_h > 0 ? static_cast<size_t>(eff_img_h) : static_cast<size_t>(height);
     const size_t img_stride = row_stride * img_rows;
-    const size_t start = static_cast<size_t>(prev_skip_img_) * img_stride +
+    const size_t start = static_cast<size_t>(eff_skip_img) * img_stride +
                          static_cast<size_t>(prev_skip_rows_) * row_stride + static_cast<size_t>(prev_skip_px_) * ss;
     const size_t span = start + static_cast<size_t>(depth - 1) * img_stride +
                         static_cast<size_t>(height - 1) * row_stride + static_cast<size_t>(width) * ss;
@@ -202,6 +261,7 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
             GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             pbo_unbound_ = true;
             pixels = nullptr;
+            dropped_ = true;
             return;
         }
         src = static_cast<const uint8_t*>(mapped);
@@ -210,15 +270,19 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     }
 
     scratch().resize(static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth) *
-                     static_cast<size_t>(rule->out_size));
+                     static_cast<size_t>(out_channels));
     uint8_t* out = scratch().data();
     for (GLsizei z = 0; z < depth; ++z) {
         for (GLsizei row = 0; row < height; ++row) {
             const uint8_t* s = src + start + static_cast<size_t>(z) * img_stride + static_cast<size_t>(row) * row_stride;
             for (GLsizei col = 0; col < width; ++col) {
-                rule->dec(s, out);
+                uint8_t px[4] = {0, 0, 0, 255};
+                rule->dec(s, px);
+                // GL 4.6 sec. 8.4.4.4: a source without an alpha channel reads as
+                // 1.0, and a destination without one discards the source's.
+                for (int c = 0; c < out_channels; ++c) out[c] = px[c];
                 s += ss;
-                out += rule->out_size;
+                out += out_channels;
             }
         }
     }
@@ -298,16 +362,53 @@ void enc_rgba_8888_rev(const uint8_t* s, uint8_t* d) {
     memcpy(d, &v, 4);
 }
 
+// The inverses of dec_bgra_1555_rev / dec_bgra_4444_rev, bit for bit. Narrowing
+// truncates, which is exactly what the decoders' replication expands back: 5-bit
+// 31 decodes to 255 and encodes to 31 again, 4-bit 15 to 255 and back. An 8-bit
+// value the decoder could not have produced lands on the level below it -- at five
+// bits 130 encodes to 16 and reads back as 132, at four bits 200 encodes to 12 and
+// reads back as 204 -- which is the precision of the format the application asked
+// for, not a loss this file introduces. Alpha is one bit in 1555: it rounds at 128,
+// so the decoder's own 0 and 255 come back unchanged.
+void enc_bgra_1555_rev(const uint8_t* s, uint8_t* d) { // B=4..0 G=9..5 R=14..10 A=15
+    const uint16_t v = static_cast<uint16_t>((s[2] >> 3) | ((s[1] >> 3) << 5) | ((s[0] >> 3) << 10) |
+                                             (s[3] >= 128 ? 0x8000 : 0));
+    memcpy(d, &v, 2);
+}
+
+void enc_bgra_4444_rev(const uint8_t* s, uint8_t* d) { // B=3..0 G=7..4 R=11..8 A=15..12
+    const uint16_t v = static_cast<uint16_t>((s[2] >> 4) | ((s[1] >> 4) << 4) | ((s[0] >> 4) << 8) |
+                                             ((s[3] >> 4) << 12));
+    memcpy(d, &v, 2);
+}
+
 struct readback_rule_t {
     GLenum format, type;
     void (*enc)(const uint8_t*, uint8_t*);
     int dst_size;
 };
 
+// Whether the driver took a call, asked of the driver directly: this layer's own
+// glGetError always answers GL_NO_ERROR, so it cannot report anything. gl/multidraw.cpp
+// probes the same way for the same reason.
+GLenum mg_tr_check() {
+    return GLES.glGetError();
+}
+
+// Empty the queue first, or an error the application left pending would be read as
+// our own failure. Nothing observable is lost -- those entries could never reach the
+// application anyway.
+void mg_tr_drain() {
+    for (int i = 0; i < 16 && GLES.glGetError() != GL_NO_ERROR; ++i) {
+    }
+}
+
 const readback_rule_t k_readback_rules[] = {
     {GL_BGRA, GL_UNSIGNED_BYTE, enc_bgra_u8, 4},
     {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, enc_bgra_8888_rev, 4},
     {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, enc_bgra_8888, 4},
+    {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, enc_bgra_1555_rev, 2},
+    {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, enc_bgra_4444_rev, 2},
     {GL_BGR, GL_UNSIGNED_BYTE, enc_bgr_u8, 3},
     {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, enc_rgba_8888_rev, 4},
     {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, enc_rgba_8888, 4},
@@ -340,11 +441,25 @@ bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenu
     GLES.glPixelStorei(GL_PACK_ROW_LENGTH, 0);
     GLES.glPixelStorei(GL_PACK_SKIP_ROWS, 0);
     GLES.glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+    mg_tr_drain();
     GLES.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, scratch().data());
+    const GLenum read_err = mg_tr_check();
     GLES.glPixelStorei(GL_PACK_ALIGNMENT, align);
     GLES.glPixelStorei(GL_PACK_ROW_LENGTH, row_len);
     GLES.glPixelStorei(GL_PACK_SKIP_ROWS, skip_rows);
     GLES.glPixelStorei(GL_PACK_SKIP_PIXELS, skip_px);
+    if (read_err != GL_NO_ERROR) {
+        // Not every read buffer hands itself back as RGBA8. The scratch still holds
+        // the previous transfer's bytes, and encoding those would give the
+        // application a whole frame of plausible stale pixels reported as a
+        // successful read. Hand the call back to the driver instead: the pair may be
+        // that buffer's own implementation-defined read format, and if it is not, the
+        // driver rejects it and leaves the destination as the application left it.
+        TR_WARN_ONCE("pixel transfer: RGBA readback failed with 0x%04x, leaving %s + %s to the driver", read_err,
+                     glEnumToString(format), glEnumToString(type));
+        if (pbo != 0) GLES.glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(pbo));
+        return false;
+    }
 
     // Encode into the destination the application described with its pack state.
     const size_t ds = static_cast<size_t>(rule->dst_size);
@@ -353,29 +468,57 @@ bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenu
     const size_t start = static_cast<size_t>(skip_rows) * dst_stride + static_cast<size_t>(skip_px) * ds;
     const size_t span = start + static_cast<size_t>(height - 1) * dst_stride + static_cast<size_t>(width) * ds;
 
+    const GLintptr pbo_offset = static_cast<GLintptr>(reinterpret_cast<uintptr_t>(pixels));
+    const size_t row_bytes = static_cast<size_t>(width) * ds;
     uint8_t* dst = nullptr;
     void* mapped = nullptr;
+    bool via_subdata = false;
+    std::vector<uint8_t> row_buf;
     if (pbo != 0) {
         GLES.glBindBuffer(GL_PIXEL_PACK_BUFFER, static_cast<GLuint>(pbo));
-        mapped = GLES.glMapBufferRange(GL_PIXEL_PACK_BUFFER, static_cast<GLintptr>(reinterpret_cast<uintptr_t>(pixels)),
-                                       static_cast<GLsizeiptr>(span), GL_MAP_WRITE_BIT);
+        mapped = GLES.glMapBufferRange(GL_PIXEL_PACK_BUFFER, pbo_offset, static_cast<GLsizeiptr>(span),
+                                       GL_MAP_WRITE_BIT);
         if (!mapped) {
-            TR_WARN_ONCE("pixel transfer: pack buffer %d is not mappable for writing, readback dropped", pbo);
-            return true;
+            // A buffer glBufferStorage made without GL_MAP_WRITE_BIT can never be
+            // mapped that way, and dropping the readback there left the application
+            // reading whatever its buffer already held. glBufferSubData still reaches
+            // it, a row at a time so the padding between rows keeps its contents.
+            TR_WARN_ONCE("pixel transfer: pack buffer %d is not mappable for writing, using glBufferSubData", pbo);
+            row_buf.resize(row_bytes);
+            via_subdata = true;
+        } else {
+            dst = static_cast<uint8_t*>(mapped);
         }
-        dst = static_cast<uint8_t*>(mapped);
     } else {
         if (pixels == nullptr) return true;
         dst = static_cast<uint8_t*>(pixels);
     }
 
     const uint8_t* src = scratch().data();
+    if (via_subdata) mg_tr_drain();
     for (GLsizei row = 0; row < height; ++row) {
-        uint8_t* d = dst + start + static_cast<size_t>(row) * dst_stride;
+        const size_t row_off = start + static_cast<size_t>(row) * dst_stride;
+        uint8_t* d = via_subdata ? row_buf.data() : dst + row_off;
         for (GLsizei col = 0; col < width; ++col) {
             rule->enc(src, d);
             src += 4;
             d += ds;
+        }
+        if (via_subdata) {
+            GLES.glBufferSubData(GL_PIXEL_PACK_BUFFER, pbo_offset + static_cast<GLintptr>(row_off),
+                                 static_cast<GLsizeiptr>(row_bytes), row_buf.data());
+            if (row == 0) {
+                // Immutable, unmappable and not dynamic either: there is no way into
+                // this buffer at all. Say so once and stop, rather than have the
+                // driver reject one call per row.
+                const GLenum sub_err = mg_tr_check();
+                if (sub_err != GL_NO_ERROR) {
+                    TR_WARN_ONCE("pixel transfer: pack buffer %d takes neither a write map nor glBufferSubData "
+                                 "(0x%04x), readback dropped",
+                                 pbo, sub_err);
+                    return true;
+                }
+            }
         }
     }
 
