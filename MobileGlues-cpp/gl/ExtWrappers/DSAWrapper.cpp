@@ -8,8 +8,24 @@
 #include "DSAWrapper.h"
 #include <cassert>
 #include "../texture.h"
+#include "../pixel.h"
+#include "../mg.h"
 
 #define DEBUG 0
+
+// LOG_D/LOG_W/LOG_E expand to nothing when GLOBAL_DEBUG is 0 (gl/log.h), which
+// is the shipping configuration, so a request this wrapper cannot carry out was
+// dropped without leaving a trace. DSA_WARN_ONCE goes through LOG_W_FORCE,
+// which is unconditional, and latches per site so a per-frame call cannot flood
+// the log.
+#define DSA_WARN_ONCE(...)                                                                                             \
+    do {                                                                                                               \
+        static bool mg_dsa_warned = false;                                                                             \
+        if (!mg_dsa_warned) {                                                                                          \
+            mg_dsa_warned = true;                                                                                      \
+            LOG_W_FORCE(__VA_ARGS__)                                                                                   \
+        }                                                                                                              \
+    } while (0)
 
 GLenum GetBindingQuery(GLenum target, bool forceTexture = false) {
     switch (target) {
@@ -1164,9 +1180,91 @@ void glBindTextureUnit(GLuint unit, GLuint texture) {
     LOG_D("[DSA] Bound texture %u to texture unit %u", texture, unit);
 }
 
+// GL 4.6 hands back all six cube map faces from one glGetTextureImage, laid out
+// consecutively like a 2D array of six layers, but glGetTexImage can only read
+// one face at a time. Walk the faces and advance the destination by one face
+// image between them. The stride has to be the one glReadPixels will use inside
+// glGetTexImage, or every face after the first lands at the wrong offset.
+static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bufSize, void* pixels) {
+    static const GLenum faces[6] = {GL_TEXTURE_CUBE_MAP_POSITIVE_X, GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                                    GL_TEXTURE_CUBE_MAP_POSITIVE_Y, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                                    GL_TEXTURE_CUBE_MAP_POSITIVE_Z, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z};
+
+    if (!pixels) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map readback with pixels == NULL, dropped");
+        return;
+    }
+
+    GLint width = 0, height = 0;
+    glGetTexLevelParameteriv(GL_TEXTURE_CUBE_MAP_POSITIVE_X, level, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_CUBE_MAP_POSITIVE_X, level, GL_TEXTURE_HEIGHT, &height);
+    if (width <= 0 || height <= 0) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map level %d has no size, dropped", level);
+        return;
+    }
+
+    // Without a texel size there is no face stride, so the faces cannot be
+    // placed. Guessing one would scatter five of the six faces.
+    const GLsizei texelSize = pixel_sizeof(format, type);
+    if (texelSize <= 0) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: cannot size format 0x%X / type 0x%X for a cube map, dropped", format,
+                      type);
+        return;
+    }
+
+    // The skip parameters offset the start of *an image*; applying them once per
+    // face, which is what six separate reads would do, is not the layout the
+    // caller asked for. Nothing here can undo that, so drop instead.
+    // GL_PACK_SKIP_IMAGES is not a GLES parameter -- querying it fails and leaves
+    // the variable at zero, so it was never part of this guard. There is nothing
+    // to guard against either: without the parameter the driver cannot hold a
+    // non-zero value for it, and the layer does not emulate one.
+    GLint skipPixels = 0, skipRows = 0;
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+    if (skipPixels || skipRows) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map readback with non-zero GL_PACK_SKIP_*, dropped");
+        return;
+    }
+
+    GLint packAlign = 4, packRowLength = 0;
+    glGetIntegerv(GL_PACK_ALIGNMENT, &packAlign);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &packRowLength);
+    if (packAlign <= 0) packAlign = 1;
+
+    const size_t rowPixels = static_cast<size_t>(packRowLength > 0 ? packRowLength : width);
+    const size_t rowBytes = widthalign(rowPixels * static_cast<size_t>(texelSize), packAlign);
+    const size_t faceBytes = rowBytes * static_cast<size_t>(height);
+
+    // The face pointers are computed here rather than by the driver, so a buffer
+    // that cannot hold six faces would be written past its end.
+    if (bufSize <= 0 || faceBytes * 6 > static_cast<size_t>(bufSize)) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: bufSize %d too small for six %zu-byte cube map faces, dropped", bufSize,
+                      faceBytes);
+        return;
+    }
+
+    auto* out = static_cast<uint8_t*>(pixels);
+    for (GLenum face : faces) {
+        glGetTexImage(face, level, format, type, out);
+        out += faceBytes;
+    }
+}
+
 void glGetTextureImage(GLuint texture, GLint level, GLenum format, GLenum type, GLsizei bufSize, void* pixels) {
     TEXTURE_OP_FUNC_BEGIN(glGetTextureImage)
-    glGetTexImage(target, level, format, type, pixels);
+    // glGetTexImage understands GL_TEXTURE_2D and a single cube map face and
+    // nothing else: it returns with the destination untouched for every other
+    // target, so the caller was told it had a full image when it had whatever
+    // was already in its buffer. Only the shapes that can be expressed in terms
+    // of those two reads are attempted; the rest say so.
+    if (target == GL_TEXTURE_CUBE_MAP) {
+        ReadCubeMapFaces(level, format, type, bufSize, pixels);
+    } else if (target == GL_TEXTURE_2D) {
+        glGetTexImage(target, level, format, type, pixels);
+    } else {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: target %s cannot be read back, dropped", glEnumToString(target));
+    }
     TEXTURE_OP_FUNC_END
     LOG_D("[DSA] Retrieved texture image from texture %u at level %d", texture, level);
 }
