@@ -67,8 +67,16 @@ struct mg_upload_fix_t {
     // to be labelled with. The conversion emits that many channels, so the enum
     // handed to the driver always describes the bytes behind it. Pass 0 (the
     // default) to keep the source's own channel count.
+    //
+    // three_d says whether this is a TexImage3D-style transfer. GL_UNPACK_IMAGE_HEIGHT
+    // and GL_UNPACK_SKIP_IMAGES are three-dimensional unpack state (GL 4.6 sec. 8.4.4.1)
+    // and must not be applied to a 2D upload: a 2D call passes depth=1, which is
+    // indistinguishable from a one-slice 3D upload, so a SKIP_IMAGES left set by an
+    // earlier 3D upload would displace the 2D source pointer. The default is true only
+    // because that is what the callers got before the parameter existed; every 2D call
+    // site should pass false.
     mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
-                    const void* pixels_in, GLenum want_format = 0);
+                    const void* pixels_in, GLenum want_format = 0, bool three_d = true);
     ~mg_upload_fix_t();
 
     mg_upload_fix_t(const mg_upload_fix_t&) = delete;
@@ -93,9 +101,13 @@ extern "C"
 
     // Performs a glReadPixels whose (format, type) pair GLES lacks, encoding the
     // driver's RGBA readback into the layout the application asked for --
-    // honouring the pack state, including a bound pack PBO. Returns false when
-    // the pair is one GLES accepts, in which case the caller does its normal
-    // read.
+    // honouring the pack state, including a bound pack PBO.
+    //
+    // Returns false for a pair GLES accepts, so the caller does its normal read --
+    // and also for a pair that is ours but whose underlying RGBA read the driver
+    // refused, where falling through to the driver is likewise the right move. The
+    // caller's action is the same either way; the distinction is only that false no
+    // longer means "not ours".
     bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type,
                               void* pixels);
 
