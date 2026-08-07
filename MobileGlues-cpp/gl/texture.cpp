@@ -1037,6 +1037,9 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
         }
         CHECK_GL_ERROR_NO_INIT
 
+        // Flush before reading depth through a blit -- see the note in
+        // glCopyTexSubImage2D for the Adreno measurement behind this.
+        if (GLES.glFlush != nullptr) GLES.glFlush();
         GLES.glBlitFramebuffer(x, y, x + width, y + height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         CHECK_GL_ERROR_NO_INIT
 
@@ -1110,6 +1113,17 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
             while (GLES.glGetError() != GL_NO_ERROR) {
             }
         }
+        // The flush is load-bearing. Adreno keeps the source's pending depth
+        // writes in an unsubmitted tile pass, and this blit reads the buffer as
+        // it is in memory -- for the first depth blit from a fresh default
+        // framebuffer that is garbage, silently, with no error raised. Measured
+        // on Adreno 750: without this, the first copy in a context reads junk
+        // (two back-to-back blits BOTH read junk, so retrying is no fix) while a
+        // single glFlush beforehand makes the same copy read the true values,
+        // reproducibly. glFinish also works but synchronizes the CPU; the flush
+        // is enough. Mali needs neither and is unaffected. Copies are rare
+        // operations, so one flush here is cheap.
+        if (GLES.glFlush != nullptr) GLES.glFlush();
         GLES.glBlitFramebuffer(x, y, x + width, y + height, xoffset, yoffset, xoffset + width, yoffset + height, mask,
                                GL_NEAREST);
         if (GLES.glGetError != nullptr && GLES.glGetError() != GL_NO_ERROR) {
@@ -1121,24 +1135,6 @@ void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffse
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempDrawFBO);
-
-        // Known limitation, Adreno 750 only; Mali-G77 is unaffected.
-        //
-        // The blit reports no error and the depth really does arrive -- one test
-        // sequence reads the copied 0.25 back correctly after the application
-        // writes GL_DEPTH_STENCIL_TEXTURE_MODE again (with the value it already
-        // holds; GL_DEPTH_COMPONENT is the GLES 3.1 default), which it could only
-        // do if the blit had landed. Yet another sequence that looks equivalent
-        // still samples 0, and issuing those same calls from inside this function
-        // -- through GLES.* or through this file's own wrappers, before or after
-        // deleting the temporary framebuffer, with or without an explicit rebind
-        // -- never has any effect at all.
-        //
-        // So the copy works and the readback is unreliable, and which of the two
-        // a given sequence gets has not been isolated. Nothing is attempted here:
-        // a workaround that was measured not to work is worse than the honest
-        // gap, and one that papers over a mechanism nobody understands is worse
-        // still.
 
     } else {
         GLES.glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
