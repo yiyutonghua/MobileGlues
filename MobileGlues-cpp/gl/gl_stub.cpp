@@ -266,7 +266,7 @@ STUB_FUNCTION_HEAD(void, glColorMaterial, GLenum face, GLenum mode ) STUB_FUNCTI
 * Raster functions
 */
 STUB_FUNCTION_HEAD(void, glPixelZoom, GLfloat xfactor, GLfloat yfactor ) STUB_FUNCTION_END_NO_RETURN(void, glPixelZoom,xfactor,yfactor)
-STUB_FUNCTION_HEAD(void, glPixelStoref, GLenum pname, GLfloat param ) STUB_FUNCTION_END_NO_RETURN(void, glPixelStoref,pname,param)
+// STUB_FUNCTION_HEAD(void, glPixelStoref, GLenum pname, GLfloat param ) STUB_FUNCTION_END_NO_RETURN(void, glPixelStoref,pname,param)   // moved to gl/texture.cpp: sets the pixel-store state like the integer form instead of dropping it
 STUB_FUNCTION_HEAD(void, glPixelTransferf, GLenum pname, GLfloat param ) STUB_FUNCTION_END_NO_RETURN(void, glPixelTransferf,pname,param)
 STUB_FUNCTION_HEAD(void, glPixelTransferi, GLenum pname, GLint param ) STUB_FUNCTION_END_NO_RETURN(void, glPixelTransferi,pname,param)
 STUB_FUNCTION_HEAD(void, glPixelMapfv, GLenum map, GLsizei mapsize,const GLfloat *values ) STUB_FUNCTION_END_NO_RETURN(void, glPixelMapfv,map,mapsize,values)
