@@ -358,8 +358,14 @@ TextureObject* mgGetTexObjectByID(unsigned texture) {
     return BufferObjectsVec[texture];
 }
 
-// Inline mapping for various internal formats to format and type
-void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
+// Inline mapping for various internal formats to format and type.
+//
+// has_data says whether this call carries bytes for `type` to describe -- the
+// same thing mg_upload_fix_t::has_data() reports, asked early because this runs
+// first. It matters only where an unsized internalformat has to be resolved: an
+// allocation's `type` describes nothing, so resolving storage from it means
+// resolving it from decoration.
+void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format, bool has_data) {
     // GL_BGRA is deliberately not renamed here: a rename converts the enum and
     // not the data. Every pixel-transfer entry point routes through
     // mg_upload_fix_t (gl/transfer.h) before calling this, which converts both.
@@ -391,11 +397,44 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     case GL_DEPTH_COMPONENT:
         LOG_D("Find GL_DEPTH_COMPONENT: internalFormat: %s, format: %s, type: %s", glEnumToString(*internal_format),
               format ? glEnumToString(*format) : "(none)", type ? glEnumToString(*type) : "(none)");
-        if (type) {
-            // glTexImage2D. Deliberately left unsized: deriving a sized format
-            // from format/type here is what used to make drivers reject
-            // otherwise valid uploads, and ES2 compatibility -- which every ES3
-            // driver carries -- accepts the unsized form with data.
+        if (type && has_data) {
+            // A glTexImage* that carries bytes. Deliberately left unsized:
+            // deriving a sized format from format/type here is what used to make
+            // drivers reject otherwise valid uploads, and ES2 compatibility --
+            // which every ES3 driver carries -- accepts the unsized form with
+            // data.
+            //
+            // GL_FLOAT is the one type that compatibility does not reach. ES2
+            // depth textures predate float depth entirely, so the unsized form
+            // with GL_FLOAT is rejected outright, and a rejected glTexImage2D
+            // leaves the level at its defaults -- the application is then holding
+            // a GL_RGBA texture with no depth bits, and nothing says so.
+            // Measured on Mali-G77: GL_TEXTURE_INTERNAL_FORMAT came back 0x1908
+            // with GL_TEXTURE_DEPTH_SIZE 0, and sampling it returned 0.
+            // GL_DEPTH_COMPONENT32F is the only destination ES 3.0 offers for
+            // float depth, and here the type is evidence: there really are float
+            // bits, and GL 4.6 sec. 8.5 lets the effective internal format of a
+            // base internal format depend on format and type.
+            if (*type == GL_FLOAT) {
+                *internal_format = GL_DEPTH_COMPONENT32F;
+            } else {
+                *internal_format = GL_DEPTH_COMPONENT;
+                *type = GL_UNSIGNED_INT;
+            }
+        } else if (type) {
+            // An allocation-only glTexImage*. The type describes no bytes, so it
+            // must not choose the storage class: the ordinary shadow-map
+            // allocation is glTexImage2D(GL_DEPTH_COMPONENT, ..., GL_FLOAT, NULL)
+            // with GL_FLOAT written out of habit, and honouring it there silently
+            // makes the whole texture floating-point. That matters because
+            // glTexSubImage2D never revisits this function and never inspects the
+            // level, so every later fixed-point upload into a level turned 32F is
+            // rejected by ES -- which binds GL_DEPTH_COMPONENT32F to GL_FLOAT
+            // alone, where GL 4.6 converts -- and the rejection is invisible.
+            // Measured on Mali-G77: the allocation and a following
+            // glTexSubImage2D(GL_UNSIGNED_INT) both succeed as written here, and
+            // resolving to 32F turned that second call into GL_INVALID_OPERATION
+            // with the texture left holding its old contents.
             *internal_format = GL_DEPTH_COMPONENT;
             *type = GL_UNSIGNED_INT;
         } else {
@@ -667,7 +706,7 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, "
           "border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type)
-    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format);
+    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format, mg_upload_has_data(pixels));
 
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_1D) {
@@ -711,7 +750,7 @@ void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     // from the conversion, which is the one thing that knows what the bytes are.
     // An allocation has no bytes to describe, so there both are adopted.
     GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
-    internal_convert(&want_if, &want_type, &want_fmt);
+    internal_convert(&want_if, &want_type, &want_fmt, mg_upload_has_data(pixels));
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, 1, format, type, pixels, want_fmt, /*three_d=*/false);
@@ -764,7 +803,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 
     // Same ordering as glTexImage2D; see the note there.
     GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
-    internal_convert(&want_if, &want_type, &want_fmt);
+    internal_convert(&want_if, &want_type, &want_fmt, mg_upload_has_data(pixels));
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, depth, format, type, pixels, want_fmt);
@@ -807,7 +846,7 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     LOG_D("glTexStorage1D not implemented!")
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d", target, levels, internalFormat,
           width)
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
 
     GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
@@ -829,7 +868,7 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
           "%d, height: %d",
           target, levels, internalFormat, width, height)
 
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
     GLES.glTexStorage2D(target, levels, internalFormat, width, height);
 
     GET_TEXTURE_OBJECT(target);
@@ -854,7 +893,7 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
           "%d, height: %d, depth: %d",
           target, levels, internalFormat, width, height, depth)
 
-    internal_convert(&internalFormat, nullptr, nullptr);
+    internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
 
     GLES.glTexStorage3D(target, levels, internalFormat, width, height, depth);
 
@@ -971,7 +1010,7 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
     if (is_depth_format(internalFormat)) {
         GLenum format = GL_DEPTH_COMPONENT;
         GLenum type = GL_UNSIGNED_INT;
-        internal_convert(&internalFormat, &type, &format);
+        internal_convert(&internalFormat, &type, &format, /*has_data=*/false);
         GLES.glTexImage2D(target, level, (GLint)internalFormat, width, height, border, format, type, nullptr);
         CHECK_GL_ERROR_NO_INIT
         GLint prevDrawFBO;
