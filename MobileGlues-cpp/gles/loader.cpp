@@ -61,16 +61,35 @@ bool g_angle_in_use = false;
 // simply on the search path; a tool that loads this library on its own (the
 // plugin app's benchmark) has to say where the launcher keeps it, or it would
 // silently measure the system driver instead of the one the game will use.
-static std::string angle_library(const char* name) {
+//
+// MG_ANGLE_DIR has three states, and the empty one is not the same as absent:
+//
+//   unset  -- nobody is managing this. Look ANGLE up by soname, which is how it
+//             resolves inside the launcher's own process.
+//   empty  -- explicitly do not use ANGLE. A caller that loads us on purpose
+//             says this when it has not been given permission to borrow ANGLE
+//             from anywhere. It cannot just leave the variable unset: once some
+//             earlier run has dlopen'd ANGLE by absolute path, that image is
+//             registered under its soname for the life of the process, and a
+//             plain dlopen("libGLESv2_angle.so") would quietly hand it back.
+//   a path -- take ANGLE from this directory.
+//
+// Returns nullptr for "do not use ANGLE"; otherwise fills `storage` and returns
+// a pointer into it.
+static const char* angle_override(const char* name, std::string& storage) {
     const char* dir = getenv("MG_ANGLE_DIR");
-    if (dir == nullptr || *dir == '\0') return std::string(name);
-    std::string path(dir);
-    if (!path.empty() && path.back() != '/') path.push_back('/');
-    path.append(name);
-    return path;
+    if (dir == nullptr) {
+        storage = name;
+        return storage.c_str();
+    }
+    if (*dir == '\0') return nullptr;
+    storage.assign(dir);
+    if (storage.back() != '/') storage.push_back('/');
+    storage.append(name);
+    return storage.c_str();
 }
 
-void* open_lib(const char** names, const char* override) {
+void* open_lib(const char** names, const char* override, bool* used_override) {
     void* lib = nullptr;
 
     char path_name[PATH_MAX + 1];
@@ -79,6 +98,7 @@ void* open_lib(const char** names, const char* override) {
         if ((lib = dlopen(override, flags))) {
             strncpy(path_name, override, PATH_MAX);
             LOG_D("LIBGL:loaded: %s\n", path_name)
+            if (used_override) *used_override = true;
             return lib;
         } else {
             LOG_E("LIBGL_GLES override failed: %s\n", dlerror())
@@ -100,16 +120,20 @@ void* open_lib(const char** names, const char* override) {
 void load_libs() {
 #ifndef __APPLE__
     const bool want_angle = global_settings.angle == AngleMode::Enabled;
-    const std::string gles_angle = want_angle ? angle_library(GLES_ANGLE) : std::string();
-    const std::string egl_angle = want_angle ? angle_library(EGL_ANGLE) : std::string();
-    gles = open_lib(gles3_lib, want_angle ? gles_angle.c_str() : nullptr);
-    egl = open_lib(egl_lib, want_angle ? egl_angle.c_str() : nullptr);
-    // open_lib() returns the fallback just as happily as the override, so ask
-    // the loader whether the ANGLE image itself is what ended up open.
-    g_angle_in_use = want_angle && gles != nullptr &&
-                     dlsym(gles, "ANGLEGetDisplayPlatform") != nullptr;
+    std::string gles_angle, egl_angle;
+    const char* gles_override = want_angle ? angle_override(GLES_ANGLE, gles_angle) : nullptr;
+    const char* egl_override = want_angle ? angle_override(EGL_ANGLE, egl_angle) : nullptr;
+
+    // open_lib() falls back to the system driver just as happily as it takes the
+    // override -- right for a game, but then nothing downstream can tell which
+    // of the two it got. Probing the loaded image for an ANGLE symbol would not
+    // answer it either: a device whose system driver *is* ANGLE would say yes.
+    // Only the loader knows, so it reports.
+    g_angle_in_use = false;
+    gles = open_lib(gles3_lib, gles_override, &g_angle_in_use);
+    egl = open_lib(egl_lib, egl_override, nullptr);
     if (want_angle && !g_angle_in_use) {
-        LOG_E("ANGLE was requested but could not be loaded; running on the system driver\n")
+        LOG_E("ANGLE was requested but was not loaded; running on the system driver\n")
     }
 #else
     gles = (void*)(~(uintptr_t)0);

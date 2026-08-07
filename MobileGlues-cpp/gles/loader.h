@@ -59,7 +59,9 @@ extern "C"
     { GLES.name = (name##_PTR)proc_address(gles, #name); }
 #endif
 
-    void* open_lib(const char** names, const char* override);
+    // `used_override`, when given, is set to true only if `override` is what got
+    // loaded -- the fallback path leaves it alone.
+    void* open_lib(const char** names, const char* override, bool* used_override = nullptr);
 
 // Resolve an EGL entry point from the backend library, once per call site.
 //
