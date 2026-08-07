@@ -1060,6 +1060,13 @@ void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, G
     // changed as a side effect of an upload, wrong the moment the application
     // uploads RGBA to the same texture, renders into it, or swizzles it itself.
     mg_upload_fix_t fix(width, height, 1, format, type, pixels);
+    // A dropped conversion leaves pixels null, and glTexSubImage2D has no
+    // allocate-only form: with the unpack buffer unbound the driver would read
+    // client memory from address zero.
+    if (fix.dropped()) {
+        CHECK_GL_ERROR
+        return;
+    }
 
     GLES.glTexSubImage2D(target, level, xoffset, yoffset, width, height, fix.format, fix.type, fix.pixels);
 
@@ -1206,6 +1213,10 @@ void glTexSubImage3D(GLenum target, GLint level, GLint xoffset, GLint yoffset, G
           glEnumToString(target), level, xoffset, yoffset, zoffset, width, height, depth, glEnumToString(format),
           glEnumToString(type))
     mg_upload_fix_t fix(width, height, depth, format, type, pixels);
+    if (fix.dropped()) {
+        CHECK_GL_ERROR
+        return;
+    }
     GLES.glTexSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, fix.format, fix.type,
                          fix.pixels);
     CHECK_GL_ERROR

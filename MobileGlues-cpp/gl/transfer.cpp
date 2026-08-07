@@ -202,6 +202,7 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
             GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             pbo_unbound_ = true;
             pixels = nullptr;
+            dropped_ = true;
             return;
         }
         src = static_cast<const uint8_t*>(mapped);

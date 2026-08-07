@@ -50,6 +50,13 @@ struct mg_upload_fix_t {
     GLenum type;
     const void* pixels;
 
+    // True when the conversion could not be performed and the caller must not
+    // issue the transfer at all. Only glTexImage* may treat a null `pixels` as
+    // "allocate without data"; for glTexSubImage* a null with no unpack buffer
+    // bound is a client-memory read from address zero, so those callers have to
+    // ask rather than infer.
+    bool dropped() const { return dropped_; }
+
     mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
                     const void* pixels_in);
     ~mg_upload_fix_t();
@@ -58,6 +65,7 @@ struct mg_upload_fix_t {
     mg_upload_fix_t& operator=(const mg_upload_fix_t&) = delete;
 
   private:
+    bool dropped_ = false;
     bool converted_ = false;
     bool pbo_unbound_ = false;
     GLint prev_pbo_ = 0;
