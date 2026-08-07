@@ -626,13 +626,28 @@ void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
           "%d,height: %d,border: %d,format: %s,type: %s, pixels: 0x%x",
           glEnumToString(target), level, glEnumToString(internalFormat), glEnumToString(internalFormat), width, height,
           border, glEnumToString(format), glEnumToString(type), pixels)
-    // Before internal_convert: it rewrites the type for RGBA internalformats,
-    // which would leave BGRA-ordered bytes labelled GL_UNSIGNED_BYTE and no way
-    // to tell they still need the swap.
-    mg_upload_fix_t fix(width, height, 1, format, type, pixels);
-    format = fix.format;
-    type = fix.type;
-    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format);
+    // internal_convert is asked first, on copies, and only then is the data
+    // converted to match. It rewrites the client format and type from the
+    // internalformat alone, without touching the bytes -- so running it last let
+    // the enum outrun the data: a three-channel stream relabelled GL_RGBA had the
+    // driver read four bytes per pixel out of a three-byte-per-pixel buffer.
+    //
+    // With data present, only the format is adopted from it, and only because the
+    // conversion below is told to emit that many channels. The type always comes
+    // from the conversion, which is the one thing that knows what the bytes are.
+    // An allocation has no bytes to describe, so there both are adopted.
+    GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
+    internal_convert(&want_if, &want_type, &want_fmt);
+    internalFormat = static_cast<GLint>(want_if);
+
+    mg_upload_fix_t fix(width, height, 1, format, type, pixels, want_fmt);
+    if (fix.has_data()) {
+        format = fix.format;
+        type = fix.type;
+    } else {
+        format = want_fmt;
+        type = want_type;
+    }
 
     LOG_D("GLES.glTexImage2D,target: %s,level: %d,internalFormat: %s->%s,width: "
           "%d,height: %d,border: %d,format: %s,type: %s, pixels: 0x%x",
@@ -673,10 +688,19 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
           "0x%x, height: %d, depth: %d, border: %d, format: 0x%x, type: %d",
           target, level, internalFormat, width, height, depth, border, format, type)
 
-    mg_upload_fix_t fix(width, height, depth, format, type, pixels);
-    format = fix.format;
-    type = fix.type;
-    internal_convert(reinterpret_cast<GLenum*>(&internalFormat), &type, &format);
+    // Same ordering as glTexImage2D; see the note there.
+    GLenum want_if = static_cast<GLenum>(internalFormat), want_fmt = format, want_type = type;
+    internal_convert(&want_if, &want_type, &want_fmt);
+    internalFormat = static_cast<GLint>(want_if);
+
+    mg_upload_fix_t fix(width, height, depth, format, type, pixels, want_fmt);
+    if (fix.has_data()) {
+        format = fix.format;
+        type = fix.type;
+    } else {
+        format = want_fmt;
+        type = want_type;
+    }
     GLenum rtarget = map_tex_target(target);
     if (rtarget == GL_PROXY_TEXTURE_3D) {
         int max1 = 4096;

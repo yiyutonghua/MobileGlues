@@ -57,8 +57,18 @@ struct mg_upload_fix_t {
     // ask rather than infer.
     bool dropped() const { return dropped_; }
 
+    // True when the call actually carries pixels -- a client pointer, or any
+    // offset with an unpack buffer bound. An allocation-only glTexImage has no
+    // bytes for the enums to describe, and is the only case where they may be
+    // rewritten freely.
+    bool has_data() const { return has_data_; }
+
+    // want_format, when non-zero, is the client format the destination is going
+    // to be labelled with. The conversion emits that many channels, so the enum
+    // handed to the driver always describes the bytes behind it. Pass 0 (the
+    // default) to keep the source's own channel count.
     mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
-                    const void* pixels_in);
+                    const void* pixels_in, GLenum want_format = 0);
     ~mg_upload_fix_t();
 
     mg_upload_fix_t(const mg_upload_fix_t&) = delete;
@@ -66,6 +76,7 @@ struct mg_upload_fix_t {
 
   private:
     bool dropped_ = false;
+    bool has_data_ = false;
     bool converted_ = false;
     bool pbo_unbound_ = false;
     GLint prev_pbo_ = 0;

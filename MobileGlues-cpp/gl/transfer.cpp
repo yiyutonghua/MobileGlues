@@ -118,29 +118,67 @@ void dec_bgra_4444_rev(const uint8_t* s, uint8_t* d) { // B=3..0 G=7..4 R=11..8 
     d[3] = ((v >> 12) & 0x0f) * 17;
 }
 
+// Straight copies. GLES accepts these pairs already, so they are only ever
+// selected when the destination format needs a different number of channels than
+// the source carries -- see the note on want_format below.
+void dec_rgb_u8(const uint8_t* s, uint8_t* d) {
+    d[0] = s[0];
+    d[1] = s[1];
+    d[2] = s[2];
+}
+
+void dec_rgba_u8(const uint8_t* s, uint8_t* d) {
+    memcpy(d, s, 4);
+}
+
 struct upload_rule_t {
     GLenum format, type;
     void (*dec)(const uint8_t*, uint8_t*);
     int src_size;
     GLenum out_format;
-    int out_size;
+    int channels; // how many 8-bit components dec writes
+    bool adapt_only; // selected only to change the channel count, never on its own
 };
 
 const upload_rule_t k_upload_rules[] = {
-    {GL_BGRA, GL_UNSIGNED_BYTE, dec_bgra_u8, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_bgra_8888_rev, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, dec_bgra_8888, 4, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, dec_bgra_1555_rev, 2, GL_RGBA, 4},
-    {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, dec_bgra_4444_rev, 2, GL_RGBA, 4},
-    {GL_BGR, GL_UNSIGNED_BYTE, dec_bgr_u8, 3, GL_RGB, 3},
+    {GL_BGRA, GL_UNSIGNED_BYTE, dec_bgra_u8, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_bgra_8888_rev, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, dec_bgra_8888, 4, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, dec_bgra_1555_rev, 2, GL_RGBA, 4, false},
+    {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, dec_bgra_4444_rev, 2, GL_RGBA, 4, false},
+    {GL_BGR, GL_UNSIGNED_BYTE, dec_bgr_u8, 3, GL_RGB, 3, false},
     // Not reversed, but the packed 8888 types themselves do not exist in GLES.
-    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_rgba_8888_rev, 4, GL_RGBA, 4},
-    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, dec_rgba_8888, 4, GL_RGBA, 4},
+    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, dec_rgba_8888_rev, 4, GL_RGBA, 4, false},
+    {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, dec_rgba_8888, 4, GL_RGBA, 4, false},
+    {GL_RGB, GL_UNSIGNED_BYTE, dec_rgb_u8, 3, GL_RGB, 3, true},
+    {GL_RGBA, GL_UNSIGNED_BYTE, dec_rgba_u8, 4, GL_RGBA, 4, true},
 };
 
-const upload_rule_t* find_upload_rule(GLenum format, GLenum type) {
+int channels_of(GLenum format) {
+    switch (format) {
+    case GL_RGBA:
+    case GL_BGRA:
+        return 4;
+    case GL_RGB:
+    case GL_BGR:
+        return 3;
+    default:
+        return 0; // not a format this file adapts between
+    }
+}
+
+const upload_rule_t* find_upload_rule(GLenum format, GLenum type, GLenum want_format) {
+    const upload_rule_t* adapt = nullptr;
     for (const auto& r : k_upload_rules) {
-        if (r.format == format && r.type == type) return &r;
+        if (r.format != format || r.type != type) continue;
+        if (!r.adapt_only) return &r;
+        adapt = &r;
+    }
+    // An adapt-only rule earns its keep only when the caller has told us the
+    // destination wants a different channel count than the source carries.
+    if (adapt && want_format != 0) {
+        const int want = channels_of(want_format);
+        if (want != 0 && want != adapt->channels) return adapt;
     }
     return nullptr;
 }
@@ -153,9 +191,13 @@ bool is_reversed_family(GLenum format, GLenum type) {
 } // namespace
 
 mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, GLenum format_in, GLenum type_in,
-                                 const void* pixels_in)
+                                 const void* pixels_in, GLenum want_format)
     : format(format_in), type(type_in), pixels(pixels_in) {
-    const upload_rule_t* rule = find_upload_rule(format_in, type_in);
+    GLint pbo_probe = 0;
+    GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &pbo_probe);
+    has_data_ = !(pixels_in == nullptr && pbo_probe == 0);
+
+    const upload_rule_t* rule = find_upload_rule(format_in, type_in, want_format);
     if (!rule) {
         if (is_reversed_family(format_in, type_in)) {
             TR_WARN_ONCE("pixel transfer: unhandled combination %s + %s, the driver will reject this upload",
@@ -164,13 +206,23 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         return;
     }
 
-    format = rule->out_format;
+    // The emitted stream carries as many channels as the destination asked for,
+    // when it asked for something this file can adapt to. Anything else keeps the
+    // source's own channel count -- the enum must describe the bytes, so it is
+    // never allowed to run ahead of them.
+    int out_channels = rule->channels;
+    if (want_format != 0) {
+        const int want = channels_of(want_format);
+        if (want != 0) out_channels = want;
+    }
+    format = out_channels == 4 ? GL_RGBA : GL_RGB;
     type = GL_UNSIGNED_BYTE;
 
     // With an unpack PBO bound, pixels is an offset -- and offset 0 is real
     // data, so nullptr only means "no data" when no PBO is bound.
     GLES.glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &prev_pbo_);
-    if (pixels_in == nullptr && prev_pbo_ == 0) return; // allocation only: the enums were all that needed fixing
+    has_data_ = !(pixels_in == nullptr && prev_pbo_ == 0);
+    if (!has_data_) return; // allocation only: the enums were all that needed fixing
     if (width <= 0 || height <= 0 || depth <= 0) return;
 
     GLES.glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align_);
@@ -211,15 +263,19 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     }
 
     scratch().resize(static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth) *
-                     static_cast<size_t>(rule->out_size));
+                     static_cast<size_t>(out_channels));
     uint8_t* out = scratch().data();
     for (GLsizei z = 0; z < depth; ++z) {
         for (GLsizei row = 0; row < height; ++row) {
             const uint8_t* s = src + start + static_cast<size_t>(z) * img_stride + static_cast<size_t>(row) * row_stride;
             for (GLsizei col = 0; col < width; ++col) {
-                rule->dec(s, out);
+                uint8_t px[4] = {0, 0, 0, 255};
+                rule->dec(s, px);
+                // GL 4.6 sec. 8.4.4.4: a source without an alpha channel reads as
+                // 1.0, and a destination without one discards the source's.
+                for (int c = 0; c < out_channels; ++c) out[c] = px[c];
                 s += ss;
-                out += rule->out_size;
+                out += out_channels;
             }
         }
     }
