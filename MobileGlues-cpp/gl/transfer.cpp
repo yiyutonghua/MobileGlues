@@ -54,7 +54,13 @@ void scratch_release_if_large() {
 // width * height * depth * channels without wrapping.
 bool mg_checked_area(GLsizei width, GLsizei height, GLsizei depth, int channels, size_t* out) {
     if (width <= 0 || height <= 0 || depth <= 0 || channels <= 0) return false;
-    constexpr size_t kMax = static_cast<size_t>(1) << 40; // 1 TiB: far past any real texture
+    // 1 TiB is far past any real texture, but it is not even representable when
+    // size_t is 32 bits -- and `size_t(1) << 40` is not merely wrong there, it is
+    // a hard error, because a shift wider than the type is undefined and a
+    // constant expression may not be undefined. That broke the armeabi-v7a and x86
+    // builds outright; only arm64 was being compiled locally. Where the cap does
+    // not fit, SIZE_MAX is the real ceiling anyway.
+    constexpr size_t kMax = sizeof(size_t) >= 8 ? static_cast<size_t>(1ULL << 40) : static_cast<size_t>(-1);
     size_t n = static_cast<size_t>(width);
     for (size_t f : {static_cast<size_t>(height), static_cast<size_t>(depth), static_cast<size_t>(channels)}) {
         if (f != 0 && n > kMax / f) return false;
@@ -310,6 +316,15 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         TR_WARN_ONCE("pixel transfer: %dx%dx%d x %d channels does not fit in memory, dropped", width, height, depth,
                      out_channels);
         mg_set_gl_error(GL_INVALID_VALUE);
+        // Same unwind as the unmappable-PBO drop above. Returning straight out
+        // left the unpack buffer mapped and bound, because the unmap below is
+        // never reached and the destructor only knows about pbo_unbound_.
+        if (mapped) {
+            GLES.glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+            GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+            pbo_unbound_ = true;
+        }
+        pixels = nullptr;
         dropped_ = true;
         return;
     }

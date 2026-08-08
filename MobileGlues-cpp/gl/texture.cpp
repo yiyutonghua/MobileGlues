@@ -663,6 +663,11 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format, boo
     case GL_RGBA8_SNORM:
         if (format) *format = GL_RGBA;
         if (type) *type = GL_BYTE;
+        // This case has never had a break; it used to fall into default:, whose
+        // two tests both miss GL_RGBA8_SNORM, so the values above survived. The
+        // GL_RGB case below was inserted between the two and silently became the
+        // fallthrough target, rewriting them to GL_RGB + GL_UNSIGNED_BYTE.
+        break;
     // The unsized spelling of the same thing, and the one classic desktop code
     // uses: glTexImage2D(GL_RGB, ..., GL_RGBA, GL_UNSIGNED_BYTE, rgba) is legal
     // GL, which drops the alpha during conversion. Only GL_RGB8 was recognised,

@@ -249,16 +249,40 @@ void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbu
 
 void restore_home_attachments(framebuffer_t& fbo) {
     if (fbo.draw_buffer_map.empty()) return;
-    for (size_t idx = 0; idx < fbo.draw_buffer_map.size(); ++idx) {
-        const GLenum where = fbo.draw_buffer_map[idx];
-        if (where == 0) continue;                                   // never moved
-        if (where == GL_COLOR_ATTACHMENT0 + (GLenum)idx) continue;  // already home
-        if (idx >= fbo.color_attachments.size()) continue;
+    // Every recorded attachment, not just the ones the map says were moved.
+    //
+    // The map answers "where did logical i go", which is the wrong direction for
+    // undoing. A slot that was only ever a DESTINATION -- something else was moved
+    // on top of it, detaching what lived there -- has a zero entry, so walking the
+    // map skipped exactly the slot that needs repairing. With colortex0 on
+    // attachment 0 and colortex1 on attachment 1, glDrawBuffers({ATTACHMENT1})
+    // moves colortex1 onto physical 0; a following glDrawBuffers({ATTACHMENT0})
+    // then found map[0] == 0, left physical 0 holding colortex1, and the pass
+    // wrote its output into the wrong texture.
+    //
+    // color_attachments is the layout the application actually asked for, so
+    // putting every entry back on its own point is both sufficient and
+    // idempotent: re-attaching something already in place costs one call and
+    // changes nothing.
+    for (size_t idx = 0; idx < fbo.color_attachments.size(); ++idx) {
         const attachment_t& a = fbo.color_attachments[idx];
         if (a.kind == attach_kind_t::None) continue;
         reattach(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + (GLenum)idx, a);
     }
     fbo.draw_buffer_map.clear();
+}
+
+// The ARB spellings, which these three had while they were NATIVE_FUNCTION_HEAD
+// entries -- that macro emits a `name##ARB` alias next to every function it
+// defines, and moving them here quietly dropped three of the 500-odd aliases the
+// library exports. An application that resolves glDeleteFramebuffersARB, as
+// anything written against EXT_framebuffer_object does, got a null pointer.
+extern "C" {
+GLAPI GLAPIENTRY void glDeleteFramebuffersARB(GLsizei n, const GLuint* names) __attribute__((alias("glDeleteFramebuffers")));
+GLAPI GLAPIENTRY void glFramebufferRenderbufferARB(GLenum target, GLenum attachment, GLenum renderbuffertarget,
+                                                   GLuint renderbuffer) __attribute__((alias("glFramebufferRenderbuffer")));
+GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(GLenum target, GLenum attachment, GLuint texture, GLint level,
+                                                   GLint layer) __attribute__((alias("glFramebufferTextureLayer")));
 }
 
 void glDeleteFramebuffers(GLsizei n, const GLuint* names) {
@@ -390,6 +414,13 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
         GLES.glDrawBuffers(n, bufs);
         return;
     }
+
+    // Undo whatever the last shuffle did before arranging a new one. Overwriting
+    // the map with assign() below discards the record of where the previous
+    // shuffle put things while the driver still has them there, so any slot the
+    // old shuffle moved and the new one does not name would be stranded with no
+    // way left to find it.
+    restore_home_attachments(fbo);
 
     std::vector<GLenum> new_bufs(n);
     fbo.draw_buffer_map.assign(max_color_attachments_or_default(), 0);

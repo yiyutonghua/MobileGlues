@@ -119,6 +119,9 @@ GLsizei pixel_sizeof(GLenum format, GLenum type) {
     // any integer texture -- an id or picking buffer, a voxel lookup -- sized to
     // zero and was dropped without an error.
     case GL_RED_INTEGER:
+    case GL_GREEN_INTEGER:
+    case GL_BLUE_INTEGER:
+    case GL_ALPHA_INTEGER:
         width = 1;
         break;
     case GL_RG:

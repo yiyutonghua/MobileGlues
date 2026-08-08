@@ -1242,7 +1242,8 @@ static bool mgPackBufferBound() {
 struct mg_pack_state_t {
     size_t row_bytes = 0;   // stride between rows
     size_t image_bytes = 0; // stride between images, rows * height
-    size_t span = 0;        // furthest byte one image actually reaches
+    size_t start = 0;       // offset of the first texel, from the skips
+    size_t span = 0;        // furthest byte one image actually reaches, skips included
     bool ok = false;
 };
 
@@ -1265,8 +1266,20 @@ static mg_pack_state_t mgPackState(GLsizei width, GLsizei height, GLenum format,
     const size_t rowPixels = static_cast<size_t>(packRowLength > 0 ? packRowLength : width);
     s.row_bytes = widthalign(rowPixels * static_cast<size_t>(texelSize), packAlign);
     s.image_bytes = s.row_bytes * static_cast<size_t>(height);
+
+    // The skips push the first texel forward, and glReadPixels applies them for
+    // real -- so a size check that ignores them is short by exactly that offset
+    // and accepts a buffer the read then overruns. They belong in span, not in the
+    // strides, which the per-slice advance uses.
+    GLint skipRows = 0, skipPixels = 0;
+    GLES.glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+    GLES.glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+    if (skipRows < 0) skipRows = 0;
+    if (skipPixels < 0) skipPixels = 0;
+    s.start = static_cast<size_t>(skipRows) * s.row_bytes + static_cast<size_t>(skipPixels) * texelSize;
+
     const size_t lastRow = static_cast<size_t>(width) * static_cast<size_t>(texelSize);
-    s.span = s.row_bytes * static_cast<size_t>(height - 1) + lastRow;
+    s.span = s.start + s.row_bytes * static_cast<size_t>(height - 1) + lastRow;
     s.ok = true;
     return s;
 }
