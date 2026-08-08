@@ -775,6 +775,15 @@ void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, 1, format, type, pixels, want_fmt, /*three_d=*/false);
+    // A conversion this layer refused -- a source it could not map, or dimensions
+    // whose product does not fit in memory -- means the call has already raised its
+    // error and must not go on to define the level. Without this, `pixels` having
+    // been nulled turned the drop into an allocation with undefined contents, which
+    // is not what GL does after an error: it does nothing.
+    if (fix.dropped()) {
+        CHECK_GL_ERROR
+        return;
+    }
     if (fix.has_data()) {
         format = fix.format;
         type = fix.type;
@@ -828,6 +837,15 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
     internalFormat = static_cast<GLint>(want_if);
 
     mg_upload_fix_t fix(width, height, depth, format, type, pixels, want_fmt);
+    // A conversion this layer refused -- a source it could not map, or dimensions
+    // whose product does not fit in memory -- means the call has already raised its
+    // error and must not go on to define the level. Without this, `pixels` having
+    // been nulled turned the drop into an allocation with undefined contents, which
+    // is not what GL does after an error: it does nothing.
+    if (fix.dropped()) {
+        CHECK_GL_ERROR
+        return;
+    }
     if (fix.has_data()) {
         format = fix.format;
         type = fix.type;

@@ -294,12 +294,43 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     const uint8_t* src = nullptr;
     void* mapped = nullptr;
     if (prev_pbo_ != 0) {
-        mapped = GLES.glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, static_cast<GLintptr>(reinterpret_cast<uintptr_t>(pixels_in)),
-                                       static_cast<GLsizeiptr>(span), GL_MAP_READ_BIT);
+        const GLintptr pbo_off = static_cast<GLintptr>(reinterpret_cast<uintptr_t>(pixels_in));
+        mapped = GLES.glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, pbo_off, static_cast<GLsizeiptr>(span), GL_MAP_READ_BIT);
+
+        if (!mapped) {
+            // Read it through a copy instead of giving up.
+            //
+            // A mobile driver routinely refuses a READ mapping of a buffer whose
+            // usage hint is one of the _DRAW ones -- and _DRAW is the natural hint
+            // for a buffer whose whole purpose is uploading. What those drivers do
+            // serve is a copy into a buffer asked for with _READ, which is a buffer
+            // we can make ourselves. Dropping the upload here instead is what left
+            // Xaero's map tiles, which arrive exactly this way, as black texture.
+            while (GLES.glGetError() != GL_NO_ERROR) {
+            } // the failed map left an error behind
+            if (GLES.glCopyBufferSubData != nullptr && GLES.glGenBuffers != nullptr &&
+                GLES.glDeleteBuffers != nullptr && GLES.glBufferData != nullptr) {
+                GLES.glGetIntegerv(GL_COPY_WRITE_BUFFER_BINDING, &prev_copy_write_);
+                GLES.glGenBuffers(1, &copy_scratch_);
+                GLES.glBindBuffer(GL_COPY_WRITE_BUFFER, copy_scratch_);
+                GLES.glBufferData(GL_COPY_WRITE_BUFFER, static_cast<GLsizeiptr>(span), nullptr, GL_STREAM_READ);
+                GLES.glCopyBufferSubData(GL_PIXEL_UNPACK_BUFFER, GL_COPY_WRITE_BUFFER, pbo_off, 0,
+                                         static_cast<GLsizeiptr>(span));
+                mapped = GLES.glMapBufferRange(GL_COPY_WRITE_BUFFER, 0, static_cast<GLsizeiptr>(span), GL_MAP_READ_BIT);
+                if (!mapped) {
+                    GLES.glBindBuffer(GL_COPY_WRITE_BUFFER, static_cast<GLuint>(prev_copy_write_));
+                    GLES.glDeleteBuffers(1, &copy_scratch_);
+                    copy_scratch_ = 0;
+                }
+            }
+        }
+
         if (!mapped) {
             // Wrong colours are worse than a missing upload: dropping keeps the
             // failure visible instead of shipping swapped channels.
-            TR_WARN_ONCE("pixel transfer: unpack buffer %d is not mappable for reading, upload dropped", prev_pbo_);
+            TR_WARN_ONCE("pixel transfer: unpack buffer %d is readable neither by mapping nor by copy, "
+                         "upload dropped",
+                         prev_pbo_);
             GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
             pbo_unbound_ = true;
             pixels = nullptr;
@@ -325,11 +356,7 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         // Same unwind as the unmappable-PBO drop above. Returning straight out
         // left the unpack buffer mapped and bound, because the unmap below is
         // never reached and the destructor only knows about pbo_unbound_.
-        if (mapped) {
-            GLES.glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-            GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-            pbo_unbound_ = true;
-        }
+        release_source(mapped);
         pixels = nullptr;
         dropped_ = true;
         return;
@@ -374,11 +401,7 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         }
     }
 
-    if (mapped) {
-        GLES.glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-        GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        pbo_unbound_ = true;
-    }
+    release_source(mapped);
 
     // The converted stream is tight and the skips are already applied.
     GLES.glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -389,6 +412,22 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     GLES.glPixelStorei(GL_UNPACK_SKIP_IMAGES, 0);
     converted_ = true;
     pixels = scratch().data();
+}
+
+// Let go of whatever the source was read through -- the unpack buffer itself, or
+// the scratch it had to be copied into first.
+void mg_upload_fix_t::release_source(void* mapped) {
+    if (!mapped) return;
+    if (copy_scratch_ != 0) {
+        GLES.glUnmapBuffer(GL_COPY_WRITE_BUFFER);
+        GLES.glBindBuffer(GL_COPY_WRITE_BUFFER, static_cast<GLuint>(prev_copy_write_));
+        GLES.glDeleteBuffers(1, &copy_scratch_);
+        copy_scratch_ = 0;
+    } else {
+        GLES.glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    }
+    GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    pbo_unbound_ = true;
 }
 
 mg_upload_fix_t::~mg_upload_fix_t() {

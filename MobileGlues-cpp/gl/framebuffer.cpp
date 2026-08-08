@@ -30,14 +30,26 @@ static GLint MAX_DRAW_BUFFERS = 0;
 // color_attachments is an uninitialised pointer that update_attachment writes
 // twelve bytes through.
 namespace {
+// Keyed by name rather than indexed by it. The vector this replaces was resized
+// to id + 10 on every miss, so one framebuffer name out of the usual small
+// sequential run cost a record for every name below it -- and framebuffer_t
+// carries two vectors now, which made that worse. std::unordered_map rather than
+// the dense map used elsewhere in the tree: references into it survive the
+// insertion of other entries, and several functions here hold a framebuffer_t&
+// across calls that can insert.
 struct fbo_ctx_state_t {
-    std::vector<framebuffer_t> table;
+    std::unordered_map<GLuint, framebuffer_t> table;
     GLuint draw = 0;
     GLuint read = 0;
 };
 std::mutex g_fbo_mutex;
 std::unordered_map<unsigned long long, fbo_ctx_state_t> g_fbo_ctxs;
-fbo_ctx_state_t g_fbo_default;
+// Per thread, not one shared instance. This is where a context this layer never
+// saw created lands, and every such thread used to read and write the same
+// tables and the same two bindings with no lock between them. A context is
+// current on one thread at a time, so a thread-local fallback is also the more
+// accurate model of what it stands for.
+thread_local fbo_ctx_state_t g_fbo_default;
 thread_local fbo_ctx_state_t* g_fc = &g_fbo_default;
 } // namespace
 
@@ -68,8 +80,8 @@ void mg_framebuffer_forget_context(unsigned long long ctx_id) {
 // the same unchecked index from another translation unit and could not see the
 // table's size. It gets the predicate instead.
 bool mg_draw_framebuffer_all_none() {
-    const GLuint id = current_draw_fbo;
-    return id < framebuffers.size() && framebuffers[id].color_attachments_all_none;
+    const auto it = framebuffers.find(current_draw_fbo);
+    return it != framebuffers.end() && it->second.color_attachments_all_none;
 }
 void ensure_max_attachments() {
     // The fallback is used but no longer cached. A query made with no context
@@ -94,10 +106,7 @@ static GLint max_color_attachments_or_default() {
     return MAX_COLOR_ATTACHMENTS > 0 ? MAX_COLOR_ATTACHMENTS : 8;
 }
 framebuffer_t& get_framebuffer(GLuint id) {
-    if (id >= framebuffers.size()) {
-        framebuffers.resize(id + 10);
-    }
-    return framebuffers[id];
+    return framebuffers[id]; // default-constructs on first sight of the name
 }
 void InitFramebufferMap(size_t expectedSize) {
     framebuffers.reserve(expectedSize);
@@ -337,7 +346,7 @@ void glDeleteFramebuffers(GLsizei n, const GLuint* names) {
         for (GLsizei i = 0; i < n; ++i) {
             const GLuint name = names[i];
             if (name == 0) continue; // silently ignored, per spec
-            if (name < framebuffers.size()) framebuffers[name] = framebuffer_t{};
+            framebuffers.erase(name);
             // "If a framebuffer object that is currently bound is deleted, the
             // binding reverts to 0" -- through this layer's own entry point, so the
             // FSR1 redirect and the tracked bindings stay in step.

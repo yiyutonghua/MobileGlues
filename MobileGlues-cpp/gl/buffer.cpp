@@ -550,6 +550,13 @@ void glBindVertexBuffer(GLuint bindingindex, GLuint buffer, GLintptr offset, GLs
 // Returns false for a format with no ES-legal pair -- the normalised 16-bit ones
 // need EXT_texture_norm16, and depth formats are not texture-buffer formats at
 // all. The caller drops the call instead of guessing.
+//
+// Deliberately wider than GL 4.6 table 8.16, which lists only the 32-bit
+// three-component forms among the RGB ones: the extra entries here (GL_RGB8,
+// GL_RGB8I/UI, GL_RGB16I/UI/F) are all valid ES triples, so emulating them costs
+// nothing, while refusing them would only break an application that already works
+// against the permissive desktop drivers. Being stricter than the hardware buys
+// no correctness.
 bool get_internal_format_transfer(GLenum internalformat, GLenum* format, GLenum* type) {
     switch (internalformat) {
     // clang-format off

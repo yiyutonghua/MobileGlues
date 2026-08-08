@@ -89,6 +89,12 @@ struct mg_upload_fix_t {
     bool converted_ = false;
     bool pbo_unbound_ = false;
     GLint prev_pbo_ = 0;
+    // A buffer of our own that the unpack PBO is copied into when the driver will
+    // not let us map the PBO itself for reading. Zero when the direct map worked.
+    GLuint copy_scratch_ = 0;
+    GLint prev_copy_write_ = 0;
+
+    void release_source(void* mapped);
     GLint prev_align_ = 4, prev_row_len_ = 0, prev_skip_rows_ = 0, prev_skip_px_ = 0;
     GLint prev_img_h_ = 0, prev_skip_img_ = 0;
 };
