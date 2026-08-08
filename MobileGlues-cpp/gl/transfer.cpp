@@ -46,8 +46,14 @@ std::vector<uint8_t>& scratch() {
 // process even though every later upload was a few kilobytes. Handed back once
 // the transfer is done and the peak was large.
 constexpr size_t k_scratch_keep = 16u << 20; // 16 MiB
-void scratch_release_if_large() {
+void scratch_release_if_large(size_t used) {
     if (scratch().capacity() <= k_scratch_keep) return;
+    // Only when this transfer did not need the room. Releasing on every large
+    // transfer would make a stream of them -- a resource-pack reload uploading
+    // atlas after atlas -- pay a fresh allocate and free each time, which is the
+    // one thing a scratch buffer exists to avoid. Handing it back matters for the
+    // opposite shape: one huge upload followed by thousands of small ones.
+    if (used * 4 > scratch().capacity()) return;
     std::vector<uint8_t>().swap(scratch());
 }
 
@@ -329,6 +335,7 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         return;
     }
     scratch().resize(need);
+    converted_bytes_ = need;
     uint8_t* out = scratch().data();
 
     // GL_UNPACK_SWAP_BYTES reverses the bytes of every component -- of the whole
@@ -398,7 +405,7 @@ mg_upload_fix_t::~mg_upload_fix_t() {
     }
     // The driver has consumed pixels by now, so the scratch that fed it can go
     // back if this transfer was the one that made it enormous.
-    if (converted_) scratch_release_if_large();
+    if (converted_) scratch_release_if_large(converted_bytes_);
 }
 
 // ---------------------------------------------------------------------------

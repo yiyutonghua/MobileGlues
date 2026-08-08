@@ -84,6 +84,7 @@ struct mg_upload_fix_t {
 
   private:
     bool dropped_ = false;
+    size_t converted_bytes_ = 0; // what this transfer actually needed, for the scratch policy
     bool has_data_ = false;
     bool converted_ = false;
     bool pbo_unbound_ = false;

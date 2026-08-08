@@ -1276,7 +1276,15 @@ static mg_pack_state_t mgPackState(GLsizei width, GLsizei height, GLenum format,
 
     const size_t rowPixels = static_cast<size_t>(packRowLength > 0 ? packRowLength : width);
     s.row_bytes = widthalign(rowPixels * static_cast<size_t>(texelSize), packAlign);
-    s.image_bytes = s.row_bytes * static_cast<size_t>(height);
+    // GL_PACK_IMAGE_HEIGHT, when set, is the row count consecutive images are laid
+    // out by -- not the image's own height. GLES has no such parameter, so this
+    // reads the shadow gl/pixel.cpp keeps for it; before that shadow existed there
+    // was nothing to read and the stride was always the height.
+    GLint packImageHeight = 0;
+    mg_pixel_store_query_int(GL_PACK_IMAGE_HEIGHT, &packImageHeight);
+    const size_t imageRows =
+        packImageHeight > 0 ? static_cast<size_t>(packImageHeight) : static_cast<size_t>(height);
+    s.image_bytes = s.row_bytes * imageRows;
 
     // The skips push the first texel forward, and glReadPixels applies them for
     // real -- so a size check that ignores them is short by exactly that offset

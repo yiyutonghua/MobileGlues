@@ -104,10 +104,19 @@ void InitFramebufferMap(size_t expectedSize) {
 }
 void init_framebuffer(framebuffer_t& fbo) {
     ensure_max_attachments();
+    const size_t want = static_cast<size_t>(max_color_attachments_or_default());
     if (!fbo.initialized) {
-        fbo.color_attachments.assign(max_color_attachments_or_default(), attachment_t{});
+        fbo.color_attachments.assign(want, attachment_t{});
         fbo.initialized = true;
+        return;
     }
+    // The limit can go up after a record was sized. ensure_max_attachments
+    // deliberately stopped latching its 8-slot fallback -- caching it from a query
+    // made with no context current was its own bug -- so a framebuffer first
+    // touched before the driver could answer holds eight slots while every bounds
+    // check now uses the driver's real, larger number. Indexing the difference is
+    // a heap write past the end.
+    if (fbo.color_attachments.size() < want) fbo.color_attachments.resize(want, attachment_t{});
 }
 void glBindFramebuffer(GLenum target, GLuint framebuffer) {
     LOG()
@@ -190,6 +199,7 @@ void update_attachment(GLenum target, GLenum attachment, const attachment_t& wha
     framebuffer_t& fbo = get_framebuffer(current_fbo);
     init_framebuffer(fbo);
     const size_t index = attachment - GL_COLOR_ATTACHMENT0;
+    if (index >= fbo.color_attachments.size()) return;
     fbo.color_attachments[index] = what;
     // If a shuffle had moved this attachment, that record now describes where the
     // PREVIOUS texture went; glReadBuffer would send the application there instead
@@ -430,6 +440,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     // record would detach whatever is really there.
     for (int i = 0; i < n; i++) {
         if (bufs[i] < GL_COLOR_ATTACHMENT0 || bufs[i] >= GL_COLOR_ATTACHMENT0 + (GLenum)max_color_attachments_or_default()) continue;
+        if (bufs[i] - GL_COLOR_ATTACHMENT0 >= fbo.color_attachments.size()) continue;
         if (fbo.color_attachments[bufs[i] - GL_COLOR_ATTACHMENT0].kind != attach_kind_t::None) continue;
         // Passed through unchanged instead. GLES rejects a non-identity draw
         // buffer list, so the application gets GL_INVALID_OPERATION -- which is
@@ -457,7 +468,11 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
             GLenum logical_attachment = bufs[i];
             GLenum physical_attachment = GL_COLOR_ATTACHMENT0 + i;
             new_bufs[i] = physical_attachment;
-            int index = logical_attachment - GL_COLOR_ATTACHMENT0;
+            size_t index = logical_attachment - GL_COLOR_ATTACHMENT0;
+            if (index >= fbo.color_attachments.size() || index >= fbo.draw_buffer_map.size()) {
+                new_bufs[i] = bufs[i];
+                continue;
+            }
             reattach(GL_DRAW_FRAMEBUFFER, physical_attachment, fbo.color_attachments[index]);
             // Remember where it went, so glReadBuffer can read it where it is
             // rather than moving it a second time.
@@ -472,7 +487,7 @@ void glReadBuffer(GLenum src) {
     if (current_read_fbo != 0 && src >= GL_COLOR_ATTACHMENT0 && src < GL_COLOR_ATTACHMENT0 + max_color_attachments_or_default()) {
         framebuffer_t& fbo = get_framebuffer(current_read_fbo);
         init_framebuffer(fbo);
-        const int index = src - GL_COLOR_ATTACHMENT0;
+        const size_t index = static_cast<size_t>(src - GL_COLOR_ATTACHMENT0);
         // glDrawBuffers has to move logical attachment i onto physical
         // GL_COLOR_ATTACHMENTi, because GLES only accepts COLOR_ATTACHMENTi in slot
         // i of the draw buffer list. After such a shuffle the texture the
@@ -484,7 +499,7 @@ void glReadBuffer(GLenum src) {
         // empty because the application had attached with glFramebufferRenderbuffer
         // or one of the layered entry points, which do not reach update_attachment.
         // Reading where the texture already is moves nothing and cannot clobber.
-        if (index < (int)fbo.draw_buffer_map.size() && fbo.draw_buffer_map[index] != 0) {
+        if (index < fbo.draw_buffer_map.size() && fbo.draw_buffer_map[index] != 0) {
             GLES.glReadBuffer(fbo.draw_buffer_map[index]);
             return;
         }
