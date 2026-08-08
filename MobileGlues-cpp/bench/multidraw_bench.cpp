@@ -131,8 +131,10 @@ constexpr int BENCH_PROGRESS_DONE = BENCH_MAX_ATTEMPTS * 1000;
 
 constexpr int BENCH_GRID_X = 8;    // sections across
 constexpr int BENCH_GRID_Y = 4;    // sections up
-constexpr int BENCH_GRID_Z = 16;   // sections into the distance
-constexpr int BENCH_SECTIONS = BENCH_GRID_X * BENCH_GRID_Y * BENCH_GRID_Z;
+// Depth is the knob: how many rows of sections recede from the camera. It is
+// chosen at run time rather than compiled in, because the right value is a
+// property of the device, not of the benchmark -- see the ladder below.
+constexpr int BENCH_SECTIONS_PER_ROW = BENCH_GRID_X * BENCH_GRID_Y;
 constexpr int BENCH_SECTION_SIZE = 16;      // blocks per side, as in the game
 constexpr int BENCH_QUADS_MIN = 64;         // block faces in a sparse section
 constexpr int BENCH_QUADS_MAX = 512;        // ... and in a dense one
@@ -142,6 +144,28 @@ constexpr int BENCH_ATLAS_SIZE = 512;       // block atlas, mipmapped
 constexpr int BENCH_ATLAS_TILE = 16;        // 16x16 tiles, as in the game
 constexpr int BENCH_DEFAULT_WIDTH = 1280;
 constexpr int BENCH_DEFAULT_HEIGHT = 720;
+
+// ---- How big the scene should be ----
+//
+// A tiler bins every primitive into the tiles it covers, and that list lives in
+// a per-context heap that grows on demand and then stops. Past that point the
+// job does not slow down, it fails: Mali answers BASE_JD_EVENT_OUT_OF_MEMORY,
+// the kernel kills the context, and ANGLE turns the VK_ERROR_DEVICE_LOST into
+// GL_CONTEXT_LOST. Measured on a Mali-G77, 512 sections crossed the line and
+// 256 did not -- but that number belongs to that phone, and guessing one that
+// fits every device means picking a scene too small to be worth measuring.
+//
+// So the size is discovered instead, once per run and never written down. The
+// run opens at BENCH_START_SECTIONS; a pass that comes back too noisy doubles
+// it, because the steadier reading is the one with more real work behind it.
+// The first lost context ends the climb for good: whatever crashed is above the
+// ceiling, the run drops back below it and stays there. Nothing is remembered
+// between runs, so a device that was busy last time is not held to it.
+constexpr int BENCH_START_SECTIONS = 256;
+constexpr int BENCH_MIN_SECTIONS = BENCH_SECTIONS_PER_ROW;   // one row
+// Not a device limit -- a limit on how far a benchmark may go before the scene
+// build itself is the slow part. At 2048 the vertex buffer alone is ~57 MB.
+constexpr int BENCH_MAX_SECTIONS = 1024;
 
 struct bench_scene_t {
     GLuint program = 0;
@@ -160,6 +184,8 @@ struct bench_scene_t {
     GLint u_mvp = -1;
     int width = BENCH_DEFAULT_WIDTH;
     int height = BENCH_DEFAULT_HEIGHT;
+    int sections = BENCH_START_SECTIONS;  // as built, after clamping
+    int grid_z = BENCH_START_SECTIONS / BENCH_SECTIONS_PER_ROW;
     float spin = 0.0f;  // moved every frame; a still camera is not a game
 
     // One entry per section, in front-to-back order.
@@ -282,12 +308,18 @@ bool bench_build_target(bench_scene_t& s) {
 // The scene goes straight through the GLES table: the multidraw backends read
 // GL state through the same table, and the frontend state machine plays no part
 // in what is being measured.
-void bench_scene_build(bench_scene_t& s) {
+// `sections` is rounded down to whole rows and clamped to the ladder; the value
+// actually built is left in s.sections, which is what the report must quote.
+void bench_scene_build(bench_scene_t& s, int sections) {
     if (!GLES.glCreateShader || !GLES.glGenVertexArrays || !GLES.glGenBuffers ||
         !GLES.glGenFramebuffers || !GLES.glGenTextures || !GLES.glGenerateMipmap) {
         s.error = "GLES entry points missing";
         return;
     }
+
+    sections = std::min(std::max(sections, BENCH_MIN_SECTIONS), BENCH_MAX_SECTIONS);
+    s.grid_z = std::max(1, sections / BENCH_SECTIONS_PER_ROW);
+    s.sections = s.grid_z * BENCH_SECTIONS_PER_ROW;
 
     s.width = bench_dimension("MG_BENCH_WIDTH", BENCH_DEFAULT_WIDTH);
     s.height = bench_dimension("MG_BENCH_HEIGHT", BENCH_DEFAULT_HEIGHT);
@@ -369,20 +401,20 @@ void bench_scene_build(bench_scene_t& s) {
     static_assert(sizeof(vertex_t) == BENCH_VERTEX_BYTES, "vertex layout drifted");
 
     std::vector<vertex_t> verts;
-    verts.reserve(static_cast<size_t>(BENCH_SECTIONS) * BENCH_QUADS_MAX * 4 / 2);
+    verts.reserve(static_cast<size_t>(s.sections) * BENCH_QUADS_MAX * 4 / 2);
 
-    s.counts.reserve(BENCH_SECTIONS);
-    s.offsets.reserve(BENCH_SECTIONS);
-    s.offsets_absolute.reserve(BENCH_SECTIONS);
-    s.basevertex.reserve(BENCH_SECTIONS);
-    s.firsts.reserve(BENCH_SECTIONS);
-    s.counts_arrays.reserve(BENCH_SECTIONS);
+    s.counts.reserve(s.sections);
+    s.offsets.reserve(s.sections);
+    s.offsets_absolute.reserve(s.sections);
+    s.basevertex.reserve(s.sections);
+    s.firsts.reserve(s.sections);
+    s.counts_arrays.reserve(s.sections);
 
     bench_rng_t rng;
     const float atlas_tiles = static_cast<float>(BENCH_ATLAS_SIZE / BENCH_ATLAS_TILE);
     int max_quads = 0;
 
-    for (int gz = 0; gz < BENCH_GRID_Z; ++gz) {
+    for (int gz = 0; gz < s.grid_z; ++gz) {
         for (int gy = 0; gy < BENCH_GRID_Y; ++gy) {
             for (int gx = 0; gx < BENCH_GRID_X; ++gx) {
                 const int quads = rng.range(BENCH_QUADS_MIN, BENCH_QUADS_MAX);
@@ -552,7 +584,11 @@ void bench_frame_begin(bench_scene_t& s) {
     const float fov = 70.0f * 3.14159265f / 180.0f;
     const float f = 1.0f / std::tan(fov * 0.5f);
     const float near_z = 0.05f;
-    const float far_z = 512.0f;
+    // Far enough that the last row of sections is still inside the frustum. A
+    // fixed plane would silently clip away the very geometry a larger scene was
+    // grown to add, so the load would stop rising while the numbers pretended
+    // it had.
+    const float far_z = std::max(512.0f, static_cast<float>(BENCH_SECTION_SIZE * (s.grid_z + 2)));
     const float depth_a = (far_z + near_z) / (near_z - far_z);
     const float depth_b = 2.0f * far_z * near_z / (near_z - far_z);
     const float yaw = std::sin(s.spin) * 0.05f;
@@ -812,6 +848,12 @@ struct bench_entry_state_t {
     std::vector<bench_candidate_t> best;  // samples from the calmest pass
     double best_rsd = 0.0;
     int best_rounds = 0;
+    // The scene the calmest pass ran on. Passes grow the scene, so two entry
+    // points can end up settling on different ones -- and a microsecond figure
+    // means nothing without the size it was measured at. Rankings are unaffected
+    // (each entry point is ranked within one pass), but the numbers shown next
+    // to them would be comparing different scenes if this were not reported.
+    int best_sections = 0;
     bool have_best = false;
 
     int attempts = 0;
@@ -840,6 +882,57 @@ struct bench_live_ref_t {
     size_t state;
     size_t candidate;
 };
+
+// How many frames of this candidate make one batch of about BENCH_TARGET_BATCH_US.
+int bench_frames_for(double probe_us) {
+    const double want = probe_us > 0.0 ? BENCH_TARGET_BATCH_US / probe_us : BENCH_MAX_FRAMES;
+    return static_cast<int>(std::min(std::max(want, static_cast<double>(BENCH_MIN_FRAMES)),
+                                     static_cast<double>(BENCH_MAX_FRAMES)));
+}
+
+// Throw the scene away and build a bigger one, then re-time every candidate on
+// it. Both halves are required: a frame of the new scene costs about twice a
+// frame of the old, so the batch lengths calibrated against the old one would
+// overshoot the time budget by the same factor and the pass would run half the
+// rounds it was asked for.
+//
+// The candidate list itself is left alone. Re-running the full probe would also
+// re-decide which backends are measurable, and a backend dropping in or out
+// halfway through a run is a worse problem than a stale frame count: the passes
+// would no longer be measuring the same set of things.
+//
+// Returns false with the old scene rebuilt and intact if the larger one could
+// not be created, so a device that runs out of memory here simply stops
+// climbing instead of losing the run.
+bool bench_scene_regrow(bench_scene_t& scene, int sections,
+                        std::vector<bench_entry_state_t>& states) {
+    const int previous = scene.sections;
+    if (sections == previous) return false;
+
+    bench_scene_destroy(scene);
+    scene = bench_scene_t{};
+    bench_scene_build(scene, sections);
+    if (!scene.ok) {
+        bench_scene_destroy(scene);
+        scene = bench_scene_t{};
+        bench_scene_build(scene, previous);
+        return false;
+    }
+
+    for (bench_entry_state_t& s : states) {
+        for (bench_candidate_t& c : s.candidates) {
+            const double probe_us = bench_timed_batch(scene, c.entry, c.backend, 4);
+            // A negative probe means a fallback fired or the context is gone.
+            // Neither is a reason to guess: keep the old pacing and let the pass
+            // discard the candidate the same way it always would.
+            if (probe_us > 0.0) {
+                c.probe_us = probe_us;
+                c.frames = bench_frames_for(probe_us);
+            }
+        }
+    }
+    return true;
+}
 
 // One round-robin pass over every candidate still unsettled. Interleaving
 // across entry points as well as backends is the point: whatever the clock does
@@ -928,7 +1021,13 @@ extern "C" __attribute__((visibility("default"))) int mg_multidraw_bench_progres
     return g_bench_progress.load(std::memory_order_relaxed);
 }
 
-extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench_run() {
+// start_sections: the scene to open with, or 0 for the default.
+// max_sections:   a ceiling the run must not climb past, or 0 for none. The
+//                 caller sets this after a previous run lost the context, since
+//                 the size that did it cannot be discovered twice in one
+//                 process -- the context it would need is the one that died.
+extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench_run(
+        int start_sections, int max_sections) {
     static std::string result;
 
     g_bench_progress.store(0, std::memory_order_relaxed);
@@ -936,10 +1035,17 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     const double budget_us = bench_budget_us();
     const double started_us = now_us();
 
+    const int ceiling = max_sections > 0
+                        ? std::min(max_sections, BENCH_MAX_SECTIONS)
+                        : BENCH_MAX_SECTIONS;
+    const int opening = std::min(start_sections > 0 ? start_sections : BENCH_START_SECTIONS,
+                                 ceiling);
+
     cJSON* root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "version", 3);
-    cJSON_AddNumberToObject(root, "sections", BENCH_SECTIONS);
     cJSON_AddNumberToObject(root, "budgetMs", budget_us / 1000.0);
+    cJSON_AddNumberToObject(root, "startSections", opening);
+    cJSON_AddNumberToObject(root, "maxSections", max_sections > 0 ? ceiling : 0);
 
     // Which driver these numbers describe. The renderer falls back to the system
     // driver when ANGLE was asked for but could not be opened, and an order
@@ -958,10 +1064,11 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
 
     g_bench_context_lost = false;
     bench_scene_t scene;
-    bench_scene_build(scene);
+    bench_scene_build(scene, opening);
     cJSON_AddNumberToObject(root, "width", scene.width);
     cJSON_AddNumberToObject(root, "height", scene.height);
     if (!scene.ok) {
+        cJSON_AddNumberToObject(root, "sections", scene.sections);
         cJSON_AddStringToObject(root, "error", scene.error.c_str());
         char* text = cJSON_PrintUnformatted(root);
         result = text ? text : "{\"error\":\"print failed\"}";
@@ -1011,10 +1118,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
             c.entry = entry;
             c.backend = backend;
             c.probe_us = probe_us;
-            const double want = probe_us > 0.0 ? BENCH_TARGET_BATCH_US / probe_us : BENCH_MAX_FRAMES;
-            c.frames = static_cast<int>(
-                std::min(std::max(want, static_cast<double>(BENCH_MIN_FRAMES)),
-                         static_cast<double>(BENCH_MAX_FRAMES)));
+            c.frames = bench_frames_for(probe_us);
             state.candidates.push_back(std::move(c));
         }
 
@@ -1022,6 +1126,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     }
 
     if (states.empty()) {
+        cJSON_AddNumberToObject(root, "sections", scene.sections);
         cJSON_AddStringToObject(root, "error", "no measurable backend on this device");
         char* text = cJSON_PrintUnformatted(root);
         result = text ? text : "{\"error\":\"print failed\"}";
@@ -1034,18 +1139,34 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
 
     // ---- Measure, and re-measure whichever functions are still too shaky ----
     //
-    // The spread being fought here is between rounds, so adding rounds does not
-    // shrink it -- it only pins it down more precisely. What shrinks it is a
-    // longer timed batch, which averages the jitter away inside each sample:
-    // spread falls as 1/sqrt(batch length), so reaching the target from a
-    // spread k times too large means batches roughly k^2 times longer.
-    //
     // Settling is judged per entry point, because each one is ranked on its own.
     // A function whose spread is already under the target drops out of the next
-    // pass; only the shaky ones get longer batches, which also makes each retry
-    // cheaper than the pass before it. Four passes at most per function -- if
+    // pass; only the shaky ones are measured again. Four passes at most -- if
     // even the fourth misses, that function's calmest pass is reported with
     // noisy=true and the app asks the user about that function specifically.
+    //
+    // A shaky pass is answered in one of two ways, and which one is not a matter
+    // of taste:
+    //
+    //   * below the ceiling, the scene doubles. Jitter is largely a fixed cost
+    //     per frame -- a scheduler slice, a governor step -- so doubling the
+    //     real work per frame halves its share of the reading. This is the
+    //     preferred answer, and it is the one that can end the run: bigger
+    //     scene, more tiler memory, and past some size the driver throws the
+    //     context away. That is the ladder working as intended; the caller comes
+    //     back with a ceiling and this run never reaches for it again.
+    //
+    //   * at the ceiling, the budget grows instead, which buys rounds -- more
+    //     independent samples under the median, at exactly the load the device
+    //     has already proven it survives.
+    //
+    // What deliberately does NOT grow is the frames-per-batch. It was the old
+    // answer to a shaky pass, and it is the one knob that raises peak load
+    // without being subject to the ceiling: a longer batch is more geometry
+    // queued before the next glFinish, which is the same resource the ceiling
+    // exists to protect. Leaving it pinned to whatever the probe calibrated is
+    // what keeps the ladder a ratchet -- load only ever moves down after a lost
+    // context, never quietly back up because a reading looked unsteady.
 
     double budget_scale = 1.0;
     for (int attempt = 0; attempt < BENCH_MAX_ATTEMPTS; ++attempt) {
@@ -1068,6 +1189,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
                 s.best = s.candidates;
                 s.best_rsd = rsd;
                 s.best_rounds = rounds;
+                s.best_sections = scene.sections;
                 s.have_best = true;
             }
             if (rsd <= BENCH_NOISE_TARGET) s.settled = true;
@@ -1080,18 +1202,27 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         if (now_us() - started_us > BENCH_TOTAL_BUDGET_US) break;
 
         double worst_scale = 1.0;
-        for (bench_entry_state_t& s : states) {
+        double worst_rsd = 0.0;
+        for (const bench_entry_state_t& s : states) {
             if (s.settled) continue;
             double scale = s.best_rsd / BENCH_NOISE_TARGET;
             scale = std::min(std::max(scale * scale, BENCH_MIN_RETRY_SCALE), BENCH_MAX_RETRY_SCALE);
-            for (bench_candidate_t& c : s.candidates) {
-                c.frames = static_cast<int>(
-                    std::min(c.frames * scale, static_cast<double>(BENCH_MAX_FRAMES)));
-            }
             worst_scale = std::max(worst_scale, scale);
+            worst_rsd = std::max(worst_rsd, s.best_rsd);
         }
-        // Longer batches with the same budget would just mean fewer rounds, so
-        // the budget grows with them -- up to a cap, since the user is waiting.
+
+        if (scene.sections * 2 <= ceiling &&
+            bench_scene_regrow(scene, scene.sections * 2, states)) {
+            LOG_I("bench: readings still spread %.0f%% (target %.0f%%), growing the scene to %d sections",
+                  worst_rsd * 100.0, BENCH_NOISE_TARGET * 100.0, scene.sections)
+            // The regrow re-timed every candidate against the new scene, so the
+            // budget still buys the rounds it was going to buy. Growing it too
+            // would be paying twice for one shaky pass.
+            if (g_bench_context_lost) break;
+            continue;
+        }
+
+        // At the ceiling (or unable to grow): buy samples instead of load.
         budget_scale = std::min(budget_scale * worst_scale, BENCH_MAX_BUDGET_SCALE);
     }
 
@@ -1138,6 +1269,9 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         cJSON_AddNumberToObject(q, "noise", s.best_rsd);
         cJSON_AddNumberToObject(q, "rounds", s.best_rounds);
         cJSON_AddNumberToObject(q, "attempts", s.attempts);
+        // The scene these microseconds were measured on. Two functions can carry
+        // different values when one settled before the other grew the scene.
+        cJSON_AddNumberToObject(q, "sections", s.best_sections);
         cJSON_AddBoolToObject(q, "noisy", noisy);
 
         max_attempts_used = std::max(max_attempts_used, s.attempts);
@@ -1145,6 +1279,9 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         any_noisy = any_noisy || noisy;
     }
 
+    // The scene the run ended on. On a lost context this is the size that did
+    // it, which is the one thing the caller needs to come back with a ceiling.
+    cJSON_AddNumberToObject(root, "sections", scene.sections);
     cJSON_AddNumberToObject(root, "attempts", max_attempts_used);
     cJSON_AddNumberToObject(root, "worstNoise", worst_noise);
     cJSON_AddNumberToObject(root, "noiseTarget", BENCH_NOISE_TARGET);
@@ -1159,6 +1296,10 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     // "measured" after, and half the candidates look unsupported because their
     // preconditions read back as zero. Reporting the ranking anyway would hand
     // the user a confident answer assembled out of fiction.
+    //
+    // The caller is expected to try again in a fresh process below this size --
+    // not here. The context is gone, and so is the ANGLE device under it; a new
+    // one is only reliable in a process that never saw the old one.
     if (g_bench_context_lost) {
         cJSON_AddStringToObject(root, "error", "context-lost");
     }
