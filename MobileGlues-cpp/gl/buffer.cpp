@@ -536,6 +536,68 @@ void glBindVertexBuffer(GLuint bindingindex, GLuint buffer, GLintptr offset, GLs
     CHECK_GL_ERROR
 }
 
+// The transfer pair GLES accepts for a given sized internalformat.
+//
+// The texture-buffer emulation used to allocate and upload with a hardcoded
+// GL_RED_INTEGER + GL_BYTE whatever the internalformat was. ES validates
+// internalformat/format/type as a triple, and that one is legal for exactly one
+// format -- GL_R8I. Everything else (GL_R32I, GL_RGBA32F, even GL_R8UI, which
+// wants GL_UNSIGNED_BYTE) failed the glTexImage2D with GL_INVALID_OPERATION,
+// left level 0 undefined, and the emulated texelFetch read zeros from an
+// incomplete texture. Sized here from the same table as the texel size, so the
+// two cannot drift apart.
+//
+// Returns false for a format with no ES-legal pair -- the normalised 16-bit ones
+// need EXT_texture_norm16, and depth formats are not texture-buffer formats at
+// all. The caller drops the call instead of guessing.
+bool get_internal_format_transfer(GLenum internalformat, GLenum* format, GLenum* type) {
+    switch (internalformat) {
+    // clang-format off
+    case GL_R8:        *format = GL_RED;           *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_R8I:       *format = GL_RED_INTEGER;   *type = GL_BYTE;           return true;
+    case GL_R8UI:      *format = GL_RED_INTEGER;   *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_R16I:      *format = GL_RED_INTEGER;   *type = GL_SHORT;          return true;
+    case GL_R16UI:     *format = GL_RED_INTEGER;   *type = GL_UNSIGNED_SHORT; return true;
+    case GL_R16F:      *format = GL_RED;           *type = GL_HALF_FLOAT;     return true;
+    case GL_R32I:      *format = GL_RED_INTEGER;   *type = GL_INT;            return true;
+    case GL_R32UI:     *format = GL_RED_INTEGER;   *type = GL_UNSIGNED_INT;   return true;
+    case GL_R32F:      *format = GL_RED;           *type = GL_FLOAT;          return true;
+
+    case GL_RG8:       *format = GL_RG;            *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RG8I:      *format = GL_RG_INTEGER;    *type = GL_BYTE;           return true;
+    case GL_RG8UI:     *format = GL_RG_INTEGER;    *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RG16I:     *format = GL_RG_INTEGER;    *type = GL_SHORT;          return true;
+    case GL_RG16UI:    *format = GL_RG_INTEGER;    *type = GL_UNSIGNED_SHORT; return true;
+    case GL_RG16F:     *format = GL_RG;            *type = GL_HALF_FLOAT;     return true;
+    case GL_RG32I:     *format = GL_RG_INTEGER;    *type = GL_INT;            return true;
+    case GL_RG32UI:    *format = GL_RG_INTEGER;    *type = GL_UNSIGNED_INT;   return true;
+    case GL_RG32F:     *format = GL_RG;            *type = GL_FLOAT;          return true;
+
+    case GL_RGB8:      *format = GL_RGB;           *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RGB8I:     *format = GL_RGB_INTEGER;   *type = GL_BYTE;           return true;
+    case GL_RGB8UI:    *format = GL_RGB_INTEGER;   *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RGB16I:    *format = GL_RGB_INTEGER;   *type = GL_SHORT;          return true;
+    case GL_RGB16UI:   *format = GL_RGB_INTEGER;   *type = GL_UNSIGNED_SHORT; return true;
+    case GL_RGB16F:    *format = GL_RGB;           *type = GL_HALF_FLOAT;     return true;
+    case GL_RGB32I:    *format = GL_RGB_INTEGER;   *type = GL_INT;            return true;
+    case GL_RGB32UI:   *format = GL_RGB_INTEGER;   *type = GL_UNSIGNED_INT;   return true;
+    case GL_RGB32F:    *format = GL_RGB;           *type = GL_FLOAT;          return true;
+
+    case GL_RGBA8:     *format = GL_RGBA;          *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RGBA8I:    *format = GL_RGBA_INTEGER;  *type = GL_BYTE;           return true;
+    case GL_RGBA8UI:   *format = GL_RGBA_INTEGER;  *type = GL_UNSIGNED_BYTE;  return true;
+    case GL_RGBA16I:   *format = GL_RGBA_INTEGER;  *type = GL_SHORT;          return true;
+    case GL_RGBA16UI:  *format = GL_RGBA_INTEGER;  *type = GL_UNSIGNED_SHORT; return true;
+    case GL_RGBA16F:   *format = GL_RGBA;          *type = GL_HALF_FLOAT;     return true;
+    case GL_RGBA32I:   *format = GL_RGBA_INTEGER;  *type = GL_INT;            return true;
+    case GL_RGBA32UI:  *format = GL_RGBA_INTEGER;  *type = GL_UNSIGNED_INT;   return true;
+    case GL_RGBA32F:   *format = GL_RGBA;          *type = GL_FLOAT;          return true;
+    // clang-format on
+    default:
+        return false;
+    }
+}
+
 size_t get_internal_format_size(GLenum internalformat) {
     switch (internalformat) {
     case GL_R8:
@@ -679,6 +741,17 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
         if (pixelSize == 0) {
             BU_WARN_ONCE("glTexBuffer: no texel size known for internalformat %s, texture buffer left untouched",
                          glEnumToString(internalformat));
+            mg_set_gl_error(GL_INVALID_ENUM);
+            return;
+        }
+
+        // The transfer pair this internalformat actually accepts. Hardcoding one
+        // pair here is what made every format but GL_R8I fail to allocate.
+        GLenum tb_format = GL_RED_INTEGER, tb_type = GL_BYTE;
+        if (!get_internal_format_transfer(internalformat, &tb_format, &tb_type)) {
+            BU_WARN_ONCE("glTexBuffer: no GLES transfer pair for internalformat %s, texture buffer left untouched",
+                         glEnumToString(internalformat));
+            mg_set_gl_error(GL_INVALID_ENUM);
             return;
         }
 
@@ -737,13 +810,21 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
         GLES.glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 
         // TODO: Optimize the glTexImage2D call
-        GLES.glTexImage2D(GL_TEXTURE_2D, 0, internalformat, width, height, 0, GL_RED_INTEGER, GL_BYTE, nullptr);
+        GLES.glTexImage2D(GL_TEXTURE_2D, 0, internalformat, width, height, 0, tb_format, tb_type, nullptr);
 
         GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, real_buffer);
 
         for (GLuint row = 0; row < height; ++row) {
-            void* offset = (void*)(row * width * pixelSize);
-            GLES.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, width, 1, GL_RED_INTEGER, GL_BYTE, offset);
+            // The last row is short whenever the element count is not a multiple
+            // of the row width. Asking for a full row anyway made the driver read
+            // past the end of the unpack buffer, which GLES answers with
+            // GL_INVALID_OPERATION and a no-op -- so the tail of the buffer was
+            // never uploaded and texelFetch read it back as whatever the
+            // allocation left there.
+            const GLuint row_texels = (row + 1 == height) ? (numElements - row * width) : width;
+            if (row_texels == 0) break;
+            void* offset = (void*)(static_cast<size_t>(row) * width * pixelSize);
+            GLES.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, row, row_texels, 1, tb_format, tb_type, offset);
         }
 
         GLES.glPixelStorei(GL_UNPACK_ALIGNMENT, prev_alignment);
