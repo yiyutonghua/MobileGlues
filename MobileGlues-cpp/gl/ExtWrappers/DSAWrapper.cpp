@@ -7,6 +7,7 @@
 
 #include "DSAWrapper.h"
 #include <cassert>
+#include <tsl/robin_map.h>
 #include "../texture.h"
 #include "../pixel.h"
 #include "../mg.h"
@@ -126,7 +127,7 @@ GLenum GetBindingQuery(GLenum target, bool forceTexture = false) {
 }
 
 // buffer
-static thread_local ankerl::unordered_dense::map<GLenum, std::vector<GLuint>> bufferBindingStack;
+static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> bufferBindingStack;
 void temporarilyBindBuffer(GLuint bufferID, GLenum target = GL_ARRAY_BUFFER) {
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
@@ -143,11 +144,17 @@ void restoreTemporaryBufferBinding(GLenum target = GL_ARRAY_BUFFER) {
     auto it = bufferBindingStack.find(target);
     if (it == bufferBindingStack.end() || it->second.empty()) {
         LOG_D("[DSA] [Restore] no saved binding for target 0x%X", target);
-        // return;
+        // The return here was commented out, and the next line dereferences an
+        // end() iterator on the miss path. Same hole the texture stack had.
+        return;
     }
 
-    GLuint toRestore = it->second.back();
-    it->second.pop_back();
+    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
+    // hands out the pair as const through operator->, so that the key cannot be
+    // rewritten under the map. The mapped value is reached through value().
+    std::vector<GLuint>& stack = it.value();
+    GLuint toRestore = stack.back();
+    stack.pop_back();
 
     if (toRestore == static_cast<GLuint>(-1)) {
         LOG_D("[DSA] [Restore] target=0x%X, no binding to restore", target);
@@ -439,7 +446,7 @@ void glGetNamedBufferSubData(GLuint buffer, GLintptr offset, GLsizeiptr size, vo
 }
 
 // framebuffer
-static thread_local ankerl::unordered_dense::map<GLenum, std::vector<GLuint>> framebufferBindingStack;
+static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> framebufferBindingStack;
 void temporarilyBindFramebuffer(GLuint framebufferID, GLenum target = GL_DRAW_FRAMEBUFFER) {
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
@@ -455,10 +462,16 @@ void restoreTemporaryFramebufferBinding(GLenum target = GL_DRAW_FRAMEBUFFER) {
     auto it = framebufferBindingStack.find(target);
     if (it == framebufferBindingStack.end() || it->second.empty()) {
         LOG_D("[DSA] [Restore] no saved binding for target 0x%X", target);
-        // return;
+        // The return here was commented out, and the next line dereferences an
+        // end() iterator on the miss path. Same hole the texture stack had.
+        return;
     }
-    GLuint toRestore = it->second.back();
-    it->second.pop_back();
+    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
+    // hands out the pair as const through operator->, so that the key cannot be
+    // rewritten under the map. The mapped value is reached through value().
+    std::vector<GLuint>& stack = it.value();
+    GLuint toRestore = stack.back();
+    stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
         LOG_D("[DSA] [Restore] target=0x%X, no binding to restore", target);
         // return;
@@ -765,7 +778,7 @@ void glGetNamedFramebufferAttachmentParameteriv(GLuint framebuffer, GLenum attac
 }
 
 // renderbuffer
-static thread_local ankerl::unordered_dense::map<GLenum, std::vector<GLuint>> renderbufferBindingStack;
+static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> renderbufferBindingStack;
 void temporarilyBindRenderbuffer(GLuint renderbufferID) {
     GLenum bindingQuery = GetBindingQuery(GL_RENDERBUFFER);
     GLint prev = 0;
@@ -781,10 +794,16 @@ void restoreTemporaryRenderbufferBinding() {
     auto it = renderbufferBindingStack.find(GL_RENDERBUFFER);
     if (it == renderbufferBindingStack.end() || it->second.empty()) {
         LOG_D("[DSA] [Restore] no saved binding for GL_RENDERBUFFER");
-        // return;
+        // The return here was commented out, and the next line dereferences an
+        // end() iterator on the miss path. Same hole the texture stack had.
+        return;
     }
-    GLuint toRestore = it->second.back();
-    it->second.pop_back();
+    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
+    // hands out the pair as const through operator->, so that the key cannot be
+    // rewritten under the map. The mapped value is reached through value().
+    std::vector<GLuint>& stack = it.value();
+    GLuint toRestore = stack.back();
+    stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
         LOG_D("[DSA] [Restore] no binding to restore for GL_RENDERBUFFER");
         // return;
@@ -876,7 +895,7 @@ void glGetNamedRenderbufferParameteriv(GLuint renderbuffer, GLenum pname, GLint*
 }
 
 // texture
-static thread_local ankerl::unordered_dense::map<GLenum, std::vector<GLuint>> textureBindingStack;
+static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> textureBindingStack;
 
 // 0 when this layer has no record for the name.
 //
@@ -929,8 +948,10 @@ void restoreTemporaryTextureBinding(GLuint textureID, GLenum possibleTarget = 0)
         return;
     }
 
-    GLuint toRestore = stackIt->second.back();
-    stackIt->second.pop_back();
+    // it.value() rather than ->second: see restoreTemporaryBufferBinding.
+    std::vector<GLuint>& stack = stackIt.value();
+    GLuint toRestore = stack.back();
+    stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
         // Sentinel for "there was nothing bound". The entry is consumed either
         // way; binding 0xFFFFFFFF as a texture name is not the alternative.

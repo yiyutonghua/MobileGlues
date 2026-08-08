@@ -6,7 +6,7 @@
 // End of Source File Header
 #include "FSR1.h"
 #include <mutex>
-#include <unordered_map>
+#include <tsl/robin_map.h>
 #include "FSRShaderSource.h"
 #include "../../config/settings.h"
 
@@ -413,7 +413,11 @@ struct fsr1_ctx_state_t {
 };
 
 std::mutex g_fsr_mutex;
-std::unordered_map<unsigned long long, fsr1_ctx_state_t> g_fsr_states;
+// Plain value, not a unique_ptr like the other per-context tables: nothing here
+// keeps the address of an entry. Both operator[] calls in mg_fsr1_bind_context
+// are separate statements, so the first reference is dead before the second one
+// can rehash the map.
+tsl::robin_map<unsigned long long, fsr1_ctx_state_t> g_fsr_states;
 fsr1_ctx_state_t g_fsr_default;
 thread_local unsigned long long g_fsr_current_id = 0;
 

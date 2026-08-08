@@ -8,9 +8,9 @@
 #include "buffer.h"
 #include "../egl/context.h"
 #include <mutex>
-#include <unordered_map>
+#include <memory>
+#include <tsl/robin_map.h>
 #include <array>
-#include "ankerl/unordered_dense.h"
 #include "texture.h"
 
 #define DEBUG 0
@@ -31,8 +31,8 @@ static GLint maxArrayId = 0;
 // The tables stay private to this file and are selected by a thread_local
 // pointer that eglMakeCurrent swaps, which is why the ~90 access sites only
 // changed shape rather than routing through an accessor on every use.
-// std::unordered_map keeps references stable, so these pointers survive the
-// insertion of another group.
+// The state is held by pointer: robin_map moves its elements when it grows, and
+// these thread_local pointers have to outlive other contexts being added.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -53,8 +53,13 @@ struct buffer_ctx_state_t { // private to one context
 };
 
 std::mutex g_buf_mutex;
-std::unordered_map<unsigned long long, buffer_group_state_t> g_buf_groups;
-std::unordered_map<unsigned long long, buffer_ctx_state_t> g_buf_ctxs;
+// The tables hold their state by pointer. A thread_local pointer into an entry is
+// the whole point of the design -- the ~90 access sites read through g_bg/g_bc
+// rather than looking anything up -- and robin_map moves its elements when it
+// grows, so the entry itself must not be what moves. The unique_ptr stays put
+// while the map rehashes around it.
+tsl::robin_map<unsigned long long, std::unique_ptr<buffer_group_state_t>> g_buf_groups;
+tsl::robin_map<unsigned long long, std::unique_ptr<buffer_ctx_state_t>> g_buf_ctxs;
 
 buffer_group_state_t g_buf_group_default;
 buffer_ctx_state_t g_buf_ctx_default;
@@ -71,8 +76,12 @@ void mg_buffer_bind_context(unsigned long long ctx_id, unsigned long long group_
         return;
     }
     std::lock_guard<std::mutex> lock(g_buf_mutex);
-    g_bg = &g_buf_groups[group_id];
-    g_bc = &g_buf_ctxs[ctx_id];
+    std::unique_ptr<buffer_group_state_t>& group = g_buf_groups[group_id];
+    if (!group) group = std::make_unique<buffer_group_state_t>();
+    std::unique_ptr<buffer_ctx_state_t>& ctx = g_buf_ctxs[ctx_id];
+    if (!ctx) ctx = std::make_unique<buffer_ctx_state_t>();
+    g_bg = group.get();
+    g_bc = ctx.get();
 }
 
 void mg_buffer_forget_context(unsigned long long ctx_id) {
@@ -80,7 +89,7 @@ void mg_buffer_forget_context(unsigned long long ctx_id) {
     std::lock_guard<std::mutex> lock(g_buf_mutex);
     const auto it = g_buf_ctxs.find(ctx_id);
     if (it == g_buf_ctxs.end()) return;
-    if (g_bc == &it->second) g_bc = &g_buf_ctx_default;
+    if (g_bc == it->second.get()) g_bc = &g_buf_ctx_default;
     g_buf_ctxs.erase(it);
 }
 

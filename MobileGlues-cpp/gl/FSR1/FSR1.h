@@ -26,7 +26,6 @@
 #include "../log.h"
 #include "../mg.h"
 #include <GL/gl.h>
-#include <ankerl/unordered_dense.h>
 
 namespace FSR1_Context {
     extern GLuint g_renderFBO;

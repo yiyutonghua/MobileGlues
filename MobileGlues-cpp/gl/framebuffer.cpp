@@ -8,7 +8,8 @@
 #include "framebuffer.h"
 #include "../egl/context.h"
 #include <mutex>
-#include <unordered_map>
+#include <memory>
+#include <tsl/robin_map.h>
 #include "log.h"
 #include "../config/settings.h"
 #include "FSR1/FSR1.h"
@@ -33,17 +34,17 @@ namespace {
 // Keyed by name rather than indexed by it. The vector this replaces was resized
 // to id + 10 on every miss, so one framebuffer name out of the usual small
 // sequential run cost a record for every name below it -- and framebuffer_t
-// carries two vectors now, which made that worse. std::unordered_map rather than
-// the dense map used elsewhere in the tree: references into it survive the
-// insertion of other entries, and several functions here hold a framebuffer_t&
-// across calls that can insert.
+// carries two vectors now, which made that worse. The records are held by
+// pointer: robin_map moves its elements when it grows, and several functions
+// here hold a framebuffer_t& across calls that can insert another name.
 struct fbo_ctx_state_t {
-    std::unordered_map<GLuint, framebuffer_t> table;
+    tsl::robin_map<GLuint, std::unique_ptr<framebuffer_t>> table;
     GLuint draw = 0;
     GLuint read = 0;
 };
 std::mutex g_fbo_mutex;
-std::unordered_map<unsigned long long, fbo_ctx_state_t> g_fbo_ctxs;
+// By pointer for the same reason: g_fc is a thread_local into an entry.
+tsl::robin_map<unsigned long long, std::unique_ptr<fbo_ctx_state_t>> g_fbo_ctxs;
 // Per thread, not one shared instance. This is where a context this layer never
 // saw created lands, and every such thread used to read and write the same
 // tables and the same two bindings with no lock between them. A context is
@@ -59,7 +60,9 @@ void mg_framebuffer_bind_context(unsigned long long ctx_id) {
         return;
     }
     std::lock_guard<std::mutex> lock(g_fbo_mutex);
-    g_fc = &g_fbo_ctxs[ctx_id];
+    std::unique_ptr<fbo_ctx_state_t>& slot = g_fbo_ctxs[ctx_id];
+    if (!slot) slot = std::make_unique<fbo_ctx_state_t>();
+    g_fc = slot.get();
 }
 
 void mg_framebuffer_forget_context(unsigned long long ctx_id) {
@@ -67,7 +70,7 @@ void mg_framebuffer_forget_context(unsigned long long ctx_id) {
     std::lock_guard<std::mutex> lock(g_fbo_mutex);
     const auto it = g_fbo_ctxs.find(ctx_id);
     if (it == g_fbo_ctxs.end()) return;
-    if (g_fc == &it->second) g_fc = &g_fbo_default;
+    if (g_fc == it->second.get()) g_fc = &g_fbo_default;
     g_fbo_ctxs.erase(it);
 }
 
@@ -81,7 +84,7 @@ void mg_framebuffer_forget_context(unsigned long long ctx_id) {
 // table's size. It gets the predicate instead.
 bool mg_draw_framebuffer_all_none() {
     const auto it = framebuffers.find(current_draw_fbo);
-    return it != framebuffers.end() && it->second.color_attachments_all_none;
+    return it != framebuffers.end() && it->second->color_attachments_all_none;
 }
 void ensure_max_attachments() {
     // The fallback is used but no longer cached. A query made with no context
@@ -106,7 +109,12 @@ static GLint max_color_attachments_or_default() {
     return MAX_COLOR_ATTACHMENTS > 0 ? MAX_COLOR_ATTACHMENTS : 8;
 }
 framebuffer_t& get_framebuffer(GLuint id) {
-    return framebuffers[id]; // default-constructs on first sight of the name
+    // Created on first sight of the name, as the old default-construct-on-index
+    // did. The reference is what callers keep across further calls to this
+    // function, so the record is what must not move when the map grows.
+    std::unique_ptr<framebuffer_t>& slot = framebuffers[id];
+    if (!slot) slot = std::make_unique<framebuffer_t>();
+    return *slot;
 }
 void InitFramebufferMap(size_t expectedSize) {
     framebuffers.reserve(expectedSize);

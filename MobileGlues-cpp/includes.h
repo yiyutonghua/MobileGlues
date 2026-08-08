@@ -40,10 +40,22 @@ extern "C"
 }
 #endif
 
-#include <FastSTL/UnorderedMap.h>
+#include <tsl/robin_map.h>
 
+// One hash map for the whole tree. It used to be four -- a hand-written open
+// addressing map, ankerl::unordered_dense, std::unordered_map and khash -- which
+// meant four sets of iterator-invalidation rules to keep straight while reading
+// code that mixes them, and no way to tell whether a container had been chosen
+// or merely inherited from whatever the neighbouring file used.
+//
+// tsl::robin_map is open addressing with robin-hood probing, so a rehash moves
+// the elements: iterators, references and pointers into it are invalidated by
+// any insertion. Where a mapped value's address has to outlive later inserts --
+// the per-context tables handed out as a thread_local pointer, the EGL extension
+// strings whose c_str() the application keeps -- the map holds a unique_ptr and
+// the pointee stays put. Those sites say so where they are declared.
 template <typename Key, typename T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
-          class Allocator = std::allocator<std::pair<const Key, T>>>
-using UnorderedMap = FastSTL::unordered_map<Key, T, Hash, KeyEqual, Allocator>;
+          class Allocator = std::allocator<std::pair<Key, T>>>
+using UnorderedMap = tsl::robin_map<Key, T, Hash, KeyEqual, Allocator>;
 
 #endif // MOBILEGLUES_INCLUDES_H

@@ -4,9 +4,6 @@
 [submodule "MobileGlues-cpp/3rdparty/xxhash"]
 	path = MobileGlues-cpp/3rdparty/xxhash
 	url = https://github.com/stbrumme/xxhash.git
-[submodule "MobileGlues-cpp/include/FastSTL"]
-	path = MobileGlues-cpp/include/FastSTL
-	url = https://github.com/MobileGL-Dev/FastSTL.git
 [submodule "MobileGlues-cpp/3rdparty/glslang"]
 	path = MobileGlues-cpp/3rdparty/glslang
 	url = https://github.com/KhronosGroup/glslang.git

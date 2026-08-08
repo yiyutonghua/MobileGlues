@@ -86,8 +86,10 @@ MGContext* mg_context_find(EGLContext handle);
 // The containers stay private to the file that uses them -- moving them into
 // MGContext would drag gl/texture.h and friends into this header and back. Each
 // subsystem keeps its own table keyed by id and swaps a thread_local pointer
-// when the current context changes. std::unordered_map keeps references stable,
-// so a pointer handed out here stays valid until the entry is erased.
+// when the current context changes. Every one of those tables holds its records
+// through a unique_ptr, because the map underneath is open addressing and moves
+// its elements when it grows: the record is what has to stay put, so a pointer
+// handed out here stays valid until the entry is erased.
 void mg_buffer_bind_context(unsigned long long ctx_id, unsigned long long group_id);
 void mg_texture_bind_context(unsigned long long ctx_id, unsigned long long group_id);
 void mg_framebuffer_bind_context(unsigned long long ctx_id);

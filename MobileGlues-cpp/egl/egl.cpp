@@ -19,7 +19,8 @@
 #include <cstdio>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <memory>
+#include <tsl/robin_map.h>
 #include <utility>
 #include <vector>
 
@@ -460,13 +461,17 @@ namespace {
     // leaving the caller holding freed memory. Applications routinely keep the
     // pointer eglQueryString returned -- that is the documented contract, the
     // string belongs to EGL and lives as long as the display.
+    // Held by pointer, not by value. The pointer handed back below has to stay
+    // good for the life of the display, and robin_map moves its elements when a
+    // second display is added -- which would leave every c_str() already given
+    // out pointing into a moved-from string. The unique_ptr is what stays put.
     std::mutex ext_strings_mutex;
-    std::unordered_map<EGLDisplay, std::string> ext_strings;
+    tsl::robin_map<EGLDisplay, std::unique_ptr<std::string>> ext_strings;
 
     const char* frontendExtensionString(EGLDisplay dpy, const char* backend_extensions) {
         std::lock_guard<std::mutex> lock(ext_strings_mutex);
         auto it = ext_strings.find(dpy);
-        if (it != ext_strings.end()) return it->second.c_str();
+        if (it != ext_strings.end()) return it->second->c_str();
 
         std::string built = backend_extensions ? backend_extensions : "";
         auto add = [&built](const char* name) {
@@ -482,8 +487,8 @@ namespace {
         add("EGL_KHR_get_all_proc_addresses");
         add("EGL_KHR_client_get_all_proc_addresses");
 
-        auto res = ext_strings.emplace(dpy, std::move(built));
-        return res.first->second.c_str();
+        auto res = ext_strings.emplace(dpy, std::make_unique<std::string>(std::move(built)));
+        return res.first->second->c_str();
     }
 
 } // namespace

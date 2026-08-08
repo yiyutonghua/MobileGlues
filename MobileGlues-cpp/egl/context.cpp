@@ -10,7 +10,7 @@
 #include "../gl/mg.h"
 #include "trace.h"
 #include <mutex>
-#include <unordered_map>
+#include <tsl/robin_map.h>
 #include <utility>
 #include <vector>
 
@@ -22,7 +22,7 @@ namespace {
 
 // The library initialises itself from a static constructor, and that
 // constructor reaches these tables through mg_display_initialised. A namespace
-// scope std::unordered_map is dynamically initialised, so whether it had been
+// scope map is dynamically initialised, so whether it had been
 // constructed by then came down to the order the linker happened to emit the
 // translation units in -- and it did not: the first insertion ran against an
 // all zero map, whose zero max_load_factor asked for an infinite bucket count
@@ -32,8 +32,8 @@ std::mutex& ctx_mutex() {
     static std::mutex m;
     return m;
 }
-std::unordered_map<EGLContext, std::shared_ptr<MGContext>>& contexts() {
-    static std::unordered_map<EGLContext, std::shared_ptr<MGContext>> m;
+tsl::robin_map<EGLContext, std::shared_ptr<MGContext>>& contexts() {
+    static tsl::robin_map<EGLContext, std::shared_ptr<MGContext>> m;
     return m;
 }
 // Who is keeping a display initialised, rather than how many times someone said
@@ -42,8 +42,8 @@ struct DisplayHolders {
     bool probe; // the bootstrap in egl/loader.cpp
     bool app;   // everything reaching the eglInitialize wrapper
 };
-std::unordered_map<EGLDisplay, DisplayHolders>& display_refs() {
-    static std::unordered_map<EGLDisplay, DisplayHolders> m;
+tsl::robin_map<EGLDisplay, DisplayHolders>& display_refs() {
+    static tsl::robin_map<EGLDisplay, DisplayHolders> m;
     return m;
 }
 
@@ -189,10 +189,13 @@ bool mg_display_release(EGLDisplay dpy, bool probe) {
         ETRACE("mg_display_release(%p, probe=%d): not held at all", dpy, probe)
         return false;
     }
-    (probe ? it->second.probe : it->second.app) = false;
-    const bool last = !(it->second.probe || it->second.app);
-    ETRACE("mg_display_release(%p, probe=%d) -> now probe:%d app:%d, last_holder=%d", dpy, probe, it->second.probe,
-           it->second.app, last)
+    // value(), not ->second: robin_map hands the pair out as const so the key
+    // cannot be rewritten under it; the mapped value is reached through value().
+    DisplayHolders& holders = it.value();
+    (probe ? holders.probe : holders.app) = false;
+    const bool last = !(holders.probe || holders.app);
+    ETRACE("mg_display_release(%p, probe=%d) -> now probe:%d app:%d, last_holder=%d", dpy, probe, holders.probe,
+           holders.app, last)
     if (!last) return false;
     g_display_refs.erase(it);
     return true;

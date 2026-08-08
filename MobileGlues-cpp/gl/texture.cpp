@@ -8,7 +8,8 @@
 #include "texture.h"
 #include "../egl/context.h"
 #include <mutex>
-#include <unordered_map>
+#include <memory>
+#include <tsl/robin_map.h>
 #include "GLES3/gl32.h"
 
 #include <cmath>
@@ -31,7 +32,6 @@
 #include "pixel.h"
 #include "mg.h"
 #include <GL/gl.h>
-#include <ankerl/unordered_dense.h>
 
 #define DEBUG 0
 
@@ -224,8 +224,13 @@ struct texture_ctx_state_t {
 };
 
 std::mutex g_tex_mutex;
-std::unordered_map<unsigned long long, texture_group_state_t> g_tex_groups;
-std::unordered_map<unsigned long long, texture_ctx_state_t> g_tex_ctxs;
+// The tables hold their state by pointer. A thread_local pointer into an entry is
+// the whole point of the design -- the ~90 access sites read through g_bg/g_bc
+// rather than looking anything up -- and robin_map moves its elements when it
+// grows, so the entry itself must not be what moves. The unique_ptr stays put
+// while the map rehashes around it.
+tsl::robin_map<unsigned long long, std::unique_ptr<texture_group_state_t>> g_tex_groups;
+tsl::robin_map<unsigned long long, std::unique_ptr<texture_ctx_state_t>> g_tex_ctxs;
 texture_group_state_t g_tex_group_default;
 texture_ctx_state_t g_tex_ctx_default;
 thread_local texture_group_state_t* g_tg = &g_tex_group_default;
@@ -240,8 +245,12 @@ void mg_texture_bind_context(unsigned long long ctx_id, unsigned long long group
         return;
     }
     std::lock_guard<std::mutex> lock(g_tex_mutex);
-    g_tg = &g_tex_groups[group_id];
-    g_tc = &g_tex_ctxs[ctx_id];
+    std::unique_ptr<texture_group_state_t>& group = g_tex_groups[group_id];
+    if (!group) group = std::make_unique<texture_group_state_t>();
+    std::unique_ptr<texture_ctx_state_t>& ctx = g_tex_ctxs[ctx_id];
+    if (!ctx) ctx = std::make_unique<texture_ctx_state_t>();
+    g_tg = group.get();
+    g_tc = ctx.get();
     g_tc->group = group_id;
 }
 
@@ -250,7 +259,7 @@ void mg_texture_forget_context(unsigned long long ctx_id) {
     std::lock_guard<std::mutex> lock(g_tex_mutex);
     const auto it = g_tex_ctxs.find(ctx_id);
     if (it == g_tex_ctxs.end()) return;
-    if (g_tc == &it->second) g_tc = &g_tex_ctx_default;
+    if (g_tc == it->second.get()) g_tc = &g_tex_ctx_default;
     g_tex_ctxs.erase(it);
     // The object table is not dropped: it belongs to the share group, whose other
     // contexts may still be alive, and the objects in it are owned by GL names the
@@ -331,8 +340,11 @@ void MarkTextureObjectForDeletion(unsigned texture) {
     {
         std::lock_guard<std::mutex> lock(g_tex_mutex);
         const unsigned long long group = g_tc->group;
-        for (auto& entry : g_tex_ctxs) {
-            if (&entry.second != g_tc && entry.second.group == group) sweep(entry.second);
+        for (const auto& entry : g_tex_ctxs) {
+            // The pair comes out const -- robin_map will not let the key be
+            // rewritten -- but dereferencing the unique_ptr still yields a
+            // mutable state, which is what sweep needs.
+            if (entry.second.get() != g_tc && entry.second->group == group) sweep(*entry.second);
         }
     }
     // The fallback record is not in the map and is what every untracked context
