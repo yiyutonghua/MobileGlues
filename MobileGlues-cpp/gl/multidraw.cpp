@@ -708,14 +708,22 @@ static bool prepare_indirect_buffer(const GLsizei* counts, GLenum type, const vo
         g_cmdbufsize = static_cast<GLsizei>(sz);
     }
 
-    auto* pcmds = static_cast<draw_elements_indirect_command_t*>(GLES.glMapBufferRange(
-        GL_DRAW_INDIRECT_BUFFER, 0, static_cast<GLsizeiptr>(primcount * sizeof(draw_elements_indirect_command_t)),
-        GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT));
-    if (!pcmds) {
-        MD_WARN_ONCE("multidraw: failed to map indirect command buffer");
-        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev);
-        return false;
-    }
+    // Built on the CPU and uploaded whole, rather than written through a
+    // GL_MAP_INVALIDATE_BUFFER_BIT mapping. The mapping says "all of this is
+    // about to be overwritten" more precisely, and on a driver that honours it
+    // there is nothing to choose between the two. What it costs is two ways to
+    // fail on every single draw call: a map that returns null, and an unmap that
+    // reports the contents lost. Both used to abandon the backend for the rest of
+    // the process, and falling back to unrolled draws forever is far more
+    // expensive than the upload that was being avoided -- a driver refusing to
+    // hand out a pointer for a buffer it is still reading is a perfectly ordinary
+    // thing, not a reason to give up on indirect drawing.
+    //
+    // thread_local for the same reason as mg_zero_basevertex: nothing in this
+    // file takes a lock, and two threads can each have a current context.
+    static thread_local std::vector<draw_elements_indirect_command_t> staged;
+    staged.resize(static_cast<size_t>(primcount));
+    draw_elements_indirect_command_t* pcmds = staged.data();
 
     for (GLsizei i = 0; i < primcount; ++i) {
         const uintptr_t byteOffset = reinterpret_cast<uintptr_t>(indices[i]);
@@ -731,11 +739,8 @@ static bool prepare_indirect_buffer(const GLsizei* counts, GLenum type, const vo
         pcmds[i].reservedMustBeZero = 0;
     }
 
-    if (GLES.glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER) == GL_FALSE) {
-        MD_WARN_ONCE("multidraw: indirect command buffer contents lost on unmap");
-        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, prev);
-        return false;
-    }
+    GLES.glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0,
+                         static_cast<GLsizeiptr>(primcount * sizeof(draw_elements_indirect_command_t)), pcmds);
     return true;
 }
 
