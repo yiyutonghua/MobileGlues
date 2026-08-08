@@ -878,12 +878,31 @@ void glGetNamedRenderbufferParameteriv(GLuint renderbuffer, GLenum pname, GLint*
 // texture
 static thread_local ankerl::unordered_dense::map<GLenum, std::vector<GLuint>> textureBindingStack;
 
+// 0 when this layer has no record for the name.
+//
+// It used to dereference mgGetTexObjectByID's result straight away, which is null
+// for name 0, for a name that came out of glGenTextures and was never bound, and
+// for one that has already been deleted. Those are not exotic: unbinding with
+// glBindTextureUnit(unit, 0) is valid GL, and the other two are cases desktop GL
+// answers with GL_INVALID_OPERATION -- a recoverable error, not a segfault in the
+// driver layer. Every caller now checks.
 GLenum GetTexTarget(GLuint texture) {
-    return ConvertTextureTargetToGLEnum(mgGetTexObjectByID(texture)->target);
+    const TextureObject* obj = mgGetTexObjectByID(texture);
+    return obj ? ConvertTextureTargetToGLEnum(obj->target) : 0;
+}
+
+// The shared reject path: the name is not one this layer can act on, so raise the
+// error GL specifies and touch nothing.
+bool mgRejectUnknownTexture(const char* what, GLuint texture, GLenum target) {
+    if (target != 0) return false;
+    LOG_W_FORCE("[DSA] %s: %u is not a texture name this layer knows about", what, texture);
+    mg_set_gl_error(GL_INVALID_OPERATION);
+    return true;
 }
 
 void temporarilyBindTexture(GLuint textureID, GLenum possibleTarget = 0) {
     GLenum target = possibleTarget ? possibleTarget : GetTexTarget(textureID);
+    if (mgRejectUnknownTexture("temporarilyBindTexture", textureID, target)) return;
     GLenum bindingQuery = GetBindingQuery(target, true);
     GLint prev = 0;
     glGetIntegerv(bindingQuery, &prev);
@@ -897,17 +916,26 @@ void temporarilyBindTexture(GLuint textureID, GLenum possibleTarget = 0) {
 
 void restoreTemporaryTextureBinding(GLuint textureID, GLenum possibleTarget = 0) {
     GLenum target = possibleTarget ? possibleTarget : GetTexTarget(textureID);
+    // Nothing was pushed for an unknown name, because temporarilyBindTexture
+    // rejected it. Falling through would look for a stack entry that is not there.
+    if (target == 0) return;
     auto stackIt = textureBindingStack.find(target);
     if (stackIt == textureBindingStack.end() || stackIt->second.empty()) {
         LOG_D("[DSA] [Restore] no saved binding for target 0x%X", target);
-        // return;
+        // The return here was commented out, and the very next line dereferences
+        // stackIt -- an end() iterator on the miss path. Unreachable while every
+        // bind pushed unconditionally; now that a rejected name pushes nothing, a
+        // caller that pairs bind and restore by hand can reach it.
+        return;
     }
 
     GLuint toRestore = stackIt->second.back();
     stackIt->second.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
+        // Sentinel for "there was nothing bound". The entry is consumed either
+        // way; binding 0xFFFFFFFF as a texture name is not the alternative.
         LOG_D("[DSA] [Restore] target=0x%X, no binding to restore", target);
-        // return;
+        return;
     }
     LOG_D("[DSA] [Restore] target=0x%X, bind back to %u", target, toRestore);
     CHECK_GL_ERROR;
@@ -984,6 +1012,7 @@ void glTextureBufferRange(GLuint texture, GLenum internalformat, GLuint buffer, 
     LOG()                                                                                                              \
     LOG_D(#func_name ", texture: %u", texture);                                                                        \
     GLenum target = GetTexTarget(texture);                                                                             \
+    if (mgRejectUnknownTexture(#func_name, texture, target)) return;                                                   \
     temporarilyBindTexture(texture);
 
 #define TEXTURE_OP_FUNC_END                                                                                            \
@@ -1173,7 +1202,28 @@ void glBindTextureUnit(GLuint unit, GLuint texture) {
     }
     GLint prevUnit = 0;
     glGetIntegerv(GL_ACTIVE_TEXTURE, &prevUnit);
+
+    if (texture == 0) {
+        // A valid unbind, and the one call in this file that was guaranteed to
+        // crash: there is no record for name 0 to read a target out of. GL 4.5
+        // says zero "resets each of the targets to its default texture", so undo
+        // them all rather than guessing which one the unit was holding.
+        glActiveTexture(GL_TEXTURE0 + unit);
+        static const GLenum k_unbind_targets[] = {GL_TEXTURE_2D, GL_TEXTURE_3D, GL_TEXTURE_2D_ARRAY,
+                                                  GL_TEXTURE_CUBE_MAP};
+        for (GLenum t : k_unbind_targets) {
+            glBindTexture(t, 0);
+        }
+        if (hardware != nullptr && hardware->es_version >= 310) {
+            glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+        }
+        glActiveTexture(prevUnit);
+        LOG_D("[DSA] Unbound texture unit %u", unit);
+        return;
+    }
+
     GLenum target = GetTexTarget(texture);
+    if (mgRejectUnknownTexture("glBindTextureUnit", texture, target)) return;
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(target, texture);
     glActiveTexture(prevUnit);
