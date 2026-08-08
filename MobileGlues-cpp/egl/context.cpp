@@ -8,6 +8,7 @@
 #include "context.h"
 #include "../gl/log.h"
 #include "../gl/mg.h"
+#include "trace.h"
 #include <mutex>
 #include <unordered_map>
 #include <utility>
@@ -92,7 +93,8 @@ void release_locked(std::shared_ptr<MGContext> ctx) {
     // eglDestroyContext was ever called on it.
     if (in_map && !ctx->destroy_pending) return;
 
-    LOG_D("MGContext %llu released", ctx->id)
+    ETRACE("MGContext %llu released (handle=%p, was_orphan=%d, destroy_pending=%d)", ctx->id, ctx->handle, !in_map,
+           ctx->destroy_pending);
     if (gl_state == &ctx->gl) gl_state = &g_default_gl_state;
     // Drop the per-context bookkeeping each subsystem keeps for this id. Safe
     // here and only here: current_count has reached zero, so no thread still has
@@ -142,8 +144,8 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
         ctx->share_group->id = g_next_group_id++;
     }
 
-    LOG_D("MGContext %llu created (handle %p, share group %llu, %d.%d)", ctx->id, handle, ctx->share_group->id, major,
-          minor)
+    ETRACE("MGContext %llu created (handle=%p, client_type=%s, share_group=%llu, granted=%d.%d)", ctx->id, handle,
+           mg_egl_api_name(client_type), ctx->share_group->id, major, minor)
 
     // An EGLContext is a driver heap allocation, so the address of one that has
     // just been destroyed comes straight back out of the next create. The record
@@ -159,7 +161,9 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
     if (stale != g_contexts.end()) {
         const std::shared_ptr<MGContext> previous = stale->second;
         g_contexts.erase(stale);
-        LOG_D("MGContext %llu orphaned: handle %p was handed out again", previous->id, handle)
+        ETRACE("MGContext %llu orphaned: handle %p was handed out again (to become MGContext %llu), "
+               "previous current_count=%d",
+               previous->id, handle, ctx->id, previous->current_count)
         release_locked(previous);
     }
 
@@ -174,16 +178,22 @@ void mg_display_initialised(EGLDisplay dpy, bool probe) {
     // Set, not incremented: initialising twice is the same statement made twice,
     // and it buys the caller no second eglTerminate.
     (probe ? holders.probe : holders.app) = true;
-    LOG_D("EGLDisplay %p held by probe:%d app:%d", dpy, holders.probe, holders.app)
+    ETRACE("EGLDisplay %p held by probe:%d app:%d", dpy, holders.probe, holders.app)
 }
 
 bool mg_display_release(EGLDisplay dpy, bool probe) {
     if (dpy == EGL_NO_DISPLAY) return false;
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
     const auto it = g_display_refs.find(dpy);
-    if (it == g_display_refs.end()) return false;
+    if (it == g_display_refs.end()) {
+        ETRACE("mg_display_release(%p, probe=%d): not held at all", dpy, probe)
+        return false;
+    }
     (probe ? it->second.probe : it->second.app) = false;
-    if (it->second.probe || it->second.app) return false;
+    const bool last = !(it->second.probe || it->second.app);
+    ETRACE("mg_display_release(%p, probe=%d) -> now probe:%d app:%d, last_holder=%d", dpy, probe, it->second.probe,
+           it->second.app, last)
+    if (!last) return false;
     g_display_refs.erase(it);
     return true;
 }
@@ -192,11 +202,16 @@ MGContext* mg_context_find(EGLContext handle) {
     if (handle == EGL_NO_CONTEXT) return nullptr;
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
     const auto it = g_contexts.find(handle);
+    // Not traced: called from getters and queries that can run every frame, and it
+    // never mutates anything -- the interesting events are the create/destroy/
+    // make-current calls that change what this would return.
     return it == g_contexts.end() ? nullptr : it->second.get();
 }
 
 void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext handle) {
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
+    ETRACE("mg_context_make_current(dpy=%p, draw=%p, read=%p, handle=%p): thread had MGContext %llu current",
+           dpy, draw, read, handle, g_current_ref ? g_current_ref->id : 0ULL)
 
     // The same record going current again, which is what an application that calls
     // eglMakeCurrent once a frame does. Nothing the rebind below sets up can have
@@ -205,10 +220,20 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     if (g_current_ref && handle != EGL_NO_CONTEXT) {
         const auto same = g_contexts.find(handle);
         if (same != g_contexts.end() && same->second == g_current_ref) {
+            ETRACE("  -> same MGContext %llu still current, only refreshing surfaces", g_current_ref->id)
             g_current_ref->display = dpy;
             g_current_ref->draw = draw;
             g_current_ref->read = read;
             return;
+        }
+        if (same != g_contexts.end()) {
+            // The handle this thread already has current names a DIFFERENT record
+            // than the one the map has for it right now -- exactly the situation
+            // fix 2 exists to make survivable. Loud on purpose: seeing this line at
+            // all means a handle was reused while still current somewhere.
+            ETRACE("  ** handle %p now names MGContext %llu, but this thread's current MGContext %llu still "
+                   "has the same handle -- reused while current **",
+                   handle, same->second->id, g_current_ref->id)
         }
     }
 
@@ -235,7 +260,7 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     }
 
     if (handle == EGL_NO_CONTEXT) {
-        LOG_D("MGContext: no context current on this thread")
+        ETRACE("  -> no context current on this thread")
         return;
     }
 
@@ -245,7 +270,7 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
         // or one made before the library was loaded. Leaving g_current_ctx null
         // keeps every consumer on its fallback path rather than inventing a
         // record with made-up attributes.
-        LOG_D("MGContext: handle %p is not tracked, leaving no current record", handle)
+        ETRACE("  -> handle %p is not tracked, leaving no current record", handle)
         return;
     }
 
@@ -266,7 +291,7 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     // Now, and not in mg_context_create() where nothing was current yet, the
     // enable table can talk to the driver.
     mg_enable_sync_driver(&g_current_ctx->enable);
-    LOG_D("MGContext %llu is now current", it->second->id)
+    ETRACE("  -> MGContext %llu is now current (current_count=%d)", it->second->id, it->second->current_count)
 }
 
 void mg_context_destroy(EGLContext handle) {
@@ -275,6 +300,8 @@ void mg_context_destroy(EGLContext handle) {
     const auto it = g_contexts.find(handle);
     if (it == g_contexts.end()) return;
 
+    ETRACE("mg_context_destroy(handle=%p): MGContext %llu, current_count=%d", handle, it->second->id,
+           it->second->current_count)
     it->second->destroy_pending = true;
     // Deliberately not erased while still current: GL permits destroying a
     // context that is current, and the record has to answer queries until the
@@ -293,6 +320,7 @@ void mg_context_forget_display(EGLDisplay dpy) {
         entry.second->destroy_pending = true;
         doomed.push_back(entry.second);
     }
+    ETRACE("mg_context_forget_display(%p): marking %zu context(s)", dpy, doomed.size())
     // Collected first because release_locked erases, and every erase goes through
     // it: this loop used to drop entries inline, skipping the per-subsystem
     // teardown, so the bookkeeping for every context on a terminated display

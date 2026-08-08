@@ -14,7 +14,9 @@
 #include "../gles/loader.h"
 #include "../glx/lookup.h"
 #include "loader.h"
+#include "trace.h"
 #include <EGL/eglext.h>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -47,7 +49,89 @@ namespace {
     std::mutex context_lifecycle_mutex;
 
     void setFrontendError(EGLint error) {
+        ETRACE("virtual error queued: %s", mg_egl_error_name(error));
         frontend_error = error;
+    }
+
+    const char* eglAttributeName(EGLint attribute) {
+        switch (attribute) {
+        case EGL_NONE:
+            return "NONE";
+        case EGL_RED_SIZE:
+            return "RED_SIZE";
+        case EGL_GREEN_SIZE:
+            return "GREEN_SIZE";
+        case EGL_BLUE_SIZE:
+            return "BLUE_SIZE";
+        case EGL_ALPHA_SIZE:
+            return "ALPHA_SIZE";
+        case EGL_DEPTH_SIZE:
+            return "DEPTH_SIZE";
+        case EGL_STENCIL_SIZE:
+            return "STENCIL_SIZE";
+        case EGL_SAMPLES:
+            return "SAMPLES";
+        case EGL_SAMPLE_BUFFERS:
+            return "SAMPLE_BUFFERS";
+        case EGL_SURFACE_TYPE:
+            return "SURFACE_TYPE";
+        case EGL_RENDERABLE_TYPE:
+            return "RENDERABLE_TYPE";
+        case EGL_CONFORMANT:
+            return "CONFORMANT";
+        case EGL_CONFIG_ID:
+            return "CONFIG_ID";
+        case EGL_CONTEXT_CLIENT_VERSION:
+            return "CONTEXT_MAJOR_VERSION";
+        case EGL_CONTEXT_MINOR_VERSION:
+            return "CONTEXT_MINOR_VERSION";
+        case EGL_CONTEXT_FLAGS_KHR:
+            return "CONTEXT_FLAGS";
+        case EGL_CONTEXT_OPENGL_PROFILE_MASK:
+            return "PROFILE_MASK";
+        case EGL_CONTEXT_OPENGL_DEBUG:
+            return "OPENGL_DEBUG";
+        case EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE:
+            return "FORWARD_COMPATIBLE";
+        case EGL_CONTEXT_OPENGL_ROBUST_ACCESS:
+            return "ROBUST_ACCESS";
+        case EGL_CONTEXT_OPENGL_NO_ERROR_KHR:
+            return "NO_ERROR";
+        case EGL_CONTEXT_OPENGL_RESET_NOTIFICATION_STRATEGY:
+            return "RESET_NOTIFICATION_STRATEGY";
+        case EGL_WIDTH:
+            return "WIDTH";
+        case EGL_HEIGHT:
+            return "HEIGHT";
+        default:
+            return nullptr;
+        }
+    }
+
+    // Attribute lists are where nearly every context- and config-creation failure
+    // actually lives, and "attrib_list: 0x7f..." says nothing about it.
+    std::string describeAttributes(const EGLint* attrib_list) {
+        if (!attrib_list) return "(none)";
+        std::string out;
+        for (size_t pair = 0; pair < kMaxEglAttributePairs; ++pair) {
+            const EGLint attribute = attrib_list[pair * 2];
+            if (attribute == EGL_NONE) break;
+            const EGLint value = attrib_list[pair * 2 + 1];
+            if (!out.empty()) out += ", ";
+            const char* name = eglAttributeName(attribute);
+            char buffer[64];
+            if (name) {
+                snprintf(buffer, sizeof(buffer), "%s=0x%x", name, value);
+            } else {
+                snprintf(buffer, sizeof(buffer), "0x%x=0x%x", attribute, value);
+            }
+            out += buffer;
+        }
+        return out.empty() ? "(empty)" : out;
+    }
+
+    std::string describeAttributes(const std::vector<EGLint>& attributes) {
+        return attributes.empty() ? "(empty)" : describeAttributes(attributes.data());
     }
 
     bool copyAttributeList(const EGLint* attrib_list, std::vector<EGLint>* attributes) {
@@ -302,11 +386,19 @@ namespace {
     // is not evidence the backend cannot do damage swaps.
     SwapWithDamageFn resolveSwapWithDamage(const char* name) {
         if (egl != nullptr) {
-            if (auto* fn = (SwapWithDamageFn)proc_address(egl, name)) return fn;
+            if (auto* fn = (SwapWithDamageFn)proc_address(egl, name)) {
+                ETRACE("%s resolved via dlsym", name);
+                return fn;
+            }
         }
         LOAD_EGL(eglGetProcAddress)
-        if (egl_eglGetProcAddress == nullptr) return nullptr;
-        return (SwapWithDamageFn)egl_eglGetProcAddress(name);
+        if (egl_eglGetProcAddress == nullptr) {
+            ETRACE("%s: backend has neither the symbol nor eglGetProcAddress", name);
+            return nullptr;
+        }
+        auto* fn = (SwapWithDamageFn)egl_eglGetProcAddress(name);
+        ETRACE("%s resolved via backend eglGetProcAddress -> %p", name, (void*)fn);
+        return fn;
     }
 
     // ApplyFSR upscales into the surface, the swap presents it, the resolution
@@ -332,8 +424,18 @@ namespace {
     // point at all.
     EGLBoolean presentSurfaceWithDamage(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects,
                                         SwapWithDamageFn backend) {
-        if (backend != nullptr && global_settings.fsr1_setting == FSR1_Quality_Preset::Disabled) {
+        const bool fsr_on = global_settings.fsr1_setting != FSR1_Quality_Preset::Disabled;
+        if (backend != nullptr && !fsr_on) {
             return backend(dpy, surface, rects, n_rects);
+        }
+        // Once, not once a frame: a damage swap runs every frame the host presents
+        // one, and this would otherwise be the loudest line in the whole trace for
+        // no new information after the first.
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            ETRACE("damage-swap(dpy=%p) falling back to a full swap (backend=%d, fsr_on=%d)", dpy, backend != nullptr,
+                   fsr_on);
         }
         return presentSurface(dpy, surface);
     }
@@ -397,23 +499,38 @@ extern "C"
             const EGLint error = frontend_error;
             frontend_error = EGL_SUCCESS;
             // A virtual failure replaces, rather than queues behind, a stale backend error.
-            egl_eglGetError();
+            const EGLint discarded = egl_eglGetError();
+            ETRACE("eglGetError -> %s (virtual; backend had %s)", mg_egl_error_name(error),
+                   mg_egl_error_name(discarded));
             return error;
         }
-        return egl_eglGetError();
+        const EGLint error = egl_eglGetError();
+        if (error != EGL_SUCCESS) ETRACE("eglGetError -> %s", mg_egl_error_name(error));
+        return error;
     }
 
     EGL_API EGLDisplay eglGetDisplay(EGLNativeDisplayType display_id) {
         LOG_D("eglGetDisplay, display_id: %p", display_id);
         LOAD_EGL(eglGetDisplay)
-        return egl_eglGetDisplay(display_id);
+        const EGLDisplay dpy = egl_eglGetDisplay(display_id);
+        ETRACE("eglGetDisplay(%p) -> %p", display_id, dpy);
+        return dpy;
     }
 
     EGL_API EGLBoolean eglInitialize(EGLDisplay dpy, EGLint* major, EGLint* minor) {
         LOG_D("eglInitialize, dpy: %p, major: %p, minor: %p", dpy, major, minor);
         LOAD_EGL(eglInitialize)
         const EGLBoolean result = egl_eglInitialize(dpy, major, minor);
-        if (result == EGL_TRUE) mg_display_initialised(dpy, false);
+        if (result == EGL_TRUE) {
+            ETRACE("eglInitialize(%p) -> EGL %d.%d", dpy, major ? *major : -1, minor ? *minor : -1);
+            mg_display_initialised(dpy, false);
+        } else {
+            // Not read here: eglGetError is a single destructive latch, and the
+            // real code belongs to whoever calls eglGetError() next, normally the
+            // application. This layer's own eglGetError() wrapper traces it at
+            // that point instead, which is the one place reading it costs nothing.
+            ETRACE("eglInitialize(%p) FAILED, see next eglGetError", dpy);
+        }
         return result;
     }
 
@@ -424,10 +541,11 @@ extern "C"
         // reference-count this, so an early eglTerminate from one part of the
         // process would tear down resources belonging to another.
         if (!mg_display_release(dpy, false)) {
-            LOG_D("eglTerminate: display %p still has other holders, not terminating", dpy);
+            ETRACE("eglTerminate(%p): other holders remain, not terminating", dpy);
             mg_context_forget_display(dpy);
             return EGL_TRUE;
         }
+        ETRACE("eglTerminate(%p): last holder, terminating for real", dpy);
         const EGLBoolean result = egl_eglTerminate(dpy);
         if (result == EGL_TRUE) {
             mg_context_forget_display(dpy);
@@ -524,6 +642,8 @@ extern "C"
         LOAD_EGL(eglBindAPI)
         const EGLenum backend_api = api == EGL_OPENGL_API ? EGL_OPENGL_ES_API : api;
         const EGLBoolean result = egl_eglBindAPI(backend_api);
+        ETRACE("eglBindAPI(%s) -> backend %s: %s", mg_egl_api_name(api), mg_egl_api_name(backend_api),
+               result == EGL_TRUE ? "ok" : "FAILED");
         if (result == EGL_TRUE) frontend_api = api;
         return result;
     }
@@ -543,6 +663,7 @@ extern "C"
         LOG_D("eglReleaseThread");
         LOAD_EGL(eglReleaseThread)
         const EGLBoolean result = egl_eglReleaseThread();
+        ETRACE("eglReleaseThread -> %s", result == EGL_TRUE ? "ok" : "FAILED");
         if (result == EGL_TRUE) {
             // eglReleaseThread releases whatever this thread had current, so the
             // record has to be let go of here as well. Without it the context's
@@ -603,9 +724,12 @@ extern "C"
             // invalidation -- silently falls back to one shared instance.
             std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
             EGLContext es_context = egl_eglCreateContext(dpy, config, share_context, attrib_list);
+            ETRACE("eglCreateContext(ES, dpy=%p, share=%p) -> %p [%s]", dpy, share_context, es_context,
+                   describeAttributes(attrib_list).c_str());
             if (es_context != EGL_NO_CONTEXT) {
-                mg_context_create(dpy, es_context, share_context, EGL_OPENGL_ES_API, g_gles_caps.major,
-                                  g_gles_caps.minor, 0, 0);
+                MGContext* record = mg_context_create(dpy, es_context, share_context, EGL_OPENGL_ES_API,
+                                                      g_gles_caps.major, g_gles_caps.minor, 0, 0);
+                ETRACE("  -> MGContext %llu", record ? record->id : 0ULL);
             }
             return es_context;
         }
@@ -617,18 +741,26 @@ extern "C"
         EGLint frontend_flags = 0;
         if (!makeBackendContextAttributes(attrib_list, &backend_attributes, &frontend_major, &frontend_minor,
                                           &frontend_flags, &context_error)) {
+            ETRACE("eglCreateContext(desktop, dpy=%p, share=%p) rejected before reaching the backend: %s [%s]", dpy,
+                   share_context, mg_egl_error_name(context_error), describeAttributes(attrib_list).c_str());
             setFrontendError(context_error);
             return EGL_NO_CONTEXT;
         }
 
         LOAD_EGL(eglBindAPI)
-        if (egl_eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) return EGL_NO_CONTEXT;
+        if (egl_eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
+            ETRACE("eglCreateContext(desktop, dpy=%p): backend eglBindAPI(ES) failed", dpy);
+            return EGL_NO_CONTEXT;
+        }
 
         std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
         EGLContext context = egl_eglCreateContext(dpy, config, share_context, backend_attributes.data());
+        ETRACE("eglCreateContext(desktop, dpy=%p, share=%p) -> %p, granted %d.%d [backend attrs: %s]", dpy,
+               share_context, context, frontend_major, frontend_minor, describeAttributes(backend_attributes).c_str());
         if (context != EGL_NO_CONTEXT) {
-            mg_context_create(dpy, context, share_context, EGL_OPENGL_API, frontend_major, frontend_minor,
-                              kVirtualDesktopProfileMask, frontend_flags);
+            MGContext* record = mg_context_create(dpy, context, share_context, EGL_OPENGL_API, frontend_major,
+                                                  frontend_minor, kVirtualDesktopProfileMask, frontend_flags);
+            ETRACE("  -> MGContext %llu", record ? record->id : 0ULL);
         }
         return context;
     }
@@ -637,7 +769,10 @@ extern "C"
         LOG_D("eglDestroyContext, dpy: %p, ctx: %p", dpy, ctx);
         LOAD_EGL(eglDestroyContext)
         std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
+        MGContext* before = mg_context_find(ctx);
         const EGLBoolean result = egl_eglDestroyContext(dpy, ctx);
+        ETRACE("eglDestroyContext(dpy=%p, ctx=%p, MGContext=%llu) -> %s", dpy, ctx,
+               before ? before->id : 0ULL, result == EGL_TRUE ? "ok" : "FAILED");
         if (result == EGL_TRUE) {
             // Marked rather than dropped: GL permits destroying a context that is
             // still current, and the record has to keep answering until the last
@@ -650,7 +785,10 @@ extern "C"
     EGL_API EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
         LOG_D("eglMakeCurrent, dpy: %p, draw: %p, read: %p, ctx: %p", dpy, draw, read, ctx);
         LOAD_EGL(eglMakeCurrent)
+        MGContext* before = mg_context_find(ctx);
         const EGLBoolean result = egl_eglMakeCurrent(dpy, draw, read, ctx);
+        ETRACE("eglMakeCurrent(dpy=%p, draw=%p, read=%p, ctx=%p, MGContext=%llu) -> %s", dpy, draw, read, ctx,
+               before ? before->id : 0ULL, result == EGL_TRUE ? "ok" : "FAILED");
         // Only on success: a failed make-current leaves the previous context
         // current, so re-pointing the record would describe the wrong one.
         if (result == EGL_TRUE) mg_context_make_current(dpy, draw, read, ctx);
@@ -680,6 +818,8 @@ extern "C"
         LOAD_EGL(eglQueryContext)
         const EGLBoolean result = egl_eglQueryContext(dpy, ctx, attribute, value);
         if (result != EGL_TRUE || !value) return result;
+
+        ETRACE("eglQueryContext(ctx=%p, attr=0x%x) backend value=0x%x", ctx, attribute, *value);
 
         // From the one record per context, rather than a second table saying the
         // same thing about the same handles. MGContext already carries the client
@@ -916,8 +1056,11 @@ extern "C"
             // same implementation that owns the handles it will be given.
             LOAD_EGL(eglGetProcAddress);
             if (egl_eglGetProcAddress != nullptr) {
-                return reinterpret_cast<__eglMustCastToProperFunctionPointerType>(egl_eglGetProcAddress(procname));
+                auto fn = egl_eglGetProcAddress(procname);
+                ETRACE("eglGetProcAddress(\"%s\"): not wrapped, backend resolved %p", procname, (void*)fn);
+                return fn;
             }
+            ETRACE("eglGetProcAddress(\"%s\"): not wrapped, backend has no eglGetProcAddress", procname);
             return nullptr;
         }
 

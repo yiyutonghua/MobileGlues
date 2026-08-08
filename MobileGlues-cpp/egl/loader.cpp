@@ -12,6 +12,7 @@
 #include "../gl/mg.h"
 #include "../gles/loader.h"
 #include "../includes.h"
+#include "trace.h"
 #include <EGL/egl.h>
 #include <string.h>
 
@@ -22,6 +23,7 @@ static EGLSurface eglSurface = EGL_NO_SURFACE;
 static EGLContext eglContext = EGL_NO_CONTEXT;
 
 void init_target_egl() {
+    ETRACE("init_target_egl: starting the bootstrap probe")
     LOAD_EGL(eglGetProcAddress);
     LOAD_EGL(eglBindAPI);
     LOAD_EGL(eglInitialize);
@@ -58,6 +60,7 @@ void init_target_egl() {
     EGLint configsFound = 0;
 
     eglDisplay = egl_eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    ETRACE("init_target_egl: eglGetDisplay(EGL_DEFAULT_DISPLAY) -> %p", eglDisplay)
     if (eglDisplay == EGL_NO_DISPLAY) {
         LOG_E("eglGetDisplay failed (0x%x)", egl_eglGetError());
         goto cleanup;
@@ -103,12 +106,14 @@ void init_target_egl() {
         LOG_E("eglCreateContext failed (0x%x)", egl_eglGetError());
         goto cleanup;
     }
+    ETRACE("init_target_egl: probe context %p", eglContext)
 
     eglSurface = egl_eglCreatePbufferSurface(eglDisplay, pbufConfig, pbAttribs);
     if (eglSurface == EGL_NO_SURFACE) {
         LOG_E("eglCreatePbufferSurface failed (0x%x)", egl_eglGetError());
         goto cleanup;
     }
+    ETRACE("init_target_egl: probe surface %p", eglSurface)
 
     if (egl_eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext) != EGL_TRUE) {
         LOG_E("eglMakeCurrent failed (0x%x)", egl_eglGetError());
@@ -116,6 +121,7 @@ void init_target_egl() {
     }
 
     LOG_V("EGL initialized successfully");
+    ETRACE("init_target_egl: probe up (dpy=%p, ctx=%p, surface=%p)", eglDisplay, eglContext, eglSurface)
     return;
 
 cleanup:
@@ -140,9 +146,11 @@ cleanup:
     // and release a display this function has already let go of.
     eglDisplay = EGL_NO_DISPLAY;
     LOG_E("EGL initialization failed");
+    ETRACE("init_target_egl: probe FAILED, all three handles released")
 }
 
 void destroy_temp_egl_ctx() {
+    ETRACE("destroy_temp_egl_ctx: dpy=%p, ctx=%p, surface=%p", eglDisplay, eglContext, eglSurface)
     if (eglDisplay == EGL_NO_DISPLAY) return;
 
     LOAD_EGL(eglDestroySurface);
