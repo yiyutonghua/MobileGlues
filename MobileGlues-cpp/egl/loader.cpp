@@ -81,7 +81,11 @@ void init_target_egl() {
     }
 
     if (configsFound == 0) {
-        configAttribs[6] = 0;
+        // Index 7, the value, not index 6, which is EGL_ALPHA_SIZE itself. Writing
+        // the name slot turned the pair into attribute 0 -- not an EGL attribute at
+        // all -- so the retry always failed with EGL_BAD_ATTRIBUTE and the "no
+        // alpha" fallback this is meant to be never actually ran.
+        configAttribs[7] = 0;
         if (egl_eglChooseConfig(eglDisplay, configAttribs, &pbufConfig, 1, &configsFound) != EGL_TRUE) {
             LOG_E("Retry eglChooseConfig failed (0x%x)", egl_eglGetError());
             goto cleanup;
@@ -117,24 +121,39 @@ void init_target_egl() {
 cleanup:
     if (eglSurface != EGL_NO_SURFACE) {
         egl_eglDestroySurface(eglDisplay, eglSurface);
+        eglSurface = EGL_NO_SURFACE;
     }
     if (eglContext != EGL_NO_CONTEXT) {
         egl_eglDestroyContext(eglDisplay, eglContext);
+        eglContext = EGL_NO_CONTEXT;
     }
-    if (eglDisplay != EGL_NO_DISPLAY) {
+    // Through the holder count, exactly like the success path does. This used to
+    // terminate unconditionally, so any step after eglInitialize failing -- a
+    // config the driver would not give us, a pbuffer it would not make -- tore
+    // down EGL_DEFAULT_DISPLAY underneath the host process, taking contexts and
+    // surfaces it had created before this library was ever loaded.
+    if (mg_display_release(eglDisplay)) {
         egl_eglTerminate(eglDisplay);
     }
+    // Cleared so destroy_temp_egl_ctx, which runs at the end of proc_init whether
+    // or not the probe came up, does not destroy the same handles a second time
+    // and release a display this function has already let go of.
+    eglDisplay = EGL_NO_DISPLAY;
     LOG_E("EGL initialization failed");
 }
 
 void destroy_temp_egl_ctx() {
+    if (eglDisplay == EGL_NO_DISPLAY) return;
+
     LOAD_EGL(eglDestroySurface);
     LOAD_EGL(eglDestroyContext);
     LOAD_EGL(eglMakeCurrent);
 
     egl_eglMakeCurrent(eglDisplay, 0, 0, EGL_NO_CONTEXT);
-    egl_eglDestroySurface(eglDisplay, eglSurface);
-    egl_eglDestroyContext(eglDisplay, eglContext);
+    if (eglSurface != EGL_NO_SURFACE) egl_eglDestroySurface(eglDisplay, eglSurface);
+    if (eglContext != EGL_NO_CONTEXT) egl_eglDestroyContext(eglDisplay, eglContext);
+    eglSurface = EGL_NO_SURFACE;
+    eglContext = EGL_NO_CONTEXT;
 
     // Terminate only if this probe was the sole holder. EGL does not
     // reference-count initialisation per caller, so terminating unconditionally
@@ -145,4 +164,5 @@ void destroy_temp_egl_ctx() {
         LOAD_EGL(eglTerminate);
         if (egl_eglTerminate) egl_eglTerminate(eglDisplay);
     }
+    eglDisplay = EGL_NO_DISPLAY;
 }
