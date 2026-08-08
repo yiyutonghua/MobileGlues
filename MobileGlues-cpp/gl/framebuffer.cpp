@@ -176,13 +176,26 @@ void update_attachment(GLenum target, GLenum attachment, const attachment_t& wha
     }
     framebuffer_t& fbo = get_framebuffer(current_fbo);
     init_framebuffer(fbo);
-    fbo.color_attachments[attachment - GL_COLOR_ATTACHMENT0] = what;
-    // Any shuffle glDrawBuffers had arranged describes where the PREVIOUS
-    // attachments were moved to. Attaching something new makes that map a lie, and
-    // glReadBuffer would send the application to the physical slot the old texture
-    // went to rather than to what is attached now.
-    fbo.draw_buffer_map.clear();
+    const size_t index = attachment - GL_COLOR_ATTACHMENT0;
+    fbo.color_attachments[index] = what;
+    // If a shuffle had moved this attachment, that record now describes where the
+    // PREVIOUS texture went; glReadBuffer would send the application there instead
+    // of to what was just attached. Only this entry is dropped -- the others are
+    // still where the shuffle put them, and forgetting that would strand them.
+    if (index < fbo.draw_buffer_map.size()) fbo.draw_buffer_map[index] = 0;
 }
+
+// Undo a shuffle: put every attachment glDrawBuffers moved back on its own
+// attachment point.
+//
+// Needed because leaving the shuffled state is not free. After
+// glDrawBuffers({ATTACHMENT1, ATTACHMENT0}) the texture the application calls
+// attachment 0 physically sits on GL_COLOR_ATTACHMENT1, so a later
+// glDrawBuffers({ATTACHMENT0}) -- identity order, nothing to move by itself --
+// would draw into whatever is on physical attachment 0, which is the other
+// texture. The old unconditional re-attach happened to fix this up on every call;
+// anything that skips it has to put things back first.
+void restore_home_attachments(framebuffer_t& fbo);
 
 // Put a recorded attachment onto a (possibly different) attachment point, the
 // same way it originally arrived.
@@ -232,6 +245,20 @@ void glFramebufferTextureLayer(GLenum target, GLenum attachment, GLuint texture,
 void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) {
     update_attachment(target, attachment, {attach_kind_t::Renderbuffer, renderbuffertarget, renderbuffer, 0, 0});
     GLES.glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
+}
+
+void restore_home_attachments(framebuffer_t& fbo) {
+    if (fbo.draw_buffer_map.empty()) return;
+    for (size_t idx = 0; idx < fbo.draw_buffer_map.size(); ++idx) {
+        const GLenum where = fbo.draw_buffer_map[idx];
+        if (where == 0) continue;                                   // never moved
+        if (where == GL_COLOR_ATTACHMENT0 + (GLenum)idx) continue;  // already home
+        if (idx >= fbo.color_attachments.size()) continue;
+        const attachment_t& a = fbo.color_attachments[idx];
+        if (a.kind == attach_kind_t::None) continue;
+        reattach(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + (GLenum)idx, a);
+    }
+    fbo.draw_buffer_map.clear();
 }
 
 void glDeleteFramebuffers(GLsizei n, const GLuint* names) {
@@ -340,7 +367,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     }
     if (identity) {
         LOG_D("glDrawBuffers, fb %d identity order, nothing to move", current_draw_fbo)
-        fbo.draw_buffer_map.clear();
+        restore_home_attachments(fbo);
         GLES.glDrawBuffers(n, bufs);
         return;
     }
@@ -359,7 +386,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
         LOG_W_FORCE("glDrawBuffers: fb %u wants attachment %u in slot %d but nothing is recorded there; "
                     "passing the list through rather than detaching it",
                     current_draw_fbo, bufs[i] - GL_COLOR_ATTACHMENT0, i)
-        fbo.draw_buffer_map.clear();
+        restore_home_attachments(fbo);
         GLES.glDrawBuffers(n, bufs);
         return;
     }
