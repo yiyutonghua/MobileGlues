@@ -731,7 +731,39 @@ struct bench_candidate_t {
 // frame. Letting several frames queue up reproduces that, so a backend that
 // spends on the CPU and one that spends on the GPU are compared the way the
 // game would actually feel them.
+const char* bench_entry_label(md_entry_t e);
+
+// Set once the driver has thrown the context away, and never cleared: nothing
+// measured afterwards is worth anything.
+bool g_bench_context_lost = false;
+
+// GL_CONTEXT_LOST is not a complaint about the call that returned it.
+//
+// After it, every query answers zero and every draw is a no-op -- so a batch
+// timed past that point is not fast, it is fiction, and the backends that check
+// their preconditions see those zeros and "fall back", which this harness would
+// otherwise write down as "this device cannot do it". A ranking built from that
+// mixture is worse than no ranking: it is wrong and it looks fine. Whoever was
+// being measured when it happened is named, because that is the one clue to why.
+bool bench_note_context_lost(md_entry_t entry, md_backend_t backend) {
+    if (g_bench_context_lost) return true;
+    if (!GLES.glGetError) return false;
+    for (int i = 0; i < 16; ++i) {
+        const GLenum e = GLES.glGetError();
+        if (e == GL_NO_ERROR) break;
+        if (e == GL_CONTEXT_LOST) {
+            g_bench_context_lost = true;
+            LOG_W_FORCE("bench: the driver lost the GL context while measuring %s/%s; everything after this "
+                        "point would be fiction, so the run stops here",
+                        bench_entry_label(entry), md_backend_name(backend))
+            return true;
+        }
+    }
+    return false;
+}
+
 double bench_timed_batch(bench_scene_t& s, md_entry_t entry, md_backend_t backend, int frames) {
+    if (g_bench_context_lost) return -1.0;
     const uint32_t tick_before = g_md_fallback_tick.load(std::memory_order_relaxed);
     GLES.glFinish();
     const double t0 = now_us();
@@ -741,6 +773,7 @@ double bench_timed_batch(bench_scene_t& s, md_entry_t entry, md_backend_t backen
     }
     GLES.glFinish();
     const double t1 = now_us();
+    if (bench_note_context_lost(entry, backend)) return -1.0;
     if (g_md_fallback_tick.load(std::memory_order_relaxed) != tick_before) return -1.0;
     return (t1 - t0) / frames;
 }
@@ -848,6 +881,7 @@ int bench_measure(bench_scene_t& scene, std::vector<bench_entry_state_t>& states
             ++completed;
             g_bench_progress.store(attempt * 1000 + completed * 1000 / total_batches,
                                    std::memory_order_relaxed);
+            if (g_bench_context_lost) return r + 1;
         }
         // Overrunning the budget is worse than one round short: the user is
         // staring at a spinner, and the median is already stable by now.
@@ -922,6 +956,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         cJSON_AddStringToObject(root, "renderer", reinterpret_cast<const char*>(renderer));
     }
 
+    g_bench_context_lost = false;
     bench_scene_t scene;
     bench_scene_build(scene);
     cJSON_AddNumberToObject(root, "width", scene.width);
@@ -1038,6 +1073,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
             if (rsd <= BENCH_NOISE_TARGET) s.settled = true;
         }
 
+        if (g_bench_context_lost) break;
         if (attempt + 1 >= BENCH_MAX_ATTEMPTS) break;
         // A device this busy will not settle down within any budget we are
         // willing to make the user sit through.
@@ -1117,6 +1153,15 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
 
     GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     bench_scene_destroy(scene);
+
+    // A lost context makes the whole run a failure, not a partial result. What
+    // was measured before it happened cannot be told apart from what was
+    // "measured" after, and half the candidates look unsupported because their
+    // preconditions read back as zero. Reporting the ranking anyway would hand
+    // the user a confident answer assembled out of fiction.
+    if (g_bench_context_lost) {
+        cJSON_AddStringToObject(root, "error", "context-lost");
+    }
 
     char* text = cJSON_PrintUnformatted(root);
     result = text ? text : "{\"error\":\"print failed\"}";
