@@ -339,6 +339,26 @@ void enc_bgra_u8(const uint8_t* s, uint8_t* d) {
     d[3] = s[3];
 }
 
+// Channel subsets of the RGBA the driver hands back. GLES only guarantees a
+// GL_RGBA/GL_UNSIGNED_BYTE readback, so an application asking for plain GL_RGB or
+// GL_RED -- the ordinary way to dump an atlas or a single-channel map -- used to
+// be handed straight to the driver, which refuses it and leaves the destination
+// exactly as it was.
+void enc_rgb_u8(const uint8_t* s, uint8_t* d) {
+    d[0] = s[0];
+    d[1] = s[1];
+    d[2] = s[2];
+}
+
+void enc_rg_u8(const uint8_t* s, uint8_t* d) {
+    d[0] = s[0];
+    d[1] = s[1];
+}
+
+void enc_r_u8(const uint8_t* s, uint8_t* d) {
+    d[0] = s[0];
+}
+
 void enc_bgr_u8(const uint8_t* s, uint8_t* d) {
     d[0] = s[2];
     d[1] = s[1];
@@ -417,6 +437,9 @@ const readback_rule_t k_readback_rules[] = {
     {GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, enc_bgra_1555_rev, 2},
     {GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, enc_bgra_4444_rev, 2},
     {GL_BGR, GL_UNSIGNED_BYTE, enc_bgr_u8, 3},
+    {GL_RGB, GL_UNSIGNED_BYTE, enc_rgb_u8, 3},
+    {GL_RG, GL_UNSIGNED_BYTE, enc_rg_u8, 2},
+    {GL_RED, GL_UNSIGNED_BYTE, enc_r_u8, 1},
     {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, enc_rgba_8888_rev, 4},
     {GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, enc_rgba_8888, 4},
 };

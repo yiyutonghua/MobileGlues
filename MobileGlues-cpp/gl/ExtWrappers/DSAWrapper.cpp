@@ -1230,6 +1230,47 @@ void glBindTextureUnit(GLuint unit, GLuint texture) {
     LOG_D("[DSA] Bound texture %u to texture unit %u", texture, unit);
 }
 
+// With a pack buffer bound every `pixels` argument is an offset, so a null one
+// means "start of the buffer" rather than "no destination".
+static bool mgPackBufferBound() {
+    GLint pbo = 0;
+    GLES.glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pbo);
+    return pbo != 0;
+}
+
+// The pack state the driver will use, resolved once.
+struct mg_pack_state_t {
+    size_t row_bytes = 0;   // stride between rows
+    size_t image_bytes = 0; // stride between images, rows * height
+    size_t span = 0;        // furthest byte one image actually reaches
+    bool ok = false;
+};
+
+// How much room one width x height image needs under the current pack state.
+//
+// `span` counts the last row in full rather than by its stride: rows advance by
+// row_bytes but write width texels, and GL_PACK_ROW_LENGTH may be smaller than
+// the image, in which case the final row reaches past the last stride. GL's own
+// required-size formula counts it the same way.
+static mg_pack_state_t mgPackState(GLsizei width, GLsizei height, GLenum format, GLenum type) {
+    mg_pack_state_t s;
+    const GLsizei texelSize = pixel_sizeof(format, type);
+    if (texelSize <= 0 || width <= 0 || height <= 0) return s;
+
+    GLint packAlign = 4, packRowLength = 0;
+    GLES.glGetIntegerv(GL_PACK_ALIGNMENT, &packAlign);
+    GLES.glGetIntegerv(GL_PACK_ROW_LENGTH, &packRowLength);
+    if (packAlign <= 0) packAlign = 1;
+
+    const size_t rowPixels = static_cast<size_t>(packRowLength > 0 ? packRowLength : width);
+    s.row_bytes = widthalign(rowPixels * static_cast<size_t>(texelSize), packAlign);
+    s.image_bytes = s.row_bytes * static_cast<size_t>(height);
+    const size_t lastRow = static_cast<size_t>(width) * static_cast<size_t>(texelSize);
+    s.span = s.row_bytes * static_cast<size_t>(height - 1) + lastRow;
+    s.ok = true;
+    return s;
+}
+
 // GL 4.6 hands back all six cube map faces from one glGetTextureImage, laid out
 // consecutively like a 2D array of six layers, but glGetTexImage can only read
 // one face at a time. Walk the faces and advance the destination by one face
@@ -1240,8 +1281,13 @@ static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bu
                                     GL_TEXTURE_CUBE_MAP_POSITIVE_Y, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
                                     GL_TEXTURE_CUBE_MAP_POSITIVE_Z, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z};
 
-    if (!pixels) {
+    // With a pack buffer bound, `pixels` is an offset into it and zero is a
+    // perfectly ordinary one. Treating null as "no destination" dropped every
+    // PBO readback that started at the beginning of the buffer -- the upload side
+    // has always drawn this distinction (mg_upload_has_data).
+    if (!pixels && !mgPackBufferBound()) {
         DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map readback with pixels == NULL, dropped");
+        mg_set_gl_error(GL_INVALID_VALUE);
         return;
     }
 
@@ -1250,6 +1296,7 @@ static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bu
     glGetTexLevelParameteriv(GL_TEXTURE_CUBE_MAP_POSITIVE_X, level, GL_TEXTURE_HEIGHT, &height);
     if (width <= 0 || height <= 0) {
         DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map level %d has no size, dropped", level);
+        mg_set_gl_error(GL_INVALID_VALUE);
         return;
     }
 
@@ -1259,6 +1306,7 @@ static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bu
     if (texelSize <= 0) {
         DSA_WARN_ONCE("[DSA] glGetTextureImage: cannot size format 0x%X / type 0x%X for a cube map, dropped", format,
                       type);
+        mg_set_gl_error(GL_INVALID_ENUM);
         return;
     }
 
@@ -1274,6 +1322,7 @@ static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bu
     glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
     if (skipPixels || skipRows) {
         DSA_WARN_ONCE("[DSA] glGetTextureImage: cube map readback with non-zero GL_PACK_SKIP_*, dropped");
+        mg_set_gl_error(GL_INVALID_OPERATION);
         return;
     }
 
@@ -1288,9 +1337,21 @@ static void ReadCubeMapFaces(GLint level, GLenum format, GLenum type, GLsizei bu
 
     // The face pointers are computed here rather than by the driver, so a buffer
     // that cannot hold six faces would be written past its end.
-    if (bufSize <= 0 || faceBytes * 6 > static_cast<size_t>(bufSize)) {
-        DSA_WARN_ONCE("[DSA] glGetTextureImage: bufSize %d too small for six %zu-byte cube map faces, dropped", bufSize,
-                      faceBytes);
+    //
+    // Six strides is not the whole story. Rows advance by rowBytes but each one
+    // still writes width texels, and GL_PACK_ROW_LENGTH is allowed to be smaller
+    // than the image -- when it is, the final row of the final face reaches past
+    // six strides by exactly that difference. Six-strides-only accepted buffers
+    // that were then overrun; GL's own required-size formula counts the last row
+    // in full, which is what this does.
+    const size_t lastRowBytes = static_cast<size_t>(width) * static_cast<size_t>(texelSize);
+    const size_t overhang = lastRowBytes > rowBytes ? lastRowBytes - rowBytes : 0;
+    const size_t required = faceBytes * 6 + overhang;
+    if (bufSize <= 0 || required > static_cast<size_t>(bufSize)) {
+        DSA_WARN_ONCE("[DSA] glGetTextureImage: bufSize %d too small for six cube map faces (%zu bytes needed), "
+                      "dropped",
+                      bufSize, required);
+        mg_set_gl_error(GL_INVALID_OPERATION);
         return;
     }
 

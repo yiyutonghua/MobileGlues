@@ -1372,6 +1372,11 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
         textureBindingTarget = GL_TEXTURE_BINDING_2D;
     } else {
         LOG_E("glGetTexImage: Unsupported or complex target: 0x%x", target)
+        // Said nothing to the application before. 3D, array and rectangle
+        // targets are legal desktop reads this emulation cannot express as a
+        // colour-attachment read, and returning quietly handed back an
+        // untouched buffer that looked like a successful image.
+        mg_set_gl_error(GL_INVALID_OPERATION);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
@@ -1381,6 +1386,7 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     if (textureId == 0) {
         LOG_E("glGetTexImage: No texture bound to the specified target.")
+        mg_set_gl_error(GL_INVALID_OPERATION);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
@@ -1393,6 +1399,7 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     if (width == 0 || height == 0) {
         LOG_E("glGetTexImage: Texture level %d has zero width or height.", level)
+        mg_set_gl_error(GL_INVALID_VALUE);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
@@ -1408,6 +1415,11 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
     GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
         LOG_E("glGetTexImage: Failed to create complete framebuffer. Status: 0x%x", fboStatus)
+        // Overwhelmingly this is a depth or depth-stencil level: it is not
+        // colour-renderable, so hanging it off GL_COLOR_ATTACHMENT0 can never
+        // complete. A shadow-map readback used to land here and return in
+        // silence.
+        mg_set_gl_error(GL_INVALID_OPERATION);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
