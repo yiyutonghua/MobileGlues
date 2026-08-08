@@ -116,6 +116,13 @@ extern "C"
     // refused, where falling through to the driver is likewise the right move. The
     // caller's action is the same either way; the distinction is only that false no
     // longer means "not ours".
+    // Whether a glReadPixels of this pair can deliver anything at all: either
+    // mg_transfer_readback re-encodes it, or the backend takes it directly. GLES
+    // rejects everything else with GL_INVALID_OPERATION and leaves the
+    // destination untouched, so an emulation that forwards blindly hands the
+    // caller back its own uninitialised buffer.
+    bool mg_readback_pair_supported(GLenum format, GLenum type);
+
     bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type,
                               void* pixels);
 

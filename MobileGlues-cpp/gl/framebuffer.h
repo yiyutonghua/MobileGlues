@@ -64,6 +64,8 @@ extern "C"
 
     GLAPI GLAPIENTRY void glBindFramebuffer(GLenum target, GLuint framebuffer);
     GLAPI GLAPIENTRY void glDeleteFramebuffers(GLsizei n, const GLuint* names);
+    GLAPI GLAPIENTRY void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0,
+                                            GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
     GLAPI GLAPIENTRY void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture,
                                                  GLint level);
     GLAPI GLAPIENTRY void glFramebufferTexture(GLenum target, GLenum attachment, GLuint texture, GLint level);
@@ -104,7 +106,8 @@ bool mg_draw_framebuffer_all_none();
 // upscaled output, or undefined content after eglSwapBuffers, instead of the
 // frame the application had just drawn.
 struct mg_fsr_read_scope_t {
-    bool active = false;
+    bool active = false;  // this scope is the one holding the redirect
+    bool counted = false; // this scope entered the nesting count, so it must leave it
     mg_fsr_read_scope_t();
     ~mg_fsr_read_scope_t();
     mg_fsr_read_scope_t(const mg_fsr_read_scope_t&) = delete;

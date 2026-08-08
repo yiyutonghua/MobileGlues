@@ -1196,10 +1196,21 @@ void glBindTextureUnit(GLuint unit, GLuint texture) {
     LOG()
     LOG_D("[DSA] glBindTextureUnit, unit: %u, texture: %u", unit, texture);
 
-    if (unit >= GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS) {
-        LOG_W("[DSA] Invalid parameters for glBindTextureUnit");
-        // return;
+    // Against the limit, not against the enum that names it. This compared a unit
+    // index with GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS itself -- 0x8B4D, so the test
+    // could never fire -- and had its return commented out besides, so an
+    // out-of-range unit fell through to glActiveTexture(GL_TEXTURE0 + unit) and
+    // bound the texture somewhere the layer does not track. GL 4.5 asks for
+    // GL_INVALID_VALUE.
+    GLint maxUnits = 0;
+    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxUnits);
+    if (maxUnits <= 0) maxUnits = 16;
+    if (unit >= static_cast<GLuint>(maxUnits)) {
+        LOG_W_FORCE("[DSA] glBindTextureUnit: unit %u is past the %d this layer tracks", unit, maxUnits);
+        mg_set_gl_error(GL_INVALID_VALUE);
+        return;
     }
+
     GLint prevUnit = 0;
     glGetIntegerv(GL_ACTIVE_TEXTURE, &prevUnit);
 
@@ -1391,6 +1402,12 @@ void glGetTextureImage(GLuint texture, GLint level, GLenum format, GLenum type, 
         // checked -- let an undersized buffer be written far past its end. GL 4.5
         // requires GL_INVALID_OPERATION and no write instead, and the 2D path is
         // the common one.
+        if (!pixels && !mgPackBufferBound()) {
+            DSA_WARN_ONCE("[DSA] glGetTextureImage: 2D readback with pixels == NULL, dropped");
+            mg_set_gl_error(GL_INVALID_VALUE);
+            TEXTURE_OP_FUNC_END
+            return;
+        }
         GLint w = 0, h = 0;
         glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_WIDTH, &w);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_HEIGHT, &h);

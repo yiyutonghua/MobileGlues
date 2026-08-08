@@ -1461,6 +1461,21 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     glReadBuffer(GL_COLOR_ATTACHMENT0);
 
+    // Asked here, with the scratch framebuffer bound, because the pair GLES
+    // accepts besides GL_RGBA/GL_UNSIGNED_BYTE is chosen per read framebuffer.
+    // Forwarding a pair it refuses used to return with the destination untouched
+    // and nothing said: the caller wrote its own uninitialised buffer out as a
+    // texture dump.
+    if (!mg_readback_pair_supported(format, type)) {
+        LOG_E("glGetTexImage: %s + %s cannot be read back on this backend", glEnumToString(format),
+              glEnumToString(type))
+        mg_set_gl_error(GL_INVALID_OPERATION);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
+        glDeleteFramebuffers(1, &tempFBO);
+        return;
+    }
+
     glReadPixels(0, 0, width, height, format, type, pixels);
 
     glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);

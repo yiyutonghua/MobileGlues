@@ -522,6 +522,24 @@ const readback_rule_t k_readback_rules[] = {
 
 } // namespace
 
+bool mg_readback_pair_supported(GLenum format, GLenum type) {
+    // Anything this file re-encodes from an RGBA read is deliverable whatever the
+    // backend thinks of the pair itself.
+    for (const auto& r : k_readback_rules) {
+        if (r.format == format && r.type == type) return true;
+    }
+    // GLES guarantees exactly two pairs for a colour read (ES 3.2 sec. 16.1.2):
+    // this one...
+    if (format == GL_RGBA && type == GL_UNSIGNED_BYTE) return true;
+    // ...and one the implementation names. Asked every time rather than cached:
+    // it is a property of the bound read framebuffer's attachment, so a read from
+    // a float FBO answers differently than one from the window.
+    GLint impl_format = 0, impl_type = 0;
+    GLES.glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &impl_format);
+    GLES.glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &impl_type);
+    return static_cast<GLenum>(impl_format) == format && static_cast<GLenum>(impl_type) == type;
+}
+
 bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels) {
     const readback_rule_t* rule = nullptr;
     for (const auto& r : k_readback_rules) {

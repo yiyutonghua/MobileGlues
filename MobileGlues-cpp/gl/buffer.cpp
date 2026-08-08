@@ -788,6 +788,17 @@ void glTexBuffer(GLenum target, GLenum internalformat, GLuint buffer) {
 
         const GLuint MAX_WIDTH = 8192;
         GLuint numElements = bufferSize / pixelSize;
+        if (numElements == 0) {
+            // A buffer too small to hold one texel. The pixelSize == 0 guard above
+            // exists because a zero-sized texture makes the emulated texelFetch
+            // index modulo zero; this reaches the same place by the other road,
+            // through a 0 x 1 glTexImage2D and a u_BufferTexWidth of 0.
+            BU_WARN_ONCE("glTexBuffer: buffer of %d bytes holds no %u-byte texel, texture buffer left untouched",
+                         bufferSize, pixelSize);
+            mg_set_gl_error(GL_INVALID_VALUE);
+            GLES.glActiveTexture(GL_TEXTURE0 + gl_state->current_tex_unit);
+            return;
+        }
 
         GLuint width = numElements;
         GLuint height = 1;

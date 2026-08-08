@@ -154,13 +154,26 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
         GLES.glBindFramebuffer(target, draw_fb);
     }
 }
+// Only the outermost scope on a thread touches the binding.
+//
+// The tracked read binding stays 0 the whole time one of these is active -- the
+// redirect goes straight to the backend and deliberately does not change what the
+// application asked for -- so a nested scope would see the same "needs
+// redirecting" state, activate as well, and then undo the outer one's redirect on
+// its way out while the outer scope still had work to do.
+static thread_local int g_fsr_read_depth = 0;
+
 mg_fsr_read_scope_t::mg_fsr_read_scope_t() {
     // g_renderFBO is nonzero only while FSR1 is on, so this is also the FSR1 test.
     if (FSR1_Context::g_renderFBO == 0 || current_read_fbo != 0) return;
+    counted = true;
+    if (g_fsr_read_depth++ > 0) return; // an outer scope already holds it
     active = true;
     GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, FSR1_Context::g_renderFBO);
 }
 mg_fsr_read_scope_t::~mg_fsr_read_scope_t() {
+    if (!counted) return;
+    --g_fsr_read_depth;
     // Back to the raw surface, which is what the tracked binding of 0 means for
     // the read target -- glBindFramebuffer never redirects that one.
     if (active) GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -283,6 +296,21 @@ GLAPI GLAPIENTRY void glFramebufferRenderbufferARB(GLenum target, GLenum attachm
                                                    GLuint renderbuffer) __attribute__((alias("glFramebufferRenderbuffer")));
 GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(GLenum target, GLenum attachment, GLuint texture, GLint level,
                                                    GLint layer) __attribute__((alias("glFramebufferTextureLayer")));
+}
+
+// Wrapped for the same reason glReadPixels is: the source is the read framebuffer,
+// and while FSR1 is on the application's framebuffer 0 is not where its frame is.
+// The commit that added mg_fsr_read_scope_t covered this layer's own internal
+// blits and left the application-facing entry point a raw passthrough, so a host
+// blitting from framebuffer 0 -- which is how most post-processing gets its
+// input, and the only way to reach the depth buffer that lives on the FSR target
+// and never on the surface -- still read the window.
+void glBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1,
+                       GLint dstY1, GLbitfield mask, GLenum filter) {
+    LOG()
+    mg_fsr_read_scope_t fsr_read;
+    GLES.glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+    CHECK_GL_ERROR
 }
 
 void glDeleteFramebuffers(GLsizei n, const GLuint* names) {
