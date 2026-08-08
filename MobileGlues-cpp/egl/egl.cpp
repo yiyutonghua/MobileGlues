@@ -521,6 +521,12 @@ extern "C"
         LOAD_EGL(eglReleaseThread)
         const EGLBoolean result = egl_eglReleaseThread();
         if (result == EGL_TRUE) {
+            // eglReleaseThread releases whatever this thread had current, so the
+            // record has to be let go of here as well. Without it the context's
+            // current_count never comes back down: it is never released, its
+            // per-subsystem bookkeeping is never dropped, and g_current_ctx keeps
+            // describing a context the thread no longer holds.
+            mg_context_make_current(EGL_NO_DISPLAY, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
             frontend_api = EGL_OPENGL_ES_API;
             frontend_error = EGL_SUCCESS;
         }

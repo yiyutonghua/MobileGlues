@@ -10,6 +10,8 @@
 #include "../gl/mg.h"
 #include <mutex>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #define DEBUG 0
 
@@ -41,6 +43,22 @@ std::unordered_map<EGLDisplay, int>& display_refs() {
 unsigned long long g_next_ctx_id = 1;
 unsigned long long g_next_group_id = 1;
 
+// The reference behind g_current_ctx. Same record, kept as a shared_ptr so this
+// thread is a co-owner rather than a bystander watching the map's only reference.
+// It is also what identifies the outgoing record in mg_context_make_current:
+// looking it up by handle stopped being reliable the moment a handle could name a
+// different record than the one this thread has current.
+//
+// Deliberately a plain shared_ptr and not something that releases on thread exit.
+// A thread that dies with a context still current already leaks it -- the count
+// never comes down -- and the map is still holding the record, so nothing is
+// freed behind anyone's back. The one case where this destructor is the last
+// owner is an orphan whose holder exits, which leaks that context's per-subsystem
+// bookkeeping; a destructor that took g_ctx_mutex to do it properly would be
+// running against function-local statics that may already have been destroyed at
+// process exit, which is the worse of the two.
+thread_local std::shared_ptr<MGContext> g_current_ref;
+
 } // namespace
 
 // Access sites read the same way they did when these were plain globals.
@@ -51,11 +69,24 @@ unsigned long long g_next_group_id = 1;
 namespace {
 
 // Caller holds g_ctx_mutex.
-void release_locked(const std::shared_ptr<MGContext>& ctx) {
-    if (ctx->current_count > 0 || !ctx->destroy_pending) return;
+//
+// By value: the caller's shared_ptr is often the one living in the map, and the
+// erase below would destroy it -- and with it the record every line after that
+// reads through.
+void release_locked(std::shared_ptr<MGContext> ctx) {
+    if (ctx->current_count > 0) return;
+
+    // Identity, not handle. After eglCreateContext is handed back an address it
+    // has just destroyed, g_contexts[handle] names a different record than this
+    // one, and erasing by handle would drop the live context instead.
+    const auto it = g_contexts.find(ctx->handle);
+    const bool in_map = it != g_contexts.end() && it->second == ctx;
+    // A record the map no longer names is an orphan: nothing can reach it any
+    // more, so it goes as soon as its last holder lets go, whether or not
+    // eglDestroyContext was ever called on it.
+    if (in_map && !ctx->destroy_pending) return;
+
     LOG_D("MGContext %llu released", ctx->id)
-    // The map is the only owner, so erasing frees the record and the gl_state_s
-    // embedded in it.
     if (gl_state == &ctx->gl) gl_state = &g_default_gl_state;
     // Drop the per-context bookkeeping each subsystem keeps for this id. Safe
     // here and only here: current_count has reached zero, so no thread still has
@@ -65,7 +96,7 @@ void release_locked(const std::shared_ptr<MGContext>& ctx) {
     mg_framebuffer_forget_context(ctx->id);
     mg_fsr1_forget_context(ctx->id);
     mg_depth_clear_forget_context(ctx->id);
-    g_contexts.erase(ctx->handle);
+    if (in_map) g_contexts.erase(it);
 }
 
 } // namespace
@@ -107,6 +138,25 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
 
     LOG_D("MGContext %llu created (handle %p, share group %llu, %d.%d)", ctx->id, handle, ctx->share_group->id, major,
           minor)
+
+    // An EGLContext is a driver heap allocation, so the address of one that has
+    // just been destroyed comes straight back out of the next create. The record
+    // for the old one can still be alive at that point -- eglDestroyContext only
+    // marks a context that is current, and it stays until the last thread makes
+    // something else current -- and assigning over the map entry dropped the map's
+    // reference, which was the only one. That freed a record another thread had
+    // current, leaving g_current_ctx and the gl_state_s inside it dangling.
+    //
+    // Orphan it instead: out of the map so nothing new can find it, alive until
+    // whoever still has it current lets go.
+    const auto stale = g_contexts.find(handle);
+    if (stale != g_contexts.end()) {
+        const std::shared_ptr<MGContext> previous = stale->second;
+        g_contexts.erase(stale);
+        LOG_D("MGContext %llu orphaned: handle %p was handed out again", previous->id, handle)
+        release_locked(previous);
+    }
+
     g_contexts[handle] = ctx;
     return ctx.get();
 }
@@ -138,15 +188,28 @@ MGContext* mg_context_find(EGLContext handle) {
 void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext handle) {
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
 
-    if (g_current_ctx != nullptr) {
-        const auto old = g_contexts.find(g_current_ctx->handle);
-        if (old != g_contexts.end()) {
-            if (old->second->current_count > 0) --old->second->current_count;
-            // Releasing here is why eglDestroyContext can be called on a context
-            // that is still current: the record outlives the EGL handle until the
-            // last thread lets go of it.
-            release_locked(old->second);
+    // The same record going current again, which is what an application that calls
+    // eglMakeCurrent once a frame does. Nothing the rebind below sets up can have
+    // changed, and mg_enable_sync_driver is a round of driver calls, so only the
+    // surfaces are worth updating.
+    if (g_current_ref && handle != EGL_NO_CONTEXT) {
+        const auto same = g_contexts.find(handle);
+        if (same != g_contexts.end() && same->second == g_current_ref) {
+            g_current_ref->display = dpy;
+            g_current_ref->draw = draw;
+            g_current_ref->read = read;
+            return;
         }
+    }
+
+    if (g_current_ref) {
+        // Through this thread's own reference, never through g_contexts[handle]:
+        // once a handle has been handed out twice the map entry for it is a
+        // different record, and decrementing that one would release a live context
+        // and strand this one at a count it can never come down from.
+        if (g_current_ref->current_count > 0) --g_current_ref->current_count;
+        const std::shared_ptr<MGContext> previous = std::move(g_current_ref);
+        g_current_ref.reset();
         g_current_ctx = nullptr;
         gl_state = &g_default_gl_state;
         // 0 selects each subsystem's fallback instance, the one used before any
@@ -155,6 +218,10 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
         mg_texture_bind_context(0, 0);
         mg_framebuffer_bind_context(0);
         mg_fsr1_bind_context(0);
+        // Releasing here is why eglDestroyContext can be called on a context
+        // that is still current: the record outlives the EGL handle until the
+        // last thread lets go of it.
+        release_locked(previous);
     }
 
     if (handle == EGL_NO_CONTEXT) {
@@ -176,7 +243,8 @@ void mg_context_make_current(EGLDisplay dpy, EGLSurface draw, EGLSurface read, E
     it->second->draw = draw;
     it->second->read = read;
     ++it->second->current_count;
-    g_current_ctx = it->second.get();
+    g_current_ref = it->second;
+    g_current_ctx = g_current_ref.get();
     mg_buffer_bind_context(g_current_ctx->id, g_current_ctx->share_group->id);
     mg_texture_bind_context(g_current_ctx->id, g_current_ctx->share_group->id);
     mg_framebuffer_bind_context(g_current_ctx->id);
@@ -206,14 +274,18 @@ void mg_context_destroy(EGLContext handle) {
 
 void mg_context_forget_display(EGLDisplay dpy) {
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
-    for (auto it = g_contexts.begin(); it != g_contexts.end();) {
-        if (it->second->display == dpy && it->second->current_count == 0) {
-            it = g_contexts.erase(it);
-        } else {
-            // eglTerminate marks resources for deletion but a context that is
-            // still current stays usable until it is replaced, so it survives.
-            if (it->second->display == dpy) it->second->destroy_pending = true;
-            ++it;
-        }
+    std::vector<std::shared_ptr<MGContext>> doomed;
+    for (auto& entry : g_contexts) {
+        if (entry.second->display != dpy) continue;
+        // eglTerminate marks resources for deletion but a context that is still
+        // current stays usable until it is replaced, so it survives -- which is
+        // what release_locked decides, one record at a time.
+        entry.second->destroy_pending = true;
+        doomed.push_back(entry.second);
     }
+    // Collected first because release_locked erases, and every erase goes through
+    // it: this loop used to drop entries inline, skipping the per-subsystem
+    // teardown, so the bookkeeping for every context on a terminated display
+    // outlived the display for the life of the process.
+    for (const auto& ctx : doomed) release_locked(ctx);
 }

@@ -65,6 +65,12 @@ struct MGContext {
 // The context current on THIS thread, or nullptr. EGL scopes the current context
 // per thread, so this must be thread_local even though the record it points at is
 // shared.
+//
+// Reading it is safe for as long as the thread keeps the context current, because
+// the thread holds a reference of its own (a shared_ptr private to context.cpp)
+// alongside this pointer. The map is not the only owner: a handle the driver
+// hands out twice would otherwise replace the map entry and free a record another
+// thread is still pointing at.
 extern thread_local MGContext* g_current_ctx;
 
 // Called from the EGL wrappers.
