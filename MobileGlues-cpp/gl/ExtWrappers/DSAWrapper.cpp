@@ -1372,19 +1372,162 @@ void glGetTextureImage(GLuint texture, GLint level, GLenum format, GLenum type, 
     if (target == GL_TEXTURE_CUBE_MAP) {
         ReadCubeMapFaces(level, format, type, bufSize, pixels);
     } else if (target == GL_TEXTURE_2D) {
-        glGetTexImage(target, level, format, type, pixels);
+        // bufSize is a contract, not decoration. glGetTexImage below reads the
+        // whole level with glReadPixels straight into this pointer, so passing it
+        // on unchecked -- which is what happened, while the cube map path above
+        // checked -- let an undersized buffer be written far past its end. GL 4.5
+        // requires GL_INVALID_OPERATION and no write instead, and the 2D path is
+        // the common one.
+        GLint w = 0, h = 0;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_HEIGHT, &h);
+        const mg_pack_state_t pack = mgPackState(w, h, format, type);
+        if (!pack.ok) {
+            DSA_WARN_ONCE("[DSA] glGetTextureImage: cannot size format 0x%X / type 0x%X at level %d, dropped", format,
+                          type, level);
+            mg_set_gl_error(GL_INVALID_ENUM);
+        } else if (bufSize < 0 || pack.span > static_cast<size_t>(bufSize)) {
+            DSA_WARN_ONCE("[DSA] glGetTextureImage: bufSize %d too small for a %dx%d level (%zu bytes needed), dropped",
+                          bufSize, w, h, pack.span);
+            mg_set_gl_error(GL_INVALID_OPERATION);
+        } else {
+            glGetTexImage(target, level, format, type, pixels);
+        }
     } else {
         DSA_WARN_ONCE("[DSA] glGetTextureImage: target %s cannot be read back, dropped", glEnumToString(target));
+        mg_set_gl_error(GL_INVALID_OPERATION);
     }
     TEXTURE_OP_FUNC_END
     LOG_D("[DSA] Retrieved texture image from texture %u at level %d", texture, level);
 }
 
+// GL 4.5's region readback, which was a silent stub -- exported, resolvable, and
+// writing nothing, next door to a glGetTextureImage that really works. A caller
+// asking for a sub-rectangle got its buffer back untouched and no error.
+//
+// Built the same way glGetTexImage is: attach the slice to a scratch framebuffer
+// and glReadPixels the region out of it. That covers 2D, cube map faces, array
+// layers and 3D slices; anything else, and any format the read rejects, says so
+// rather than pretending.
+void glGetTextureSubImage(GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width,
+                          GLsizei height, GLsizei depth, GLenum format, GLenum type, GLsizei bufSize, void* pixels) {
+    LOG()
+    LOG_D("[DSA] glGetTextureSubImage, texture: %u, level: %d, offset: %d,%d,%d, size: %dx%dx%d", texture, level,
+          xoffset, yoffset, zoffset, width, height, depth);
+
+    const GLenum target = GetTexTarget(texture);
+    if (mgRejectUnknownTexture("glGetTextureSubImage", texture, target)) return;
+
+    if (width <= 0 || height <= 0 || depth <= 0 || xoffset < 0 || yoffset < 0 || zoffset < 0) {
+        mg_set_gl_error(GL_INVALID_VALUE);
+        return;
+    }
+    if (!pixels && !mgPackBufferBound()) {
+        mg_set_gl_error(GL_INVALID_VALUE);
+        return;
+    }
+
+    const mg_pack_state_t pack = mgPackState(width, height, format, type);
+    if (!pack.ok) {
+        DSA_WARN_ONCE("[DSA] glGetTextureSubImage: cannot size format 0x%X / type 0x%X, dropped", format, type);
+        mg_set_gl_error(GL_INVALID_ENUM);
+        return;
+    }
+    // Slices are laid out consecutively, and only the last one's final row can
+    // reach past its stride.
+    const size_t required = pack.image_bytes * static_cast<size_t>(depth - 1) + pack.span;
+    if (bufSize < 0 || required > static_cast<size_t>(bufSize)) {
+        DSA_WARN_ONCE("[DSA] glGetTextureSubImage: bufSize %d too small (%zu bytes needed), dropped", bufSize,
+                      required);
+        mg_set_gl_error(GL_INVALID_OPERATION);
+        return;
+    }
+
+    // How a slice of this target gets onto a colour attachment.
+    enum class slice_t { Flat, CubeFace, Layered } slice;
+    switch (target) {
+    case GL_TEXTURE_2D:
+        if (zoffset != 0 || depth != 1) {
+            mg_set_gl_error(GL_INVALID_VALUE);
+            return;
+        }
+        slice = slice_t::Flat;
+        break;
+    case GL_TEXTURE_CUBE_MAP:
+        if (zoffset + depth > 6) {
+            mg_set_gl_error(GL_INVALID_VALUE);
+            return;
+        }
+        slice = slice_t::CubeFace;
+        break;
+    case GL_TEXTURE_2D_ARRAY:
+    case GL_TEXTURE_3D:
+        slice = slice_t::Layered;
+        break;
+    default:
+        DSA_WARN_ONCE("[DSA] glGetTextureSubImage: target %s cannot be read back, dropped", glEnumToString(target));
+        mg_set_gl_error(GL_INVALID_OPERATION);
+        return;
+    }
+
+    static const GLenum k_faces[6] = {GL_TEXTURE_CUBE_MAP_POSITIVE_X, GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                                      GL_TEXTURE_CUBE_MAP_POSITIVE_Y, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                                      GL_TEXTURE_CUBE_MAP_POSITIVE_Z, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z};
+
+    GLint prevDrawFBO = 0, prevReadFBO = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
+
+    GLuint tempFBO = 0;
+    glGenFramebuffers(1, &tempFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, tempFBO);
+
+    auto* out = static_cast<uint8_t*>(pixels);
+    bool failed = false;
+    for (GLsizei i = 0; i < depth; ++i) {
+        const GLint z = zoffset + i;
+        switch (slice) {
+        case slice_t::Flat:
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, level);
+            break;
+        case slice_t::CubeFace:
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, k_faces[z], texture, level);
+            break;
+        case slice_t::Layered:
+            glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, level, z);
+            break;
+        }
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            // Depth, stencil and the integer-only formats a colour attachment
+            // cannot hold end up here.
+            DSA_WARN_ONCE("[DSA] glGetTextureSubImage: level %d of texture %u is not colour-readable, dropped", level,
+                          texture);
+            failed = true;
+            break;
+        }
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glReadPixels(xoffset, yoffset, width, height, format, type, out);
+        out += pack.image_bytes;
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
+    glDeleteFramebuffers(1, &tempFBO);
+    if (failed) mg_set_gl_error(GL_INVALID_OPERATION);
+}
+
 void glGetCompressedTextureImage(GLuint texture, GLint level, GLsizei bufSize, void* pixels) {
     TEXTURE_OP_FUNC_BEGIN(glGetCompressedTextureImage)
-    glGetCompressedTexImage(target, level, pixels);
+    (void)bufSize;
+    (void)pixels;
+    // glGetCompressedTexImage is a do-nothing stub, so this wrote nothing, ignored
+    // bufSize, and then logged "Retrieved compressed texture image" -- the one
+    // quiet failure in this file that actively claimed to have succeeded. An
+    // application caching compressed levels to disk wrote uninitialised memory and
+    // re-uploaded it as texture data on the next run.
+    DSA_WARN_ONCE("[DSA] glGetCompressedTextureImage: compressed readback is not implemented, nothing written");
+    mg_set_gl_error(GL_INVALID_OPERATION);
     TEXTURE_OP_FUNC_END
-    LOG_D("[DSA] Retrieved compressed texture image from texture %u at level %d", texture, level);
 }
 
 void glGetTextureLevelParameterfv(GLuint texture, GLint level, GLenum pname, GLfloat* params) {
