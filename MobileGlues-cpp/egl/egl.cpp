@@ -38,6 +38,20 @@ namespace {
 
     thread_local EGLenum frontend_api = EGL_OPENGL_ES_API;
     thread_local EGLint frontend_error = EGL_SUCCESS;
+
+    // Held across "call the backend, then record what it did", in both directions.
+    //
+    // The two halves are not atomic together, and the backend recycles handle
+    // addresses: a destroy that had returned but not yet reached mg_context_destroy
+    // could be overtaken by a create that got the same address back and registered
+    // it first, and then the destroy's bookkeeping deleted the record belonging to
+    // the brand new context. Ordering create against create matters for the same
+    // reason -- the loser would find its own entry already replaced.
+    //
+    // Strictly outside the context table's own lock, which mg_context_* takes
+    // inside; nothing takes them the other way round.
+    std::mutex context_lifecycle_mutex;
+
     std::mutex desktop_contexts_mutex;
     std::unordered_map<EGLContext, DesktopContextInfo> desktop_contexts;
     thread_local std::string frontend_extensions;
@@ -578,6 +592,7 @@ extern "C"
             // eglBindAPI(EGL_OPENGL_API), and everything keyed on the current
             // context -- the enable table, gl_state, the multidraw scratch
             // invalidation -- silently falls back to one shared instance.
+            std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
             EGLContext es_context = egl_eglCreateContext(dpy, config, share_context, attrib_list);
             if (es_context != EGL_NO_CONTEXT) {
                 mg_context_create(dpy, es_context, share_context, EGL_OPENGL_ES_API, g_gles_caps.major,
@@ -600,6 +615,7 @@ extern "C"
         LOAD_EGL(eglBindAPI)
         if (egl_eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) return EGL_NO_CONTEXT;
 
+        std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
         EGLContext context = egl_eglCreateContext(dpy, config, share_context, backend_attributes.data());
         if (context != EGL_NO_CONTEXT) {
             rememberDesktopContext(context, dpy, frontend_major, frontend_minor);
@@ -612,6 +628,7 @@ extern "C"
     EGL_API EGLBoolean eglDestroyContext(EGLDisplay dpy, EGLContext ctx) {
         LOG_D("eglDestroyContext, dpy: %p, ctx: %p", dpy, ctx);
         LOAD_EGL(eglDestroyContext)
+        std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
         const EGLBoolean result = egl_eglDestroyContext(dpy, ctx);
         if (result == EGL_TRUE) {
             forgetDesktopContext(ctx);
