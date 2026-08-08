@@ -108,7 +108,33 @@ int main() {
     { GLenum b[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1}; glDrawBuffers(2, b); }
     expect("slot0 still the renderbuffer", physical[0], 900);
 
-    printf("7. deleting the framebuffer drops its record\n");
+    printf("7. a record survives the table growing under it\n");
+    // Every scenario above uses one framebuffer, so until here nothing had ever
+    // made the table grow. Sixty-four more names take it through several
+    // rehashes and then come back to fbo 7, which must still know its home
+    // attachments.
+    //
+    // This does not reproduce a reference held across an insert -- the case the
+    // unique_ptr in the table exists for. It passes with or without it, because
+    // no path in framebuffer.cpp currently keeps a framebuffer_t& while asking
+    // for a different name; the pointer there is precaution, not load-bearing.
+    // What this does catch is a record being lost or corrupted by the growth
+    // itself, which nothing else covers.
+    for (GLuint extra = 100; extra < 164; ++extra) {
+        glBindFramebuffer(GL_FRAMEBUFFER, extra);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 7000 + extra, 0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 7);
+    physical.clear();
+    { GLenum b[] = {GL_COLOR_ATTACHMENT1}; glDrawBuffers(1, b); }
+    expect("slot0 holds colortex1 after 64 inserts", physical[0], 101);
+    { GLenum b[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1}; glDrawBuffers(2, b); }
+    // Scenario 6 left a renderbuffer on attachment 0, so that is what home means
+    // here -- and getting it back is the whole point: the record still knows.
+    expect("slot0 restored to the renderbuffer", physical[0], 900);
+    expect("slot1 restored to colortex1", physical[1], 101);
+
+    printf("8. deleting the framebuffer drops its record\n");
     { GLuint fb = 7; glDeleteFramebuffers(1, &fb); }
     glBindFramebuffer(GL_FRAMEBUFFER, 7);          // driver recycles the name
     physical.clear();
