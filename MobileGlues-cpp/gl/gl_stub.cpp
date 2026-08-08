@@ -502,7 +502,7 @@ STUB_FUNCTION_HEAD(void, glVertexAttrib4ubv, GLuint index, const GLubyte* v); ST
 STUB_FUNCTION_HEAD(void, glVertexAttrib4uiv, GLuint index, const GLuint* v); STUB_FUNCTION_END_NO_RETURN(void, glVertexAttrib4uiv,index,v)
 STUB_FUNCTION_HEAD(void, glVertexAttrib4usv, GLuint index, const GLushort* v); STUB_FUNCTION_END_NO_RETURN(void, glVertexAttrib4usv,index,v)
 // STUB_FUNCTION_HEAD(void, glPrimitiveRestartIndex, GLuint index); STUB_FUNCTION_END_NO_RETURN(void, glPrimitiveRestartIndex,index)   // implemented in gl/enable.cpp
-STUB_FUNCTION_HEAD(void, glGetActiveUniformName, GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei* length, GLchar* uniformName); STUB_FUNCTION_END_NO_RETURN(void, glGetActiveUniformName,program,uniformIndex,bufSize,length,uniformName)
+// STUB_FUNCTION_HEAD(void, glGetActiveUniformName, GLuint program, GLuint uniformIndex, GLsizei bufSize, GLsizei* length, GLchar* uniformName); STUB_FUNCTION_END_NO_RETURN(void, glGetActiveUniformName,program,uniformIndex,bufSize,length,uniformName)   // implemented in gl/program.cpp
 //STUB_FUNCTION_HEAD(void, glMultiDrawElementsBaseVertex, GLenum mode, const GLsizei* count, GLenum type, const void* const*indices, GLsizei drawcount, const GLint* basevertex); STUB_FUNCTION_END_NO_RETURN(void, glMultiDrawElementsBaseVertex,mode,count,type,indices,drawcount,basevertex)
 STUB_FUNCTION_HEAD(void, glProvokingVertex, GLenum mode); STUB_FUNCTION_END_NO_RETURN(void, glProvokingVertex,mode)
 STUB_FUNCTION_HEAD(void, glTexImage2DMultisample, GLenum target, GLsizei samples, GLenum internalformat, GLsizei width, GLsizei height, GLboolean fixedsamplelocations); STUB_FUNCTION_END_NO_RETURN(void, glTexImage2DMultisample,target,samples,internalformat,width,height,fixedsamplelocations)
