@@ -815,8 +815,24 @@ void mg_glMultiDrawElementsBaseVertex_drawelements(GLenum mode, GLsizei* counts,
             }
             mg_rebase_indices_to_u32(rebased.data(), srcData, count, type, bv, restart_enabled, restart_value);
             GLES.glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
-        } else {
+        } else if (indices[i] != nullptr) {
             mg_rebase_indices_to_u32(rebased.data(), indices[i], count, type, bv, restart_enabled, restart_value);
+        } else {
+            // No element buffer bound and a null client pointer: there is nothing
+            // to read. GL leaves this undefined, and reading it is a segfault at
+            // address zero rather than a wrong picture -- which is what it was,
+            // reachable from the in-process benchmark the moment borrowing ANGLE
+            // started working, because a sub-draw's `indices` there is a buffer
+            // offset and offset zero is a null pointer.
+            //
+            // The binding is what decides which of the two `indices` means, so a
+            // zero binding with offset-shaped indices is a caller-side mistake
+            // this cannot repair. Say so once and skip: missing geometry beats a
+            // crash, and beats reading whatever happens to be at address zero.
+            MD_WARN_ONCE("multidraw drawelements: no element buffer bound and indices[%d] is null; "
+                         "sub-draw skipped",
+                         i);
+            continue;
         }
 
         GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_scratch_ibo);

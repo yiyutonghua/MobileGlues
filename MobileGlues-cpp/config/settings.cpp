@@ -22,6 +22,8 @@ static void parse_multidraw_orders();
 void init_settings() {
 #if defined(__APPLE__)
     global_settings.angle = AngleMode::Disabled;
+    global_settings.angle_config = AngleConfig::DisableIfPossible;
+    global_settings.angle_supported = false;
     global_settings.ignore_error = IgnoreErrorLevel::Partial;
     global_settings.ext_compute_shader = false;
     global_settings.max_glsl_cache_size = 30 * 1024 * 1024;
@@ -178,6 +180,8 @@ void init_settings() {
     }
 
     global_settings.angle = finalAngleMode;
+    global_settings.angle_config = angleConfig;
+    global_settings.angle_supported = isANGLESupported;
     LOG_D("Final ANGLE setting: %d", static_cast<int>(global_settings.angle))
     global_settings.buffer_coherent_as_flush = (global_settings.angle == AngleMode::Disabled);
 

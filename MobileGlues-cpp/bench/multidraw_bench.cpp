@@ -912,6 +912,12 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     // measured on the wrong one of those is worse than no order at all.
     cJSON_AddBoolToObject(root, "angleRequested", global_settings.angle == AngleMode::Enabled);
     cJSON_AddBoolToObject(root, "angleInUse", g_angle_in_use);
+    // The resolved mode is not the whole story: under EnableIfPossible on a
+    // device the probe rejects, angleRequested is false and the borrowed ANGLE
+    // was ignored -- which is invisible unless the raw choice and the device
+    // verdict ride along.
+    cJSON_AddNumberToObject(root, "angleConfigured", static_cast<int>(global_settings.angle_config));
+    cJSON_AddBoolToObject(root, "angleSupported", global_settings.angle_supported);
     if (const GLubyte* renderer = GLES.glGetString ? GLES.glGetString(GL_RENDERER) : nullptr) {
         cJSON_AddStringToObject(root, "renderer", reinterpret_cast<const char*>(renderer));
     }

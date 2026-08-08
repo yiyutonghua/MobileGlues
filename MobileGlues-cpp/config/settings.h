@@ -189,6 +189,12 @@ constexpr int MD_BACKEND_COUNT = static_cast<int>(md_backend_t::MaxValue);
 
 struct global_settings_t {
     AngleMode angle;
+    // The two halves of how `angle` came to be, kept so a report can tell the
+    // truth. `angle` alone cannot: EnableIfPossible resolves to Disabled on a
+    // device the probe rejects, and then nothing downstream can distinguish
+    // "user did not want ANGLE" from "user wanted it, device cannot".
+    AngleConfig angle_config; // the raw configured choice, before device gating
+    bool angle_supported;     // what checkIfANGLESupported() said at init
     IgnoreErrorLevel ignore_error;
     bool ext_compute_shader;
     bool ext_timer_query;

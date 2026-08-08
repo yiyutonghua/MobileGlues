@@ -57,6 +57,14 @@ const char* EGL_ANGLE = "libEGL_angle.so";
 // that reports on the environment has to be able to tell the two apart.
 bool g_angle_in_use = false;
 
+// The same fact, callable through dlsym. The plugin app's info query loads this
+// library and needs to report which driver answered; the bool above is not
+// exported (the build hides everything not marked), and a function survives
+// symbol-visibility policy changes better than a data export would.
+extern "C" __attribute__((visibility("default"))) int mg_angle_in_use(void) {
+    return g_angle_in_use ? 1 : 0;
+}
+
 // ANGLE ships with the launcher, not with us. Inside the game's process it is
 // simply on the search path; a tool that loads this library on its own (the
 // plugin app's benchmark) has to say where the launcher keeps it, or it would
