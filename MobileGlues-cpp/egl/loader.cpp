@@ -64,7 +64,7 @@ void init_target_egl() {
     }
 
     if (egl_eglInitialize(eglDisplay, NULL, NULL) == EGL_TRUE) {
-        mg_display_initialised(eglDisplay);
+        mg_display_initialised(eglDisplay, true);
     } else {
         LOG_E("eglInitialize failed (0x%x)", egl_eglGetError());
         goto cleanup;
@@ -132,7 +132,7 @@ cleanup:
     // config the driver would not give us, a pbuffer it would not make -- tore
     // down EGL_DEFAULT_DISPLAY underneath the host process, taking contexts and
     // surfaces it had created before this library was ever loaded.
-    if (mg_display_release(eglDisplay)) {
+    if (mg_display_release(eglDisplay, true)) {
         egl_eglTerminate(eglDisplay);
     }
     // Cleared so destroy_temp_egl_ctx, which runs at the end of proc_init whether
@@ -160,7 +160,7 @@ void destroy_temp_egl_ctx() {
     // marked every resource on EGL_DEFAULT_DISPLAY for destruction, including
     // contexts and surfaces the host process created before this library was
     // loaded.
-    if (mg_display_release(eglDisplay)) {
+    if (mg_display_release(eglDisplay, true)) {
         LOAD_EGL(eglTerminate);
         if (egl_eglTerminate) egl_eglTerminate(eglDisplay);
     }

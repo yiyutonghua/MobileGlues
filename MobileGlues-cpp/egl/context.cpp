@@ -35,8 +35,14 @@ std::unordered_map<EGLContext, std::shared_ptr<MGContext>>& contexts() {
     static std::unordered_map<EGLContext, std::shared_ptr<MGContext>> m;
     return m;
 }
-std::unordered_map<EGLDisplay, int>& display_refs() {
-    static std::unordered_map<EGLDisplay, int> m;
+// Who is keeping a display initialised, rather than how many times someone said
+// so. See mg_display_initialised in the header for why a count is the wrong shape.
+struct DisplayHolders {
+    bool probe; // the bootstrap in egl/loader.cpp
+    bool app;   // everything reaching the eglInitialize wrapper
+};
+std::unordered_map<EGLDisplay, DisplayHolders>& display_refs() {
+    static std::unordered_map<EGLDisplay, DisplayHolders> m;
     return m;
 }
 
@@ -161,19 +167,23 @@ MGContext* mg_context_create(EGLDisplay dpy, EGLContext handle, EGLContext share
     return ctx.get();
 }
 
-void mg_display_initialised(EGLDisplay dpy) {
+void mg_display_initialised(EGLDisplay dpy, bool probe) {
     if (dpy == EGL_NO_DISPLAY) return;
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
-    ++g_display_refs[dpy];
-    LOG_D("EGLDisplay %p initialise count -> %d", dpy, g_display_refs[dpy])
+    DisplayHolders& holders = g_display_refs[dpy];
+    // Set, not incremented: initialising twice is the same statement made twice,
+    // and it buys the caller no second eglTerminate.
+    (probe ? holders.probe : holders.app) = true;
+    LOG_D("EGLDisplay %p held by probe:%d app:%d", dpy, holders.probe, holders.app)
 }
 
-bool mg_display_release(EGLDisplay dpy) {
+bool mg_display_release(EGLDisplay dpy, bool probe) {
     if (dpy == EGL_NO_DISPLAY) return false;
     std::lock_guard<std::mutex> lock(g_ctx_mutex);
     const auto it = g_display_refs.find(dpy);
     if (it == g_display_refs.end()) return false;
-    if (--it->second > 0) return false;
+    (probe ? it->second.probe : it->second.app) = false;
+    if (it->second.probe || it->second.app) return false;
     g_display_refs.erase(it);
     return true;
 }

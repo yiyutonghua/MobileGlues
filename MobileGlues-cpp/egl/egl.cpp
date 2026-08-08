@@ -408,7 +408,7 @@ extern "C"
         LOG_D("eglInitialize, dpy: %p, major: %p, minor: %p", dpy, major, minor);
         LOAD_EGL(eglInitialize)
         const EGLBoolean result = egl_eglInitialize(dpy, major, minor);
-        if (result == EGL_TRUE) mg_display_initialised(dpy);
+        if (result == EGL_TRUE) mg_display_initialised(dpy, false);
         return result;
     }
 
@@ -418,7 +418,7 @@ extern "C"
         // Only the last holder actually terminates. EGL itself does not
         // reference-count this, so an early eglTerminate from one part of the
         // process would tear down resources belonging to another.
-        if (!mg_display_release(dpy)) {
+        if (!mg_display_release(dpy, false)) {
             LOG_D("eglTerminate: display %p still has other holders, not terminating", dpy);
             forgetDisplayContexts(dpy);
             mg_context_forget_display(dpy);
