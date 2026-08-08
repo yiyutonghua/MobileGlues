@@ -1433,6 +1433,19 @@ void glGetTextureSubImage(GLuint texture, GLint level, GLint xoffset, GLint yoff
         mg_set_gl_error(GL_INVALID_ENUM);
         return;
     }
+    // The skips offset the start of ONE image. This walks the slices itself and
+    // each per-slice glReadPixels would apply them again, putting every slice at
+    // the wrong offset and reaching past the size checked below. Nothing here can
+    // undo that, so drop -- the same call ReadCubeMapFaces makes for the same
+    // reason.
+    GLint skipPixels = 0, skipRows = 0;
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+    if (skipPixels || skipRows) {
+        DSA_WARN_ONCE("[DSA] glGetTextureSubImage: non-zero GL_PACK_SKIP_*, dropped");
+        mg_set_gl_error(GL_INVALID_OPERATION);
+        return;
+    }
     // Slices are laid out consecutively, and only the last one's final row can
     // reach past its stride.
     const size_t required = pack.image_bytes * static_cast<size_t>(depth - 1) + pack.span;

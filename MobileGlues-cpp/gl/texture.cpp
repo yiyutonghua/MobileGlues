@@ -28,6 +28,7 @@
 #include "framebuffer.h"
 #include "log.h"
 #include "transfer.h"
+#include "pixel.h"
 #include "mg.h"
 #include <GL/gl.h>
 #include <ankerl/unordered_dense.h>
@@ -1756,30 +1757,15 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
 // worse than the silence. What the layer cannot do is honour them; nothing here
 // byte-swaps, so an application feeding big-endian component data through
 // GL_UNPACK_SWAP_BYTES still gets it unswapped, and says so once in the log.
-static bool mg_pixel_store_is_desktop_only(GLenum pname) {
-    switch (pname) {
-    case GL_UNPACK_SWAP_BYTES:
-    case GL_UNPACK_LSB_FIRST:
-    case GL_PACK_SWAP_BYTES:
-    case GL_PACK_LSB_FIRST:
-    case GL_PACK_IMAGE_HEIGHT:
-    case GL_PACK_SKIP_IMAGES:
-        return true;
-    default:
-        return false;
-    }
-}
-
 void glPixelStorei(GLenum pname, GLint param) {
     LOG_D("glPixelStorei, pname = %s, param = %d", glEnumToString(pname), param)
-    if (mg_pixel_store_is_desktop_only(pname)) {
-        if (param != 0) {
-            LOG_W_FORCE("glPixelStorei: %s is not a GLES pixel-store parameter and is not emulated; "
-                        "the transfer will ignore it",
-                        glEnumToString(pname))
-        }
-        return;
-    }
+    // Kept here rather than forwarded. GLES has neither the two SWAP_BYTES, the
+    // two LSB_FIRST, nor PACK_IMAGE_HEIGHT / PACK_SKIP_IMAGES, so the driver
+    // answered GL_INVALID_ENUM and dropped the value -- and glGetIntegerv, going
+    // the same way, left the application's variable untouched, so the parameter
+    // could be neither set nor read. The shadow in gl_state_s closes both halves;
+    // what is actually honoured is documented there.
+    if (mg_pixel_store_set(pname, param)) return;
     GLES.glPixelStorei(pname, param);
     CHECK_GL_ERROR
 }

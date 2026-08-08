@@ -75,6 +75,27 @@ extern "C"
         GLuint current_program;
         GLuint current_tex_unit;
         GLuint current_draw_fbo;
+
+        // The pixel-store parameters desktop GL has and GLES does not.
+        //
+        // GLES answers GL_INVALID_ENUM for all six, in both directions, so before
+        // this they could neither be set nor read: glGetIntegerv left the
+        // application's variable exactly as it found it, which for the usual
+        // stack local is whatever happened to be there. State that cannot be read
+        // back is not state. Kept here so it is per context, like the rest of the
+        // pixel-store block the driver owns.
+        //
+        // Only the two SWAP_BYTES are acted on (gl/transfer.cpp, on the paths that
+        // already repack on the CPU). LSB_FIRST orders bits within a byte for
+        // GL_BITMAP and colour-index transfers, neither of which exists in a core
+        // profile; PACK_IMAGE_HEIGHT and PACK_SKIP_IMAGES describe a
+        // three-dimensional readback this layer does not implement.
+        GLint unpack_swap_bytes;
+        GLint unpack_lsb_first;
+        GLint pack_swap_bytes;
+        GLint pack_lsb_first;
+        GLint pack_image_height;
+        GLint pack_skip_images;
     };
     typedef struct gl_state_s* gl_state_t;
     // Where gl_state points when no tracked context is current. Every member is a

@@ -315,12 +315,34 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
     }
     scratch().resize(need);
     uint8_t* out = scratch().data();
+
+    // GL_UNPACK_SWAP_BYTES reverses the bytes of every component -- of the whole
+    // unit, for a packed type, which is what gl_sizeof answers for one. It has no
+    // meaning for a single byte, and mg_unpack_swaps_bytes says so. Honoured here
+    // because here is the only place this layer looks at the bytes at all; a pair
+    // that needs no repack still goes to the driver untouched and unswapped, and
+    // the shadow in gl_state_s records that.
+    const size_t comp = static_cast<size_t>(gl_sizeof(type_in));
+    const bool swap_in = mg_unpack_swaps_bytes(type_in) && comp > 1 && ss % comp == 0 && ss <= 16;
+    if (mg_unpack_swaps_bytes(type_in) && !swap_in) {
+        TR_WARN_ONCE("pixel transfer: GL_UNPACK_SWAP_BYTES cannot be applied to %s + %s, uploading unswapped",
+                     glEnumToString(format_in), glEnumToString(type_in));
+    }
+    uint8_t swapped[16];
+
     for (GLsizei z = 0; z < depth; ++z) {
         for (GLsizei row = 0; row < height; ++row) {
             const uint8_t* s = src + start + static_cast<size_t>(z) * img_stride + static_cast<size_t>(row) * row_stride;
             for (GLsizei col = 0; col < width; ++col) {
                 uint8_t px[4] = {0, 0, 0, 255};
-                rule->dec(s, px);
+                if (swap_in) {
+                    for (size_t b = 0; b < ss; b += comp) {
+                        for (size_t k = 0; k < comp; ++k) swapped[b + k] = s[b + comp - 1 - k];
+                    }
+                    rule->dec(swapped, px);
+                } else {
+                    rule->dec(s, px);
+                }
                 // GL 4.6 sec. 8.4.4.4: a source without an alpha channel reads as
                 // 1.0, and a destination without one discards the source's.
                 for (int c = 0; c < out_channels; ++c) out[c] = px[c];
@@ -565,11 +587,25 @@ bool mg_transfer_readback(GLint x, GLint y, GLsizei width, GLsizei height, GLenu
 
     const uint8_t* src = scratch().data();
     if (via_subdata) mg_tr_drain();
+    // GL_PACK_SWAP_BYTES, the mirror of the unpack side: reverse the bytes of each
+    // component of the pixel this encoder just wrote. Of the pairs handled here
+    // only the packed ones are wider than a byte, so most reads skip it entirely.
+    const size_t dcomp = static_cast<size_t>(gl_sizeof(type));
+    const bool swap_out = mg_pack_swaps_bytes(type) && dcomp > 1 && ds % dcomp == 0;
     for (GLsizei row = 0; row < height; ++row) {
         const size_t row_off = start + static_cast<size_t>(row) * dst_stride;
         uint8_t* d = via_subdata ? row_buf.data() : dst + row_off;
         for (GLsizei col = 0; col < width; ++col) {
             rule->enc(src, d);
+            if (swap_out) {
+                for (size_t b = 0; b < ds; b += dcomp) {
+                    for (size_t k = 0; k < dcomp / 2; ++k) {
+                        const uint8_t t = d[b + k];
+                        d[b + k] = d[b + dcomp - 1 - k];
+                        d[b + dcomp - 1 - k] = t;
+                    }
+                }
+            }
             src += 4;
             d += ds;
         }

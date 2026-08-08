@@ -17,6 +17,7 @@
 #include "FSR1/FSR1.h"
 #include "log.h"
 #include "mg.h"
+#include "pixel.h"
 #include "random_string_gen.h"
 #include "../config/settings.h"
 
@@ -164,6 +165,12 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         }
         if (mg_enable_query_int(pname, &ival)) {
             (*params) = ival;
+            break;
+        }
+        // The pixel-store parameters GLES has no answer for. Forwarding them
+        // returned GL_INVALID_ENUM and left *params exactly as the caller left it.
+        if (mg_pixel_store_query_int(pname, params)) {
+            LOG_D("  -> %d", *params)
             break;
         }
         GLES.glGetIntegerv(pname, params);

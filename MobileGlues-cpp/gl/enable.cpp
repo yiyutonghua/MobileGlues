@@ -6,6 +6,7 @@
 // End of Source File Header
 
 #include "enable.h"
+#include "pixel.h"
 #include "../gles/loader.h"
 #include "log.h"
 #include "mg.h"
@@ -431,6 +432,10 @@ extern "C"
             *data = ival != 0 ? GL_TRUE : GL_FALSE;
             return;
         }
+        if (mg_pixel_store_query_int(pname, &ival)) {
+            *data = ival != 0 ? GL_TRUE : GL_FALSE;
+            return;
+        }
         GLES.glGetBooleanv(pname, data);
     }
 
@@ -446,6 +451,10 @@ extern "C"
             *data = static_cast<GLfloat>(ival);
             return;
         }
+        if (mg_pixel_store_query_int(pname, &ival)) {
+            *data = static_cast<GLfloat>(ival);
+            return;
+        }
         GLES.glGetFloatv(pname, data);
     }
 
@@ -458,6 +467,10 @@ extern "C"
             return;
         }
         if (mg_enable_query_int(pname, &ival)) {
+            *data = ival;
+            return;
+        }
+        if (mg_pixel_store_query_int(pname, &ival)) {
             *data = ival;
             return;
         }

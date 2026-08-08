@@ -149,3 +149,69 @@ GLsizei pixel_sizeof(GLenum format, GLenum type) {
 
     return width * gl_sizeof(type);
 }
+
+// ---------------------------------------------------------------------------
+// The pixel-store parameters GLES does not have
+// ---------------------------------------------------------------------------
+
+namespace {
+// Where each of the six lives in the per-context record, or nullptr for a pname
+// that is not one of them.
+GLint* desktop_pixel_store_slot(GLenum pname) {
+    if (gl_state == nullptr) return nullptr;
+    switch (pname) {
+    case GL_UNPACK_SWAP_BYTES:
+        return &gl_state->unpack_swap_bytes;
+    case GL_UNPACK_LSB_FIRST:
+        return &gl_state->unpack_lsb_first;
+    case GL_PACK_SWAP_BYTES:
+        return &gl_state->pack_swap_bytes;
+    case GL_PACK_LSB_FIRST:
+        return &gl_state->pack_lsb_first;
+    case GL_PACK_IMAGE_HEIGHT:
+        return &gl_state->pack_image_height;
+    case GL_PACK_SKIP_IMAGES:
+        return &gl_state->pack_skip_images;
+    default:
+        return nullptr;
+    }
+}
+} // namespace
+
+bool mg_pixel_store_set(GLenum pname, GLint param) {
+    GLint* slot = desktop_pixel_store_slot(pname);
+    if (slot == nullptr) return false;
+    // The booleans store as 0 or 1, the two counts as themselves. GL rejects a
+    // negative count; the driver would have said so, and nothing here can.
+    switch (pname) {
+    case GL_PACK_IMAGE_HEIGHT:
+    case GL_PACK_SKIP_IMAGES:
+        if (param < 0) {
+            mg_set_gl_error(GL_INVALID_VALUE);
+            return true;
+        }
+        *slot = param;
+        break;
+    default:
+        *slot = param != 0 ? 1 : 0;
+        break;
+    }
+    return true;
+}
+
+bool mg_pixel_store_query_int(GLenum pname, GLint* out) {
+    const GLint* slot = desktop_pixel_store_slot(pname);
+    if (slot == nullptr) return false;
+    if (out != nullptr) *out = *slot;
+    return true;
+}
+
+bool mg_unpack_swaps_bytes(GLenum type) {
+    if (gl_state == nullptr || !gl_state->unpack_swap_bytes) return false;
+    return gl_sizeof(type) > 1;
+}
+
+bool mg_pack_swaps_bytes(GLenum type) {
+    if (gl_state == nullptr || !gl_state->pack_swap_bytes) return false;
+    return gl_sizeof(type) > 1;
+}

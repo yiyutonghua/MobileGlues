@@ -34,5 +34,19 @@ GLsizei pixel_sizeof(GLenum format, GLenum type);
 
 GLboolean is_type_packed(GLenum type);
 
+// The six pixel-store parameters GLES does not have. Both directions go through
+// here so a value that was set can be read back; see gl_state_s in gl/mg.h.
+//
+// Each returns true when pname is one of the six, which is the caller's signal to
+// stop -- forwarding any of them to the driver only earns a GL_INVALID_ENUM.
+bool mg_pixel_store_set(GLenum pname, GLint param);
+bool mg_pixel_store_query_int(GLenum pname, GLint* out);
+
+// Whether a transfer has to reverse the byte order of each component. Answered
+// per direction, and only ever true for a component wider than one byte -- the
+// parameter has no meaning for a byte, and GL says so.
+bool mg_unpack_swaps_bytes(GLenum type);
+bool mg_pack_swaps_bytes(GLenum type);
+
 
 #endif // MOBILEGLUES_PIXEL_H
