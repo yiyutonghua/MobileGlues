@@ -181,26 +181,23 @@ GLenum glGetError() {
     const GLenum frontend = g_frontend_error;
     g_frontend_error = GL_NO_ERROR;
 
-    // This layer's own error first. It describes the call the application made,
-    // while a backend error is at best a symptom of how that call was translated.
-    const GLenum reported = frontend != GL_NO_ERROR ? frontend : backend;
-    if (reported == GL_NO_ERROR) return GL_NO_ERROR;
-
-    // Answering GL_NO_ERROR unconditionally -- which this did, in every
-    // configuration, with a comment reading "Now try to cheat" -- is what made
-    // the whole family of quiet failures in this layer undiagnosable: a readback
-    // that never wrote, a texture level that was never defined, a pixel-store
-    // parameter the driver refused. The application saw success and consumed
-    // whatever was already in its buffer.
+    // GL_NO_ERROR, always, in every configuration and whatever ignoreError says.
     //
-    // Hiding errors is a real setting some users need, so it stays -- but gated,
-    // the way glCheckFramebufferStatus has always gated its own lie
-    // (gl/framebuffer.cpp). With ignoreError off, errors are the truth.
-    if (global_settings.ignore_error == IgnoreErrorLevel::None) {
-        LOG_D("glGetError -> %s", glEnumToString(reported))
-        return reported;
+    // Deliberate, and not the same thing as not knowing. This layer emulates
+    // enough of desktop GL on top of GLES that a faithfully forwarded error is
+    // more often an artefact of how a call had to be translated than something the
+    // application got wrong -- and hosts treat errors as fatal or fall back to
+    // slower paths on them. One example from inside this very library:
+    // gl/buffer.cpp's glMapBuffer asks glGetError and returns nullptr if it is
+    // not clear, a branch that only stays dead because of this.
+    //
+    // What the errors are still for is the log. Every path that raises one names
+    // itself right next to the call, so a quiet failure is diagnosable from a
+    // logcat even though the application will never be told.
+    const GLenum swallowed = frontend != GL_NO_ERROR ? frontend : backend;
+    if (swallowed != GL_NO_ERROR) {
+        LOG_W("glGetError -> %s, reported to the application as GL_NO_ERROR", glEnumToString(swallowed))
     }
-    LOG_W("glGetError -> %s, hidden by ignoreError", glEnumToString(reported))
     return GL_NO_ERROR;
 }
 
