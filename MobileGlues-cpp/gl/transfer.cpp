@@ -41,6 +41,29 @@ std::vector<uint8_t>& scratch() {
     return buf;
 }
 
+// The scratch only ever grew: resize() to a smaller size keeps the capacity, so
+// one 16384x8192 atlas pinned half a gigabyte on that thread for the life of the
+// process even though every later upload was a few kilobytes. Handed back once
+// the transfer is done and the peak was large.
+constexpr size_t k_scratch_keep = 16u << 20; // 16 MiB
+void scratch_release_if_large() {
+    if (scratch().capacity() <= k_scratch_keep) return;
+    std::vector<uint8_t>().swap(scratch());
+}
+
+// width * height * depth * channels without wrapping.
+bool mg_checked_area(GLsizei width, GLsizei height, GLsizei depth, int channels, size_t* out) {
+    if (width <= 0 || height <= 0 || depth <= 0 || channels <= 0) return false;
+    constexpr size_t kMax = static_cast<size_t>(1) << 40; // 1 TiB: far past any real texture
+    size_t n = static_cast<size_t>(width);
+    for (size_t f : {static_cast<size_t>(height), static_cast<size_t>(depth), static_cast<size_t>(channels)}) {
+        if (f != 0 && n > kMax / f) return false;
+        n *= f;
+    }
+    *out = n;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Decoders. Each reads one source pixel and writes RGBA (or RGB) bytes in
 // memory order. The packed GL_UNSIGNED_INT_* types are defined as components
@@ -276,8 +299,21 @@ mg_upload_fix_t::mg_upload_fix_t(GLsizei width, GLsizei height, GLsizei depth, G
         src = static_cast<const uint8_t*>(pixels_in);
     }
 
-    scratch().resize(static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth) *
-                     static_cast<size_t>(out_channels));
+    // Checked, not just multiplied. Desktop GL answers GL_INVALID_VALUE for
+    // dimensions past GL_MAX_TEXTURE_SIZE without touching client memory; this
+    // conversion runs before the driver ever sees the call, so an out-of-range
+    // request used to reach resize() first -- either throwing bad_alloc or
+    // length_error out of a constructor nobody catches, or, once the product
+    // wrapped, succeeding small and letting the decode loop run off the end.
+    size_t need = 0;
+    if (!mg_checked_area(width, height, depth, out_channels, &need)) {
+        TR_WARN_ONCE("pixel transfer: %dx%dx%d x %d channels does not fit in memory, dropped", width, height, depth,
+                     out_channels);
+        mg_set_gl_error(GL_INVALID_VALUE);
+        dropped_ = true;
+        return;
+    }
+    scratch().resize(need);
     uint8_t* out = scratch().data();
     for (GLsizei z = 0; z < depth; ++z) {
         for (GLsizei row = 0; row < height; ++row) {
@@ -323,6 +359,9 @@ mg_upload_fix_t::~mg_upload_fix_t() {
     if (pbo_unbound_) {
         GLES.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, static_cast<GLuint>(prev_pbo_));
     }
+    // The driver has consumed pixels by now, so the scratch that fed it can go
+    // back if this transfer was the one that made it enormous.
+    if (converted_) scratch_release_if_large();
 }
 
 // ---------------------------------------------------------------------------

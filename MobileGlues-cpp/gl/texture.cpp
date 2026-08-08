@@ -662,6 +662,15 @@ void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format, boo
     case GL_RGBA8_SNORM:
         if (format) *format = GL_RGBA;
         if (type) *type = GL_BYTE;
+    // The unsized spelling of the same thing, and the one classic desktop code
+    // uses: glTexImage2D(GL_RGB, ..., GL_RGBA, GL_UNSIGNED_BYTE, rgba) is legal
+    // GL, which drops the alpha during conversion. Only GL_RGB8 was recognised,
+    // so unsized GL_RGB kept format GL_RGBA, ES rejected the pair as an illegal
+    // triple, and the level was never defined -- the texture then sampled black.
+    case GL_RGB:
+        if (format) *format = GL_RGB;
+        if (type && *type != GL_UNSIGNED_BYTE && *type != GL_UNSIGNED_SHORT_5_6_5) *type = GL_UNSIGNED_BYTE;
+        break;
     default:
         // fallback handling for GL_RGB8, GL_RGBA16_SNORM etc.
         if (*internal_format == GL_RGB8) {
@@ -703,6 +712,12 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
                   GLenum type, const GLvoid* pixels) {
     LOG()
     LOG_D("glTexImage1D not implemented!")
+    // Not implemented: no GLES storage call is ever issued, only the shadow
+    // TextureObject fields below get written. That used to be a LOG_D and
+    // nothing else -- invisible in a release build, and with glGetError
+    // answering GL_NO_ERROR the application had every reason to believe its
+    // level existed. Sampling it reads an incomplete texture instead.
+    mg_set_gl_error(GL_INVALID_OPERATION);
     LOG_D("glTexImage1D, target: %d, level: %d, internalFormat: %d, width: %d, "
           "border: %d, format: %d, type: %d",
           target, level, internalFormat, width, border, format, type)
@@ -844,6 +859,12 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width) {
     LOG()
     LOG_D("glTexStorage1D not implemented!")
+    // Not implemented: no GLES storage call is ever issued, only the shadow
+    // TextureObject fields below get written. That used to be a LOG_D and
+    // nothing else -- invisible in a release build, and with glGetError
+    // answering GL_NO_ERROR the application had every reason to believe its
+    // level existed. Sampling it reads an incomplete texture instead.
+    mg_set_gl_error(GL_INVALID_OPERATION);
     LOG_D("glTexStorage1D, target: %d, levels: %d, internalFormat: %d, width: %d", target, levels, internalFormat,
           width)
     internal_convert(&internalFormat, nullptr, nullptr, /*has_data=*/false);
@@ -915,6 +936,12 @@ void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x
                       GLint border) {
     LOG()
     LOG_D("glCopyTexImage1D not implemented!")
+    // Not implemented: no GLES storage call is ever issued, only the shadow
+    // TextureObject fields below get written. That used to be a LOG_D and
+    // nothing else -- invisible in a release build, and with glGetError
+    // answering GL_NO_ERROR the application had every reason to believe its
+    // level existed. Sampling it reads an incomplete texture instead.
+    mg_set_gl_error(GL_INVALID_OPERATION);
     LOG_D("glCopyTexImage1D, target: %d, level: %d, internalFormat: %d, x: %d, "
           "y: %d, width: %d, border: %d",
           target, level, internalFormat, x, y, width, border)
@@ -1720,8 +1747,39 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
     CHECK_GL_ERROR_NO_INIT
 }
 
+// Pixel-store parameters desktop GL has and GLES does not.
+//
+// Forwarding them earned a GL_INVALID_ENUM from the driver and nothing else --
+// which, while glGetError was lying, the application could not even see. Swallow
+// them instead: the error was never the application's fault, and raising one for
+// a parameter it is entitled to set under the API this layer advertises would be
+// worse than the silence. What the layer cannot do is honour them; nothing here
+// byte-swaps, so an application feeding big-endian component data through
+// GL_UNPACK_SWAP_BYTES still gets it unswapped, and says so once in the log.
+static bool mg_pixel_store_is_desktop_only(GLenum pname) {
+    switch (pname) {
+    case GL_UNPACK_SWAP_BYTES:
+    case GL_UNPACK_LSB_FIRST:
+    case GL_PACK_SWAP_BYTES:
+    case GL_PACK_LSB_FIRST:
+    case GL_PACK_IMAGE_HEIGHT:
+    case GL_PACK_SKIP_IMAGES:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void glPixelStorei(GLenum pname, GLint param) {
     LOG_D("glPixelStorei, pname = %s, param = %d", glEnumToString(pname), param)
+    if (mg_pixel_store_is_desktop_only(pname)) {
+        if (param != 0) {
+            LOG_W_FORCE("glPixelStorei: %s is not a GLES pixel-store parameter and is not emulated; "
+                        "the transfer will ignore it",
+                        glEnumToString(pname))
+        }
+        return;
+    }
     GLES.glPixelStorei(pname, param);
     CHECK_GL_ERROR
 }
@@ -1733,6 +1791,6 @@ void glPixelStoref(GLenum pname, GLfloat param) {
     // transferred with whatever the previous state happened to be. Every
     // pixel-store parameter GLES has is integer-valued, and GL 4.6 sec. 8.4.1
     // rounds this form to the nearest integer for those.
-    GLES.glPixelStorei(pname, (GLint)lroundf(param));
+    glPixelStorei(pname, (GLint)lroundf(param));
     CHECK_GL_ERROR
 }

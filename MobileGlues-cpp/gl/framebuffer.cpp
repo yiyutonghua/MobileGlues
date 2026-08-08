@@ -72,14 +72,26 @@ bool mg_draw_framebuffer_all_none() {
     return id < framebuffers.size() && framebuffers[id].color_attachments_all_none;
 }
 void ensure_max_attachments() {
+    // The fallback is used but no longer cached. A query made with no context
+    // current answers nothing, and writing 8 into the static then meant 8 for the
+    // life of the process -- on four-attachment hardware the draw-buffer shuffle
+    // would attach past the end of what the driver has. Leaving the static at
+    // zero makes the next call, once a context exists, ask again.
     if (MAX_COLOR_ATTACHMENTS == 0) {
-        GLES.glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &MAX_COLOR_ATTACHMENTS);
-        MAX_COLOR_ATTACHMENTS = MAX_COLOR_ATTACHMENTS > 0 ? MAX_COLOR_ATTACHMENTS : 8;
+        GLint v = 0;
+        GLES.glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &v);
+        if (v > 0) MAX_COLOR_ATTACHMENTS = v;
     }
     if (MAX_DRAW_BUFFERS == 0) {
-        GLES.glGetIntegerv(GL_MAX_DRAW_BUFFERS, &MAX_DRAW_BUFFERS);
-        MAX_DRAW_BUFFERS = MAX_DRAW_BUFFERS > 0 ? MAX_DRAW_BUFFERS : 8;
+        GLint v = 0;
+        GLES.glGetIntegerv(GL_MAX_DRAW_BUFFERS, &v);
+        if (v > 0) MAX_DRAW_BUFFERS = v;
     }
+}
+
+// What the tables are sized against while the query has not answered yet.
+static GLint max_color_attachments_or_default() {
+    return MAX_COLOR_ATTACHMENTS > 0 ? MAX_COLOR_ATTACHMENTS : 8;
 }
 framebuffer_t& get_framebuffer(GLuint id) {
     if (id >= framebuffers.size()) {
@@ -93,11 +105,13 @@ void InitFramebufferMap(size_t expectedSize) {
 void init_framebuffer(framebuffer_t& fbo) {
     ensure_max_attachments();
     if (!fbo.initialized) {
-        fbo.color_attachments.assign(MAX_COLOR_ATTACHMENTS, attachment_t{});
+        fbo.color_attachments.assign(max_color_attachments_or_default(), attachment_t{});
         fbo.initialized = true;
     }
 }
 void glBindFramebuffer(GLenum target, GLuint framebuffer) {
+    LOG()
+    LOG_D("glBindFramebuffer, target = %s, framebuffer = %u", glEnumToString(target), framebuffer)
     ensure_max_attachments();
 
     // Resolve the redirect before touching the table: this used to take the
@@ -140,8 +154,6 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
         GLES.glBindFramebuffer(target, draw_fb);
     }
 }
-// Record what is now attached at `attachment`. Only colour attachments are kept:
-// nothing reads depth or stencil back out of here.
 mg_fsr_read_scope_t::mg_fsr_read_scope_t() {
     // g_renderFBO is nonzero only while FSR1 is on, so this is also the FSR1 test.
     if (FSR1_Context::g_renderFBO == 0 || current_read_fbo != 0) return;
@@ -154,10 +166,12 @@ mg_fsr_read_scope_t::~mg_fsr_read_scope_t() {
     if (active) GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 }
 
+// Record what is now attached at `attachment`. Only colour attachments are kept:
+// nothing reads depth or stencil back out of here.
 void update_attachment(GLenum target, GLenum attachment, const attachment_t& what) {
     GLuint current_fbo = (target == GL_READ_FRAMEBUFFER) ? current_read_fbo : current_draw_fbo;
     if (current_fbo == 0) return;
-    if (attachment < GL_COLOR_ATTACHMENT0 || attachment >= GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) {
+    if (attachment < GL_COLOR_ATTACHMENT0 || attachment >= GL_COLOR_ATTACHMENT0 + (GLenum)max_color_attachments_or_default()) {
         return;
     }
     framebuffer_t& fbo = get_framebuffer(current_fbo);
@@ -266,8 +280,10 @@ void glDrawBuffer(GLenum buffer) {
             LOG_D("glDrawBuffer 0x%x on the FSR1 target -> GL_COLOR_ATTACHMENT0", buffer)
             buffer = GL_COLOR_ATTACHMENT0;
         }
-        GLint maxAttachments;
-        GLES.glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &maxAttachments);
+        // The cached value, not a driver round trip on every call -- and the same
+        // one the rest of this file uses, so the two cannot disagree about how
+        // many attachments there are.
+        const GLint maxAttachments = max_color_attachments_or_default();
 
         if (buffer == GL_NONE) {
             get_framebuffer(current_draw_fbo).color_attachments_all_none = true;
@@ -334,7 +350,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     // a path that does not reach update_attachment, and "re-attaching" its zeroed
     // record would detach whatever is really there.
     for (int i = 0; i < n; i++) {
-        if (bufs[i] < GL_COLOR_ATTACHMENT0 || bufs[i] >= GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) continue;
+        if (bufs[i] < GL_COLOR_ATTACHMENT0 || bufs[i] >= GL_COLOR_ATTACHMENT0 + (GLenum)max_color_attachments_or_default()) continue;
         if (fbo.color_attachments[bufs[i] - GL_COLOR_ATTACHMENT0].kind != attach_kind_t::None) continue;
         // Passed through unchanged instead. GLES rejects a non-identity draw
         // buffer list, so the application gets GL_INVALID_OPERATION -- which is
@@ -349,9 +365,9 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     }
 
     std::vector<GLenum> new_bufs(n);
-    fbo.draw_buffer_map.assign(MAX_COLOR_ATTACHMENTS, 0);
+    fbo.draw_buffer_map.assign(max_color_attachments_or_default(), 0);
     for (int i = 0; i < n; i++) {
-        if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] < GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) {
+        if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] < GL_COLOR_ATTACHMENT0 + (GLenum)max_color_attachments_or_default()) {
             GLenum logical_attachment = bufs[i];
             GLenum physical_attachment = GL_COLOR_ATTACHMENT0 + i;
             new_bufs[i] = physical_attachment;
@@ -367,7 +383,7 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
     GLES.glDrawBuffers(n, new_bufs.data());
 }
 void glReadBuffer(GLenum src) {
-    if (current_read_fbo != 0 && src >= GL_COLOR_ATTACHMENT0 && src < GL_COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENTS) {
+    if (current_read_fbo != 0 && src >= GL_COLOR_ATTACHMENT0 && src < GL_COLOR_ATTACHMENT0 + max_color_attachments_or_default()) {
         framebuffer_t& fbo = get_framebuffer(current_read_fbo);
         init_framebuffer(fbo);
         const int index = src - GL_COLOR_ATTACHMENT0;
