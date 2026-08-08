@@ -55,10 +55,27 @@ void glGetIntegerv(GLenum pname, GLint* params) {
     case GL_MAJOR_VERSION:
         // What THIS context was granted, which after the version gate was relaxed
         // is what the application asked for rather than the configured maximum.
-        (*params) = g_current_ctx ? g_current_ctx->granted_major : GLVersion.Major;
+        //
+        // Only for a desktop context. An ES context has no granted desktop version
+        // to report -- eglCreateContext records the values the bootstrap probe read
+        // off the driver, which describe the driver, not this context -- so it goes
+        // to the driver, which knows the real answer.
+        if (g_current_ctx && g_current_ctx->client_type == EGL_OPENGL_API) {
+            (*params) = g_current_ctx->granted_major;
+        } else if (g_current_ctx) {
+            GLES.glGetIntegerv(GL_MAJOR_VERSION, params);
+        } else {
+            (*params) = GLVersion.Major;
+        }
         break;
     case GL_MINOR_VERSION:
-        (*params) = g_current_ctx ? g_current_ctx->granted_minor : GLVersion.Minor;
+        if (g_current_ctx && g_current_ctx->client_type == EGL_OPENGL_API) {
+            (*params) = g_current_ctx->granted_minor;
+        } else if (g_current_ctx) {
+            GLES.glGetIntegerv(GL_MINOR_VERSION, params);
+        } else {
+            (*params) = GLVersion.Minor;
+        }
         break;
     case GL_MAX_TEXTURE_IMAGE_UNITS: {
         int es_params = 16;

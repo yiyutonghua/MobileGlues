@@ -30,12 +30,6 @@ namespace {
     constexpr EGLint kVirtualDesktopProfileMask = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
     constexpr size_t kMaxEglAttributePairs = 128;
 
-    struct DesktopContextInfo {
-        EGLDisplay display;
-        EGLint major;
-        EGLint minor;
-    };
-
     thread_local EGLenum frontend_api = EGL_OPENGL_ES_API;
     thread_local EGLint frontend_error = EGL_SUCCESS;
 
@@ -51,10 +45,6 @@ namespace {
     // Strictly outside the context table's own lock, which mg_context_* takes
     // inside; nothing takes them the other way round.
     std::mutex context_lifecycle_mutex;
-
-    std::mutex desktop_contexts_mutex;
-    std::unordered_map<EGLContext, DesktopContextInfo> desktop_contexts;
-    thread_local std::string frontend_extensions;
 
     void setFrontendError(EGLint error) {
         frontend_error = error;
@@ -303,36 +293,6 @@ namespace {
         return true;
     }
 
-    void rememberDesktopContext(EGLContext context, EGLDisplay display, EGLint major, EGLint minor) {
-        if (context == EGL_NO_CONTEXT) return;
-        std::lock_guard<std::mutex> lock(desktop_contexts_mutex);
-        desktop_contexts[context] = {display, major, minor};
-    }
-
-    bool findDesktopContext(EGLContext context, DesktopContextInfo* info) {
-        std::lock_guard<std::mutex> lock(desktop_contexts_mutex);
-        const auto it = desktop_contexts.find(context);
-        if (it == desktop_contexts.end()) return false;
-        *info = it->second;
-        return true;
-    }
-
-    void forgetDesktopContext(EGLContext context) {
-        std::lock_guard<std::mutex> lock(desktop_contexts_mutex);
-        desktop_contexts.erase(context);
-    }
-
-    void forgetDisplayContexts(EGLDisplay display) {
-        std::lock_guard<std::mutex> lock(desktop_contexts_mutex);
-        for (auto it = desktop_contexts.begin(); it != desktop_contexts.end();) {
-            if (it->second.display == display) {
-                it = desktop_contexts.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
-
     using SwapWithDamageFn = EGLBoolean (*)(EGLDisplay, EGLSurface, EGLint*, EGLint);
 
     // dlsym first, then the backend's own eglGetProcAddress.
@@ -465,14 +425,18 @@ extern "C"
         // process would tear down resources belonging to another.
         if (!mg_display_release(dpy, false)) {
             LOG_D("eglTerminate: display %p still has other holders, not terminating", dpy);
-            forgetDisplayContexts(dpy);
             mg_context_forget_display(dpy);
             return EGL_TRUE;
         }
         const EGLBoolean result = egl_eglTerminate(dpy);
         if (result == EGL_TRUE) {
-            forgetDisplayContexts(dpy);
             mg_context_forget_display(dpy);
+            // EGL's contract is that the extension string lives as long as the
+            // display, so the cache entry outlives every caller's pointer -- but
+            // only until the display is genuinely gone. Keeping it past that leaked
+            // one string per display for the life of the process.
+            std::lock_guard<std::mutex> lock(ext_strings_mutex);
+            ext_strings.erase(dpy);
         }
         return result;
     }
@@ -663,7 +627,6 @@ extern "C"
         std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
         EGLContext context = egl_eglCreateContext(dpy, config, share_context, backend_attributes.data());
         if (context != EGL_NO_CONTEXT) {
-            rememberDesktopContext(context, dpy, frontend_major, frontend_minor);
             mg_context_create(dpy, context, share_context, EGL_OPENGL_API, frontend_major, frontend_minor,
                               kVirtualDesktopProfileMask, frontend_flags);
         }
@@ -676,7 +639,6 @@ extern "C"
         std::lock_guard<std::mutex> lifecycle(context_lifecycle_mutex);
         const EGLBoolean result = egl_eglDestroyContext(dpy, ctx);
         if (result == EGL_TRUE) {
-            forgetDesktopContext(ctx);
             // Marked rather than dropped: GL permits destroying a context that is
             // still current, and the record has to keep answering until the last
             // thread makes something else current.
@@ -719,14 +681,17 @@ extern "C"
         const EGLBoolean result = egl_eglQueryContext(dpy, ctx, attribute, value);
         if (result != EGL_TRUE || !value) return result;
 
-        DesktopContextInfo context_info{};
-        if (value && findDesktopContext(ctx, &context_info)) {
+        // From the one record per context, rather than a second table saying the
+        // same thing about the same handles. MGContext already carries the client
+        // type and the version the application was granted.
+        const MGContext* record = mg_context_find(ctx);
+        if (record != nullptr && record->client_type == EGL_OPENGL_API) {
             if (attribute == EGL_CONTEXT_CLIENT_TYPE) {
                 *value = EGL_OPENGL_API;
                 return EGL_TRUE;
             }
             if (attribute == EGL_CONTEXT_CLIENT_VERSION) {
-                *value = context_info.major;
+                *value = record->granted_major;
                 return EGL_TRUE;
             }
         }
