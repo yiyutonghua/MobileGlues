@@ -93,6 +93,20 @@ extern "C"
     // address zero.
     extern thread_local gl_state_t gl_state;
 
+    // Raise one of this layer's own GL errors, latched until the next glGetError.
+    //
+    // A call this layer rejects by itself -- a readback target it cannot emulate,
+    // a texture name it has no record of, a buffer size that would overflow --
+    // never reaches the driver, so there is no backend error for glGetError to
+    // find. Those paths used to just return, handing the application back an
+    // untouched buffer and GL_NO_ERROR with no way to tell the two apart. This is
+    // where they say what went wrong instead.
+    //
+    // One slot per thread and the first error wins, which is what GL 4.6 sec 2.3.1
+    // asks for. Per thread rather than per context because several of these paths
+    // run with no context current at all.
+    void mg_set_gl_error(GLenum error);
+
     GLenum pname_convert(GLenum pname);
     GLenum map_tex_target(GLenum target);
     void start_log();

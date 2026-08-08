@@ -16,11 +16,27 @@
 #include <random>
 #include "FSR1/FSR1.h"
 #include "log.h"
+#include "mg.h"
 #include "random_string_gen.h"
+#include "../config/settings.h"
 
 #define DEBUG 0
 
 Version GLVersion;
+
+namespace {
+// See mg_set_gl_error in gl/mg.h for why this exists and why it is per thread.
+thread_local GLenum g_frontend_error = GL_NO_ERROR;
+} // namespace
+
+void mg_set_gl_error(GLenum error) {
+    if (error == GL_NO_ERROR) return;
+    // First error wins. A later, vaguer failure must not paper over the one that
+    // actually explains what the application did wrong.
+    if (g_frontend_error != GL_NO_ERROR) return;
+    g_frontend_error = error;
+    LOG_D("MobileGlues raised %s", glEnumToString(error))
+}
 
 void glGetIntegerv(GLenum pname, GLint* params) {
     LOG()
@@ -146,13 +162,32 @@ void glGetIntegerv(GLenum pname, GLint* params) {
 
 GLenum glGetError() {
     LOG()
-    GLenum err = GLES.glGetError();
-    // just clear gles error, no reporting
-    if (err != GL_NO_ERROR) {
-        // no logging without DEBUG
-        LOG_W("glGetError\n -> %d", err)
-        LOG_W("Now try to cheat.")
+    // Both are consumed whether or not they get reported: leaving either latched
+    // would hand it to a later, unrelated glGetError.
+    const GLenum backend = GLES.glGetError();
+    const GLenum frontend = g_frontend_error;
+    g_frontend_error = GL_NO_ERROR;
+
+    // This layer's own error first. It describes the call the application made,
+    // while a backend error is at best a symptom of how that call was translated.
+    const GLenum reported = frontend != GL_NO_ERROR ? frontend : backend;
+    if (reported == GL_NO_ERROR) return GL_NO_ERROR;
+
+    // Answering GL_NO_ERROR unconditionally -- which this did, in every
+    // configuration, with a comment reading "Now try to cheat" -- is what made
+    // the whole family of quiet failures in this layer undiagnosable: a readback
+    // that never wrote, a texture level that was never defined, a pixel-store
+    // parameter the driver refused. The application saw success and consumed
+    // whatever was already in its buffer.
+    //
+    // Hiding errors is a real setting some users need, so it stays -- but gated,
+    // the way glCheckFramebufferStatus has always gated its own lie
+    // (gl/framebuffer.cpp). With ignoreError off, errors are the truth.
+    if (global_settings.ignore_error == IgnoreErrorLevel::None) {
+        LOG_D("glGetError -> %s", glEnumToString(reported))
+        return reported;
     }
+    LOG_W("glGetError -> %s, hidden by ignoreError", glEnumToString(reported))
     return GL_NO_ERROR;
 }
 
