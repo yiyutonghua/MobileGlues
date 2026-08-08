@@ -333,6 +333,51 @@ namespace {
         }
     }
 
+    using SwapWithDamageFn = EGLBoolean (*)(EGLDisplay, EGLSurface, EGLint*, EGLint);
+
+    // dlsym first, then the backend's own eglGetProcAddress.
+    //
+    // An extension entry point is frequently missing from the backend's dynamic
+    // symbol table and reachable only through eglGetProcAddress, so a failed dlsym
+    // is not evidence the backend cannot do damage swaps.
+    SwapWithDamageFn resolveSwapWithDamage(const char* name) {
+        if (egl != nullptr) {
+            if (auto* fn = (SwapWithDamageFn)proc_address(egl, name)) return fn;
+        }
+        LOAD_EGL(eglGetProcAddress)
+        if (egl_eglGetProcAddress == nullptr) return nullptr;
+        return (SwapWithDamageFn)egl_eglGetProcAddress(name);
+    }
+
+    // ApplyFSR upscales into the surface, the swap presents it, the resolution
+    // check reacts to a surface that has changed size. The three belong together,
+    // and every path that presents a frame has to go through here.
+    EGLBoolean presentSurface(EGLDisplay dpy, EGLSurface surface) {
+        LOAD_EGL(eglSwapBuffers)
+        if (global_settings.fsr1_setting == FSR1_Quality_Preset::Disabled) {
+            return egl_eglSwapBuffers(dpy, surface);
+        }
+        ApplyFSR();
+        const EGLBoolean result = egl_eglSwapBuffers(dpy, surface);
+        CheckResolutionChange(dpy, surface);
+        return result;
+    }
+
+    // The damage rectangles are dropped whenever FSR1 is on, and that is the point
+    // of the whole function: they describe what the caller drew at render
+    // resolution, while the upscale rewrites the entire surface, so they no longer
+    // bound what changed. A full swap is always a valid answer to a damage swap --
+    // the rectangles are a hint that lets the driver copy less, never a limit on
+    // what may be presented. Same fallback when the backend has no damage entry
+    // point at all.
+    EGLBoolean presentSurfaceWithDamage(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects,
+                                        SwapWithDamageFn backend) {
+        if (backend != nullptr && global_settings.fsr1_setting == FSR1_Quality_Preset::Disabled) {
+            return backend(dpy, surface, rects, n_rects);
+        }
+        return presentSurface(dpy, surface);
+    }
+
     bool hasExtension(const std::string& extensions, const char* extension) {
         const std::string needle(extension);
         size_t offset = 0;
@@ -702,16 +747,26 @@ extern "C"
 
     EGL_API EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         LOG_D("eglSwapBuffers, dpy: %p, surface: %p", dpy, surface);
-        LOAD_EGL(eglSwapBuffers)
-        EGLBoolean result;
-        if (global_settings.fsr1_setting != FSR1_Quality_Preset::Disabled) {
-            ApplyFSR();
-            result = egl_eglSwapBuffers(dpy, surface);
-            CheckResolutionChange(dpy, surface);
-        } else {
-            result = egl_eglSwapBuffers(dpy, surface);
-        }
-        return result;
+        return presentSurface(dpy, surface);
+    }
+
+    // Wrapped, not passed through.
+    //
+    // The extension string reaches the application unchanged, so a backend that
+    // advertises EGL_KHR_swap_buffers_with_damage has applications presenting
+    // frames through it -- and every one of those frames used to skip ApplyFSR and
+    // CheckResolutionChange entirely, which is the whole of FSR1 on a host that
+    // prefers the damage variant.
+    EGL_API EGLBoolean eglSwapBuffersWithDamageKHR(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects) {
+        LOG_D("eglSwapBuffersWithDamageKHR, dpy: %p, surface: %p, n_rects: %d", dpy, surface, n_rects);
+        static const SwapWithDamageFn backend = resolveSwapWithDamage("eglSwapBuffersWithDamageKHR");
+        return presentSurfaceWithDamage(dpy, surface, rects, n_rects, backend);
+    }
+
+    EGL_API EGLBoolean eglSwapBuffersWithDamageEXT(EGLDisplay dpy, EGLSurface surface, EGLint* rects, EGLint n_rects) {
+        LOG_D("eglSwapBuffersWithDamageEXT, dpy: %p, surface: %p, n_rects: %d", dpy, surface, n_rects);
+        static const SwapWithDamageFn backend = resolveSwapWithDamage("eglSwapBuffersWithDamageEXT");
+        return presentSurfaceWithDamage(dpy, surface, rects, n_rects, backend);
     }
 
     EGL_API EGLBoolean eglCopyBuffers(EGLDisplay dpy, EGLSurface surface, EGLNativePixmapType target) {
@@ -875,6 +930,8 @@ extern "C"
             {"eglReleaseThread", (void*)eglReleaseThread},
             {"eglSurfaceAttrib", (void*)eglSurfaceAttrib},
             {"eglSwapBuffers", (void*)eglSwapBuffers},
+            {"eglSwapBuffersWithDamageEXT", (void*)eglSwapBuffersWithDamageEXT},
+            {"eglSwapBuffersWithDamageKHR", (void*)eglSwapBuffersWithDamageKHR},
             {"eglSwapInterval", (void*)eglSwapInterval},
             {"eglTerminate", (void*)eglTerminate},
             {"eglWaitClient", (void*)eglWaitClient},
