@@ -12,8 +12,21 @@
 #include "../gles/gles.h"
 #include "log.h"
 
-// Round up to a pixel-store alignment boundary.
-#define widthalign(width, align) ((((uintptr_t)(width)) + ((uintptr_t)(align) - 1)) & (~((uintptr_t)(align) - 1)))
+// Round a row length up to a pixel-store alignment boundary.
+//
+// The mask form below is only meaningful for a power-of-two alignment: with
+// align 0 it produces 0 for every width (align-1 wraps to all-ones and the mask
+// becomes zero), and with a non-power-of-two it produces something that is not a
+// multiple of align at all. GL only ever hands us 1, 2, 4 or 8, but this is fed
+// from GL_UNPACK_ALIGNMENT / GL_PACK_ALIGNMENT read back from the driver, and a
+// stride of 0 walks rows forever, so the degenerate cases return the width
+// untouched rather than a number nothing can use.
+static inline uintptr_t mg_width_align(uintptr_t width, uintptr_t align) {
+    if (align <= 1) return width;
+    if ((align & (align - 1)) != 0) return width; // not a power of two: no sane rounding
+    return (width + (align - 1)) & ~(align - 1);
+}
+#define widthalign(width, align) mg_width_align((uintptr_t)(width), (uintptr_t)(align))
 
 GLsizei gl_sizeof(GLenum type);
 
