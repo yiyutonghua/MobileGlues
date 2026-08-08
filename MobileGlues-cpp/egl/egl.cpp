@@ -20,7 +20,7 @@
 #include <mutex>
 #include <string>
 #include <memory>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 #include <utility>
 #include <vector>
 
@@ -462,11 +462,11 @@ namespace {
     // pointer eglQueryString returned -- that is the documented contract, the
     // string belongs to EGL and lives as long as the display.
     // Held by pointer, not by value. The pointer handed back below has to stay
-    // good for the life of the display, and robin_map moves its elements when a
+    // good for the life of the display, and the map moves its elements when a
     // second display is added -- which would leave every c_str() already given
     // out pointing into a moved-from string. The unique_ptr is what stays put.
     std::mutex ext_strings_mutex;
-    tsl::robin_map<EGLDisplay, std::unique_ptr<std::string>> ext_strings;
+    ska::flat_hash_map<EGLDisplay, std::unique_ptr<std::string>> ext_strings;
 
     const char* frontendExtensionString(EGLDisplay dpy, const char* backend_extensions) {
         std::lock_guard<std::mutex> lock(ext_strings_mutex);

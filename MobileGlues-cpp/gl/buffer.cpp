@@ -9,7 +9,7 @@
 #include "../egl/context.h"
 #include <mutex>
 #include <memory>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 #include <array>
 #include "texture.h"
 
@@ -31,7 +31,7 @@ static GLint maxArrayId = 0;
 // The tables stay private to this file and are selected by a thread_local
 // pointer that eglMakeCurrent swaps, which is why the ~90 access sites only
 // changed shape rather than routing through an accessor on every use.
-// The state is held by pointer: robin_map moves its elements when it grows, and
+// The state is held by pointer: the map moves its elements when it grows, and
 // these thread_local pointers have to outlive other contexts being added.
 // ---------------------------------------------------------------------------
 
@@ -55,11 +55,11 @@ struct buffer_ctx_state_t { // private to one context
 std::mutex g_buf_mutex;
 // The tables hold their state by pointer. A thread_local pointer into an entry is
 // the whole point of the design -- the ~90 access sites read through g_bg/g_bc
-// rather than looking anything up -- and robin_map moves its elements when it
+// rather than looking anything up -- and the map moves its elements when it
 // grows, so the entry itself must not be what moves. The unique_ptr stays put
 // while the map rehashes around it.
-tsl::robin_map<unsigned long long, std::unique_ptr<buffer_group_state_t>> g_buf_groups;
-tsl::robin_map<unsigned long long, std::unique_ptr<buffer_ctx_state_t>> g_buf_ctxs;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<buffer_group_state_t>> g_buf_groups;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<buffer_ctx_state_t>> g_buf_ctxs;
 
 buffer_group_state_t g_buf_group_default;
 buffer_ctx_state_t g_buf_ctx_default;

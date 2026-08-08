@@ -17,7 +17,7 @@
 #include "../egl/context.h"
 #include <mutex>
 #include <memory>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 
 #define DEBUG 0
 
@@ -54,9 +54,9 @@ struct depth_clear_objects_t {
 std::mutex g_depthClearMutex;
 // Held by pointer, because the reference this table hands out outlives the lock.
 // A caller keeps the depth_clear_objects_t& across GL calls while another thread
-// can be adding its own context, and robin_map moves its elements when it grows.
+// can be adding its own context, and the map moves its elements when it grows.
 // The unique_ptr is what stays put; the map is free to rehash around it.
-tsl::robin_map<unsigned long long, std::unique_ptr<depth_clear_objects_t>> g_depthClearCtxs;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<depth_clear_objects_t>> g_depthClearCtxs;
 depth_clear_objects_t g_depthClearDefault;
 
 depth_clear_objects_t& depth_clear_objects() {

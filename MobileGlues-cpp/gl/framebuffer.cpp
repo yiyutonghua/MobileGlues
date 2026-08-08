@@ -9,7 +9,7 @@
 #include "../egl/context.h"
 #include <mutex>
 #include <memory>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 #include "log.h"
 #include "../config/settings.h"
 #include "FSR1/FSR1.h"
@@ -35,16 +35,16 @@ namespace {
 // to id + 10 on every miss, so one framebuffer name out of the usual small
 // sequential run cost a record for every name below it -- and framebuffer_t
 // carries two vectors now, which made that worse. The records are held by
-// pointer: robin_map moves its elements when it grows, and several functions
+// pointer: the map moves its elements when it grows, and several functions
 // here hold a framebuffer_t& across calls that can insert another name.
 struct fbo_ctx_state_t {
-    tsl::robin_map<GLuint, std::unique_ptr<framebuffer_t>> table;
+    ska::flat_hash_map<GLuint, std::unique_ptr<framebuffer_t>> table;
     GLuint draw = 0;
     GLuint read = 0;
 };
 std::mutex g_fbo_mutex;
 // By pointer for the same reason: g_fc is a thread_local into an entry.
-tsl::robin_map<unsigned long long, std::unique_ptr<fbo_ctx_state_t>> g_fbo_ctxs;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<fbo_ctx_state_t>> g_fbo_ctxs;
 // Per thread, not one shared instance. This is where a context this layer never
 // saw created lands, and every such thread used to read and write the same
 // tables and the same two bindings with no lock between them. A context is

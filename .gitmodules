@@ -10,3 +10,6 @@
 [submodule "MobileGlues-cpp/3rdparty/SPIRV-Cross"]
 	path = MobileGlues-cpp/3rdparty/SPIRV-Cross
 	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "MobileGlues-cpp/include/ska"]
+	path = MobileGlues-cpp/include/ska
+	url = https://github.com/MobileGL-Dev/flat_hash_map.git

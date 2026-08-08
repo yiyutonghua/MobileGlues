@@ -7,7 +7,7 @@
 
 #include "DSAWrapper.h"
 #include <cassert>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 #include "../texture.h"
 #include "../pixel.h"
 #include "../mg.h"
@@ -127,7 +127,7 @@ GLenum GetBindingQuery(GLenum target, bool forceTexture = false) {
 }
 
 // buffer
-static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> bufferBindingStack;
+static thread_local ska::flat_hash_map<GLenum, std::vector<GLuint>> bufferBindingStack;
 void temporarilyBindBuffer(GLuint bufferID, GLenum target = GL_ARRAY_BUFFER) {
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
@@ -149,10 +149,7 @@ void restoreTemporaryBufferBinding(GLenum target = GL_ARRAY_BUFFER) {
         return;
     }
 
-    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
-    // hands out the pair as const through operator->, so that the key cannot be
-    // rewritten under the map. The mapped value is reached through value().
-    std::vector<GLuint>& stack = it.value();
+    std::vector<GLuint>& stack = it->second;
     GLuint toRestore = stack.back();
     stack.pop_back();
 
@@ -446,7 +443,7 @@ void glGetNamedBufferSubData(GLuint buffer, GLintptr offset, GLsizeiptr size, vo
 }
 
 // framebuffer
-static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> framebufferBindingStack;
+static thread_local ska::flat_hash_map<GLenum, std::vector<GLuint>> framebufferBindingStack;
 void temporarilyBindFramebuffer(GLuint framebufferID, GLenum target = GL_DRAW_FRAMEBUFFER) {
     GLenum bindingQuery = GetBindingQuery(target);
     GLint prev = 0;
@@ -466,10 +463,7 @@ void restoreTemporaryFramebufferBinding(GLenum target = GL_DRAW_FRAMEBUFFER) {
         // end() iterator on the miss path. Same hole the texture stack had.
         return;
     }
-    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
-    // hands out the pair as const through operator->, so that the key cannot be
-    // rewritten under the map. The mapped value is reached through value().
-    std::vector<GLuint>& stack = it.value();
+    std::vector<GLuint>& stack = it->second;
     GLuint toRestore = stack.back();
     stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
@@ -778,7 +772,7 @@ void glGetNamedFramebufferAttachmentParameteriv(GLuint framebuffer, GLenum attac
 }
 
 // renderbuffer
-static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> renderbufferBindingStack;
+static thread_local ska::flat_hash_map<GLenum, std::vector<GLuint>> renderbufferBindingStack;
 void temporarilyBindRenderbuffer(GLuint renderbufferID) {
     GLenum bindingQuery = GetBindingQuery(GL_RENDERBUFFER);
     GLint prev = 0;
@@ -798,10 +792,7 @@ void restoreTemporaryRenderbufferBinding() {
         // end() iterator on the miss path. Same hole the texture stack had.
         return;
     }
-    // it.value() rather than it->second: tsl::robin_map stores pair<Key, T> and
-    // hands out the pair as const through operator->, so that the key cannot be
-    // rewritten under the map. The mapped value is reached through value().
-    std::vector<GLuint>& stack = it.value();
+    std::vector<GLuint>& stack = it->second;
     GLuint toRestore = stack.back();
     stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {
@@ -895,7 +886,7 @@ void glGetNamedRenderbufferParameteriv(GLuint renderbuffer, GLenum pname, GLint*
 }
 
 // texture
-static thread_local tsl::robin_map<GLenum, std::vector<GLuint>> textureBindingStack;
+static thread_local ska::flat_hash_map<GLenum, std::vector<GLuint>> textureBindingStack;
 
 // 0 when this layer has no record for the name.
 //
@@ -948,8 +939,7 @@ void restoreTemporaryTextureBinding(GLuint textureID, GLenum possibleTarget = 0)
         return;
     }
 
-    // it.value() rather than ->second: see restoreTemporaryBufferBinding.
-    std::vector<GLuint>& stack = stackIt.value();
+    std::vector<GLuint>& stack = stackIt->second;
     GLuint toRestore = stack.back();
     stack.pop_back();
     if (toRestore == static_cast<GLuint>(-1)) {

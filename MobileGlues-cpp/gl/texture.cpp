@@ -9,7 +9,7 @@
 #include "../egl/context.h"
 #include <mutex>
 #include <memory>
-#include <tsl/robin_map.h>
+#include <ska/flat_hash_map.hpp>
 #include "GLES3/gl32.h"
 
 #include <cmath>
@@ -226,11 +226,11 @@ struct texture_ctx_state_t {
 std::mutex g_tex_mutex;
 // The tables hold their state by pointer. A thread_local pointer into an entry is
 // the whole point of the design -- the ~90 access sites read through g_bg/g_bc
-// rather than looking anything up -- and robin_map moves its elements when it
+// rather than looking anything up -- and the map moves its elements when it
 // grows, so the entry itself must not be what moves. The unique_ptr stays put
 // while the map rehashes around it.
-tsl::robin_map<unsigned long long, std::unique_ptr<texture_group_state_t>> g_tex_groups;
-tsl::robin_map<unsigned long long, std::unique_ptr<texture_ctx_state_t>> g_tex_ctxs;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<texture_group_state_t>> g_tex_groups;
+ska::flat_hash_map<unsigned long long, std::unique_ptr<texture_ctx_state_t>> g_tex_ctxs;
 texture_group_state_t g_tex_group_default;
 texture_ctx_state_t g_tex_ctx_default;
 thread_local texture_group_state_t* g_tg = &g_tex_group_default;
@@ -341,9 +341,6 @@ void MarkTextureObjectForDeletion(unsigned texture) {
         std::lock_guard<std::mutex> lock(g_tex_mutex);
         const unsigned long long group = g_tc->group;
         for (const auto& entry : g_tex_ctxs) {
-            // The pair comes out const -- robin_map will not let the key be
-            // rewritten -- but dereferencing the unique_ptr still yields a
-            // mutable state, which is what sweep needs.
             if (entry.second.get() != g_tc && entry.second->group == group) sweep(*entry.second);
         }
     }
