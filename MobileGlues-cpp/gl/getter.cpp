@@ -140,6 +140,19 @@ void glGetIntegerv(GLenum pname, GLint* params) {
     case GL_VERTEX_ARRAY_BINDING:
         (*params) = (int)find_bound_array();
         break;
+    // GL_FRAMEBUFFER_BINDING is the same enum as GL_DRAW_FRAMEBUFFER_BINDING.
+    case GL_DRAW_FRAMEBUFFER_BINDING: {
+        GLES.glGetIntegerv(pname, params);
+        // Hide the FSR1 redirect. While FSR1 is on, the application's framebuffer
+        // 0 really is g_renderFBO (gl/framebuffer.cpp), and handing that name back
+        // let the application save it and bind it again later -- by which point a
+        // resolution change may have deleted and recreated the target, so the
+        // restore named a dead framebuffer and stuck. Answering 0 means a restore
+        // goes back through the redirect and lands wherever it currently points.
+        if (FSR1_Context::g_renderFBO != 0 && *params == (GLint)FSR1_Context::g_renderFBO) *params = 0;
+        LOG_D("  -> %d", *params)
+        break;
+    }
     default: {
         // The enable table owns every enable capability and the handful of limits
         // that describe it, so glGetIntegerv can never disagree with glIsEnabled.

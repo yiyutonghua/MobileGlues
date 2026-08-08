@@ -986,6 +986,11 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
                       GLsizei height, GLint border) {
     LOG()
 
+    // The source is the read framebuffer; under FSR1 that has to be the render
+    // target, not the surface. Matters most on the depth path below, whose depth
+    // buffer lives on the FSR1 target and was never on the surface at all.
+    mg_fsr_read_scope_t fsr_read;
+
     INIT_CHECK_GL_ERROR
 
     // This call *defines* the level, so the internalformat it is given is the
@@ -1069,6 +1074,9 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
 void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width,
                          GLsizei height) {
     LOG()
+    // Same as glCopyTexImage2D: read from where the frame really is.
+    mg_fsr_read_scope_t fsr_read;
+
     GLint internalFormat;
     GLES.glGetTexLevelParameteriv(target, level, GL_TEXTURE_INTERNAL_FORMAT, &internalFormat);
 
@@ -1441,6 +1449,10 @@ void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format
     LOG_D("glReadPixels, x=%d, y=%d, width=%d, height=%d, format=0x%x, "
           "type=0x%x, pixels=0x%x",
           x, y, width, height, format, type, pixels)
+
+    // Source the frame the application actually drew, not the window surface it
+    // has not been rendering into since FSR1 was switched on. No-op otherwise.
+    mg_fsr_read_scope_t fsr_read;
 
     // Encodes BGRA and the packed 8888 layouts from an RGBA readback; the old
     // code renamed one type combination and wrote RGBA bytes into a buffer the

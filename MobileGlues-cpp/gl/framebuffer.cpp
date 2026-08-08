@@ -140,27 +140,109 @@ void glBindFramebuffer(GLenum target, GLuint framebuffer) {
         GLES.glBindFramebuffer(target, draw_fb);
     }
 }
-void update_attachment(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
+// Record what is now attached at `attachment`. Only colour attachments are kept:
+// nothing reads depth or stencil back out of here.
+mg_fsr_read_scope_t::mg_fsr_read_scope_t() {
+    // g_renderFBO is nonzero only while FSR1 is on, so this is also the FSR1 test.
+    if (FSR1_Context::g_renderFBO == 0 || current_read_fbo != 0) return;
+    active = true;
+    GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, FSR1_Context::g_renderFBO);
+}
+mg_fsr_read_scope_t::~mg_fsr_read_scope_t() {
+    // Back to the raw surface, which is what the tracked binding of 0 means for
+    // the read target -- glBindFramebuffer never redirects that one.
+    if (active) GLES.glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+}
+
+void update_attachment(GLenum target, GLenum attachment, const attachment_t& what) {
     GLuint current_fbo = (target == GL_READ_FRAMEBUFFER) ? current_read_fbo : current_draw_fbo;
     if (current_fbo == 0) return;
+    if (attachment < GL_COLOR_ATTACHMENT0 || attachment >= GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) {
+        return;
+    }
     framebuffer_t& fbo = get_framebuffer(current_fbo);
     init_framebuffer(fbo);
-    if (attachment >= GL_COLOR_ATTACHMENT0 && attachment < GL_COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENTS) {
-        int index = attachment - GL_COLOR_ATTACHMENT0;
-        fbo.color_attachments[index] = {textarget, texture, level};
-    } else if (attachment == GL_DEPTH_ATTACHMENT) {
-        fbo.depth_attachment = {textarget, texture, level};
-    } else if (attachment == GL_STENCIL_ATTACHMENT) {
-        fbo.stencil_attachment = {textarget, texture, level};
+    fbo.color_attachments[attachment - GL_COLOR_ATTACHMENT0] = what;
+    // Any shuffle glDrawBuffers had arranged describes where the PREVIOUS
+    // attachments were moved to. Attaching something new makes that map a lie, and
+    // glReadBuffer would send the application to the physical slot the old texture
+    // went to rather than to what is attached now.
+    fbo.draw_buffer_map.clear();
+}
+
+// Put a recorded attachment onto a (possibly different) attachment point, the
+// same way it originally arrived.
+//
+// Deliberately calls GLES directly: the only caller is the glDrawBuffers shuffle,
+// which is in the middle of building draw_buffer_map, and going back through the
+// wrappers above would clear it.
+void reattach(GLenum target, GLenum attachment, const attachment_t& a) {
+    switch (a.kind) {
+    case attach_kind_t::Texture2D:
+        GLES.glFramebufferTexture2D(target, attachment, a.textarget, a.texture, a.level);
+        break;
+    case attach_kind_t::TextureLayer:
+        GLES.glFramebufferTextureLayer(target, attachment, a.texture, a.level, a.layer);
+        break;
+    case attach_kind_t::TextureAll:
+        GLES.glFramebufferTexture(target, attachment, a.texture, a.level);
+        break;
+    case attach_kind_t::Renderbuffer:
+        GLES.glFramebufferRenderbuffer(target, attachment, a.textarget, a.texture);
+        break;
+    case attach_kind_t::None:
+        // Never reached: the caller checks for it, because "re-attach nothing" is
+        // a detach and that was the bug.
+        break;
     }
 }
+
 void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
-    update_attachment(target, attachment, textarget, texture, level);
+    update_attachment(target, attachment, {attach_kind_t::Texture2D, textarget, texture, level, 0});
     GLES.glFramebufferTexture2D(target, attachment, textarget, texture, level);
 }
 void glFramebufferTexture(GLenum target, GLenum attachment, GLuint texture, GLint level) {
-    update_attachment(target, attachment, GL_TEXTURE_2D, texture, level);
+    // Kind rather than a made-up GL_TEXTURE_2D. This entry point attaches the
+    // whole texture, whatever its target is, and recording it as a 2D attachment
+    // meant a replay re-attached an array or 3D texture as if it were flat.
+    update_attachment(target, attachment, {attach_kind_t::TextureAll, 0, texture, level, 0});
     GLES.glFramebufferTexture(target, attachment, texture, level);
+}
+// Wrapped rather than passed straight through, so the record knows about them.
+// While these bypassed the table, the record for an attachment they wrote stayed
+// all-zero and the glDrawBuffers shuffle detached it.
+void glFramebufferTextureLayer(GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer) {
+    update_attachment(target, attachment, {attach_kind_t::TextureLayer, 0, texture, level, layer});
+    GLES.glFramebufferTextureLayer(target, attachment, texture, level, layer);
+}
+void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) {
+    update_attachment(target, attachment, {attach_kind_t::Renderbuffer, renderbuffertarget, renderbuffer, 0, 0});
+    GLES.glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
+}
+
+void glDeleteFramebuffers(GLsizei n, const GLuint* names) {
+    // The record has to die with the name. Drivers hand deleted framebuffer names
+    // straight back out of the next glGenFramebuffers, and this table never
+    // dropped anything -- so a recycled name inherited the previous framebuffer's
+    // attachments (which the draw-buffer shuffle would then re-attach over
+    // whatever the application had just bound), its draw_buffer_map (silently
+    // redirecting glReadBuffer) and its all-none flag (misfiring the ANGLE
+    // depth-clear workaround in gl/gl.cpp). The pixel helpers in gl/texture.cpp
+    // create and delete temporary framebuffers constantly, so this recycling is
+    // the common case rather than a corner one.
+    if (names != nullptr) {
+        for (GLsizei i = 0; i < n; ++i) {
+            const GLuint name = names[i];
+            if (name == 0) continue; // silently ignored, per spec
+            if (name < framebuffers.size()) framebuffers[name] = framebuffer_t{};
+            // "If a framebuffer object that is currently bound is deleted, the
+            // binding reverts to 0" -- through this layer's own entry point, so the
+            // FSR1 redirect and the tracked bindings stay in step.
+            if (current_draw_fbo == name) glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            if (current_read_fbo == name) glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        }
+    }
+    GLES.glDeleteFramebuffers(n, names);
 }
 void glDrawBuffer(GLenum buffer) {
     LOG()
@@ -172,6 +254,18 @@ void glDrawBuffer(GLenum buffer) {
         GLenum buffers[] = {buffer};
         glDrawBuffers(1, buffers);
     } else {
+        // Under the FSR1 redirect the application still believes it is drawing to
+        // the window, so it names the window's buffers -- but the binding really
+        // is an FBO, whose only colour buffer is attachment 0. GL_BACK matched
+        // neither GL_NONE nor the attachment range below, so the call emitted
+        // nothing whatsoever and an earlier glDrawBuffer(GL_NONE) could never be
+        // undone.
+        if (current_draw_fbo == FSR1_Context::g_renderFBO &&
+            (buffer == GL_BACK || buffer == GL_FRONT || buffer == GL_FRONT_AND_BACK || buffer == GL_LEFT ||
+             buffer == GL_BACK_LEFT || buffer == GL_FRONT_LEFT)) {
+            LOG_D("glDrawBuffer 0x%x on the FSR1 target -> GL_COLOR_ATTACHMENT0", buffer)
+            buffer = GL_COLOR_ATTACHMENT0;
+        }
         GLint maxAttachments;
         GLES.glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &maxAttachments);
 
@@ -216,17 +310,53 @@ void glDrawBuffers(GLsizei n, const GLenum* bufs) {
         fbo.color_attachments_all_none = false;
     }
 
+    // Attachment i already in slot i is the only arrangement GLES accepts, so
+    // there is nothing to move -- and this is what applications ask for almost
+    // every time. Moving it anyway is how a renderbuffer or layered attachment,
+    // which this table cannot describe, used to get detached by a call that
+    // should have been a no-op.
+    bool identity = true;
+    for (int i = 0; i < n; i++) {
+        if (bufs[i] != GL_COLOR_ATTACHMENT0 + (GLenum)i) {
+            identity = false;
+            break;
+        }
+    }
+    if (identity) {
+        LOG_D("glDrawBuffers, fb %d identity order, nothing to move", current_draw_fbo)
+        fbo.draw_buffer_map.clear();
+        GLES.glDrawBuffers(n, bufs);
+        return;
+    }
+
+    // A real shuffle. Every attachment it has to move must be one this layer
+    // recorded -- an unrecorded one is either genuinely empty or attached through
+    // a path that does not reach update_attachment, and "re-attaching" its zeroed
+    // record would detach whatever is really there.
+    for (int i = 0; i < n; i++) {
+        if (bufs[i] < GL_COLOR_ATTACHMENT0 || bufs[i] >= GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) continue;
+        if (fbo.color_attachments[bufs[i] - GL_COLOR_ATTACHMENT0].kind != attach_kind_t::None) continue;
+        // Passed through unchanged instead. GLES rejects a non-identity draw
+        // buffer list, so the application gets GL_INVALID_OPERATION -- which is
+        // both true and something it can now see -- rather than a framebuffer that
+        // quietly lost an attachment.
+        LOG_W_FORCE("glDrawBuffers: fb %u wants attachment %u in slot %d but nothing is recorded there; "
+                    "passing the list through rather than detaching it",
+                    current_draw_fbo, bufs[i] - GL_COLOR_ATTACHMENT0, i)
+        fbo.draw_buffer_map.clear();
+        GLES.glDrawBuffers(n, bufs);
+        return;
+    }
+
     std::vector<GLenum> new_bufs(n);
     fbo.draw_buffer_map.assign(MAX_COLOR_ATTACHMENTS, 0);
     for (int i = 0; i < n; i++) {
-        if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] < GL_COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENTS) {
+        if (bufs[i] >= GL_COLOR_ATTACHMENT0 && bufs[i] < GL_COLOR_ATTACHMENT0 + (GLenum)MAX_COLOR_ATTACHMENTS) {
             GLenum logical_attachment = bufs[i];
             GLenum physical_attachment = GL_COLOR_ATTACHMENT0 + i;
             new_bufs[i] = physical_attachment;
             int index = logical_attachment - GL_COLOR_ATTACHMENT0;
-            attachment_t& attach = fbo.color_attachments[index];
-            GLES.glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, physical_attachment, attach.textarget, attach.texture,
-                                        attach.level);
+            reattach(GL_DRAW_FRAMEBUFFER, physical_attachment, fbo.color_attachments[index]);
             // Remember where it went, so glReadBuffer can read it where it is
             // rather than moving it a second time.
             fbo.draw_buffer_map[index] = physical_attachment;
