@@ -154,6 +154,10 @@ constexpr int BENCH_DEFAULT_HEIGHT = 720;
 // GL_CONTEXT_LOST. Measured on a Mali-G77, 512 sections crossed the line and
 // 256 did not -- but that number belongs to that phone, and guessing one that
 // fits every device means picking a scene too small to be worth measuring.
+// (Those measurements predate bench_frame_end: whole batches merged into one
+// pass then, so the list held many frames of geometry. With per-frame passes
+// the pressure per pass is one frame's worth and the ceiling sits far higher --
+// the ladder stays because the limit is still real, just further away.)
 //
 // So the size is discovered instead, once per run and never written down. The
 // run opens at BENCH_START_SECTIONS; a pass that comes back too noisy doubles
@@ -560,6 +564,10 @@ void bench_scene_build(bench_scene_t& s, int sections) {
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
+    // Dither is the one piece of default-on state that may perturb identical
+    // draws into non-identical bytes; the output gate compares frames bit for
+    // bit, so it goes. On RGBA8 it is almost always an identity anyway.
+    glDisable(GL_DITHER);
     glClearColor(0.47f, 0.65f, 1.0f, 1.0f);  // sky
 
     while (GLES.glGetError() != GL_NO_ERROR) {
@@ -766,9 +774,60 @@ struct bench_candidate_t {
     md_backend_t backend = md_backend_t::Unroll;
     int frames = 1;             // frames per timed batch
     double probe_us = 0.0;      // rough frame cost from probing, used to size rounds
+    uint64_t image_hash = 0;    // checksum of one fixed-camera frame, for the output gate
     std::vector<double> samples;
     int discarded = 0;          // rounds thrown away because a fallback fired
 };
+
+// End of a frame: close the render pass and submit it, waiting for nothing.
+//
+// The scene renders into an FBO, so no eglSwapBuffers ever ends a frame here --
+// and a glClear does not close a pass that is already open. Without this, every
+// frame of a batch merged into one render pass: a shape no game produces, with
+// the per-pass work amortised in a way no game frame would amortise it, and the
+// tiler binning a whole batch's geometry into one polygon list. Unbinding the
+// framebuffer is the non-deferrable boundary (the next frame's draws go
+// somewhere else, so the pass must close); the flush submits it. Neither call
+// waits, so the CPU/GPU overlap the batch timing depends on is preserved.
+void bench_frame_end(bench_scene_t& s) {
+    (void)s;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GLES.glFlush();
+}
+
+// One frame with a pinned camera, hashed. Every backend of an entry point must
+// produce the same image -- they are five implementations of one draw call --
+// so a fixed spin makes the frames bit-comparable and FNV-1a over the readback
+// is enough to tell "drew the same thing" from "won by drawing less". The
+// readback is a full pipeline sync, which is why this runs once per candidate
+// at probe time and never inside a timed batch.
+bool bench_frame_hash(bench_scene_t& s, md_entry_t entry, md_backend_t backend, uint64_t* out) {
+    const float saved_spin = s.spin;
+    s.spin = 0.0f;
+    bench_frame_begin(s);
+    const bool issued = bench_issue(s, entry, backend);
+    if (!issued) {
+        bench_frame_end(s);
+        s.spin = saved_spin;
+        return false;
+    }
+    static thread_local std::vector<uint8_t> pixels;
+    pixels.resize(static_cast<size_t>(s.width) * s.height * 4);
+    // GLES-direct on purpose: this is introspection of our own FBO with default
+    // pack state (RGBA rows of a 4-multiple width need no alignment care), not
+    // state the frontend must track.
+    GLES.glReadPixels(0, 0, s.width, s.height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    bench_frame_end(s);
+    s.spin = saved_spin;
+
+    uint64_t h = 1469598103934665603ull;
+    for (uint8_t b : pixels) {
+        h ^= b;
+        h *= 1099511628211ull;
+    }
+    *out = h;
+    return true;
+}
 
 // Draws `frames` frames back to back and returns microseconds per frame, or a
 // negative value if a fallback fired during the batch (the number would then
@@ -819,6 +878,7 @@ double bench_timed_batch(bench_scene_t& s, md_entry_t entry, md_backend_t backen
     for (int i = 0; i < frames; ++i) {
         bench_frame_begin(s);
         bench_issue(s, entry, backend);
+        bench_frame_end(s);
     }
     GLES.glFinish();
     const double t1 = now_us();
@@ -871,6 +931,9 @@ struct bench_entry_state_t {
 
     int attempts = 0;
     bool settled = false;  // spread is under the target; stop re-measuring it
+    // Backends that ran but drew a different image than the reference. Reported
+    // rather than ranked: a wrong picture at any speed is not a candidate.
+    std::vector<const char*> wrong_output;
 };
 
 // The spread of the shakiest candidate is the grade for the whole group: an
@@ -1115,6 +1178,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
                 // half-set-up frame warms up the wrong thing.
                 bench_frame_begin(scene);
                 issued = bench_issue(scene, entry, backend);
+                bench_frame_end(scene);
             }
             GLES.glFinish();
             if (!issued) continue;
@@ -1127,12 +1191,53 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
             const double probe_us = bench_timed_batch(scene, entry, backend, 4);
             if (probe_us < 0.0) continue;
 
+            // The output gate's evidence, taken while the candidate is warm. A
+            // fallback during this frame means the image belongs to some other
+            // backend, so it disqualifies the same way the warmup check does.
+            const uint32_t tick_before_hash = g_md_fallback_tick.load(std::memory_order_relaxed);
+            uint64_t image_hash = 0;
+            if (!bench_frame_hash(scene, entry, backend, &image_hash)) continue;
+            if (bench_note_context_lost(entry, backend)) break;
+            if (g_md_fallback_tick.load(std::memory_order_relaxed) != tick_before_hash) continue;
+
             bench_candidate_t c;
             c.entry = entry;
             c.backend = backend;
             c.probe_us = probe_us;
+            c.image_hash = image_hash;
             c.frames = bench_frames_for(probe_us);
             state.candidates.push_back(std::move(c));
+        }
+
+        // The output gate. Five backends of one entry point are five
+        // implementations of the same draw call: with the camera pinned they
+        // must produce the same image, bit for bit -- same triangles, same
+        // order, same pipeline, dither disabled. A mismatch means the fast
+        // number was bought by drawing something else, which is exactly how a
+        // backend that silently skips work would otherwise win the ranking.
+        // The reference is unroll when it survived probing -- one native draw
+        // per sub-draw, the simplest possible semantics -- and the first
+        // survivor otherwise.
+        if (state.candidates.size() > 1) {
+            uint64_t ref_hash = state.candidates.front().image_hash;
+            for (const bench_candidate_t& c : state.candidates) {
+                if (c.backend == md_backend_t::Unroll) {
+                    ref_hash = c.image_hash;
+                    break;
+                }
+            }
+            for (size_t i = state.candidates.size(); i-- > 0;) {
+                const bench_candidate_t& c = state.candidates[i];
+                if (c.image_hash == ref_hash) continue;
+                LOG_W_FORCE("bench: %s/%s drew a different image than the reference "
+                            "(%016llx vs %016llx); a wrong picture at any speed is not a "
+                            "candidate, so it is excluded from the ranking",
+                            bench_entry_label(entry), md_backend_name(c.backend),
+                            static_cast<unsigned long long>(c.image_hash),
+                            static_cast<unsigned long long>(ref_hash))
+                state.wrong_output.push_back(md_backend_name(c.backend));
+                state.candidates.erase(state.candidates.begin() + static_cast<long>(i));
+            }
         }
 
         if (!state.candidates.empty()) states.push_back(std::move(state));
@@ -1286,6 +1391,12 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
         // different values when one settled before the other grew the scene.
         cJSON_AddNumberToObject(q, "sections", s.best_sections);
         cJSON_AddBoolToObject(q, "noisy", noisy);
+        if (!s.wrong_output.empty()) {
+            cJSON* wrong = cJSON_AddArrayToObject(q, "wrongOutput");
+            for (const char* name : s.wrong_output) {
+                cJSON_AddItemToArray(wrong, cJSON_CreateString(name));
+            }
+        }
 
         max_attempts_used = std::max(max_attempts_used, s.attempts);
         worst_noise = std::max(worst_noise, s.best_rsd);
