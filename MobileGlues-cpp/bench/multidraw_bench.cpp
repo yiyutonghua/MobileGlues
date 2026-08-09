@@ -228,6 +228,12 @@ double now_us() {
     return static_cast<double>(ts.tv_sec) * 1e6 + static_cast<double>(ts.tv_nsec) / 1e3;
 }
 
+// The one deliberate exemption from the go-through-the-frontend rule (see
+// bench_frame_begin): shaders and the program stay on GLES.*. These sources are
+// written as ESSL, and the frontend's shader path is a desktop-GLSL-to-ESSL
+// translator -- feeding it ESSL is outside its contract. The exemption is safe
+// because no backend consults tracked program state: the compute backend saves
+// and restores GL_CURRENT_PROGRAM through the driver.
 GLuint bench_compile(GLenum type, const char* src, std::string* err) {
     GLuint shader = GLES.glCreateShader(type);
     GLES.glShaderSource(shader, 1, &src, nullptr);
@@ -272,37 +278,37 @@ void bench_build_atlas(bench_scene_t& s) {
         }
     }
 
-    GLES.glGenTextures(1, &s.atlas);
-    GLES.glActiveTexture(GL_TEXTURE0);
-    GLES.glBindTexture(GL_TEXTURE_2D, s.atlas);
-    GLES.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, BENCH_ATLAS_SIZE, BENCH_ATLAS_SIZE, 0, GL_RGBA,
+    glGenTextures(1, &s.atlas);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s.atlas);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, BENCH_ATLAS_SIZE, BENCH_ATLAS_SIZE, 0, GL_RGBA,
                       GL_UNSIGNED_BYTE, pixels.data());
-    GLES.glGenerateMipmap(GL_TEXTURE_2D);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 // Render to a texture the size a phone actually renders at. The 1x1 pbuffer the
 // context was created with cannot show a fill-rate cost, and fill rate is
 // exactly what the compute backend competes with.
 bool bench_build_target(bench_scene_t& s) {
-    GLES.glGenTextures(1, &s.color_tex);
-    GLES.glBindTexture(GL_TEXTURE_2D, s.color_tex);
-    GLES.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s.width, s.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    GLES.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glGenTextures(1, &s.color_tex);
+    glBindTexture(GL_TEXTURE_2D, s.color_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, s.width, s.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    GLES.glGenRenderbuffers(1, &s.depth_rb);
-    GLES.glBindRenderbuffer(GL_RENDERBUFFER, s.depth_rb);
-    GLES.glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, s.width, s.height);
+    glGenRenderbuffers(1, &s.depth_rb);
+    glBindRenderbuffer(GL_RENDERBUFFER, s.depth_rb);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, s.width, s.height);
 
-    GLES.glGenFramebuffers(1, &s.fbo);
-    GLES.glBindFramebuffer(GL_FRAMEBUFFER, s.fbo);
-    GLES.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s.color_tex, 0);
-    GLES.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, s.depth_rb);
-    return GLES.glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glGenFramebuffers(1, &s.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, s.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s.color_tex, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, s.depth_rb);
+    return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
 }
 
 // The scene goes straight through the GLES table: the multidraw backends read
@@ -495,29 +501,29 @@ void bench_scene_build(bench_scene_t& s, int sections) {
         }
     }
 
-    GLES.glGenVertexArrays(1, &s.vao);
-    GLES.glBindVertexArray(s.vao);
+    glGenVertexArrays(1, &s.vao);
+    glBindVertexArray(s.vao);
 
-    GLES.glGenBuffers(1, &s.vbo);
-    GLES.glBindBuffer(GL_ARRAY_BUFFER, s.vbo);
-    GLES.glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(verts.size() * sizeof(vertex_t)),
+    glGenBuffers(1, &s.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, s.vbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(verts.size() * sizeof(vertex_t)),
                       verts.data(), GL_STATIC_DRAW);
-    GLES.glEnableVertexAttribArray(0);
-    GLES.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, BENCH_VERTEX_BYTES, nullptr);
-    GLES.glEnableVertexAttribArray(1);
-    GLES.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, BENCH_VERTEX_BYTES,
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, BENCH_VERTEX_BYTES, nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, BENCH_VERTEX_BYTES,
                                reinterpret_cast<const void*>(12));
-    GLES.glEnableVertexAttribArray(2);
-    GLES.glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, BENCH_VERTEX_BYTES,
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, BENCH_VERTEX_BYTES,
                                reinterpret_cast<const void*>(20));
 
-    GLES.glGenBuffers(1, &s.ibo_shared);
-    GLES.glGenBuffers(1, &s.ibo_absolute);
-    GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_absolute);
-    GLES.glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(absolute.size() * sizeof(GLuint)),
+    glGenBuffers(1, &s.ibo_shared);
+    glGenBuffers(1, &s.ibo_absolute);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_absolute);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(absolute.size() * sizeof(GLuint)),
                       absolute.data(), GL_STATIC_DRAW);
-    GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
-    GLES.glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(shared.size() * sizeof(GLuint)),
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(shared.size() * sizeof(GLuint)),
                       shared.data(), GL_STATIC_DRAW);
 
     // Command buffers for the two *Indirect entry points, which take commands
@@ -537,24 +543,24 @@ void bench_scene_build(bench_scene_t& s, int sections) {
         array_cmds[i] = {static_cast<GLuint>(s.counts_arrays[i]), 1,
                          static_cast<GLuint>(s.firsts[i]), 0};
     }
-    GLES.glGenBuffers(1, &s.indirect_elements);
-    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_elements);
-    GLES.glBufferData(GL_DRAW_INDIRECT_BUFFER,
+    glGenBuffers(1, &s.indirect_elements);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_elements);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER,
                       static_cast<GLsizeiptr>(elem_cmds.size() * sizeof(elem_cmd_t)), elem_cmds.data(),
                       GL_STATIC_DRAW);
-    GLES.glGenBuffers(1, &s.indirect_arrays);
-    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_arrays);
-    GLES.glBufferData(GL_DRAW_INDIRECT_BUFFER,
+    glGenBuffers(1, &s.indirect_arrays);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_arrays);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER,
                       static_cast<GLsizeiptr>(array_cmds.size() * sizeof(array_cmd_t)), array_cmds.data(),
                       GL_STATIC_DRAW);
-    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
-    GLES.glViewport(0, 0, s.width, s.height);
-    GLES.glEnable(GL_DEPTH_TEST);
-    GLES.glDepthFunc(GL_LEQUAL);
-    GLES.glEnable(GL_CULL_FACE);
-    GLES.glCullFace(GL_BACK);
-    GLES.glClearColor(0.47f, 0.65f, 1.0f, 1.0f);  // sky
+    glViewport(0, 0, s.width, s.height);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glClearColor(0.47f, 0.65f, 1.0f, 1.0f);  // sky
 
     while (GLES.glGetError() != GL_NO_ERROR) {
     }
@@ -564,20 +570,27 @@ void bench_scene_build(bench_scene_t& s, int sections) {
 // Start of a frame: clear, and move the camera a little. Games do not render
 // the same matrix twice, and a still one invites the driver to notice.
 void bench_frame_begin(bench_scene_t& s) {
-    // Backends are called directly here, bypassing the frontend state machine
-    // that would normally put things back (the compute one binds its own
-    // program and buffers). Re-establishing the frame state is also simply what
-    // a renderer does at the top of a pass.
-    GLES.glBindFramebuffer(GL_FRAMEBUFFER, s.fbo);
-    GLES.glViewport(0, 0, s.width, s.height);
+    // State goes through the FRONTEND here, and everywhere else in this file
+    // that establishes it. The backends are still called directly -- what this
+    // harness bypasses is the dispatcher's backend selection, never the state
+    // machine -- because the backends' contract is "the frontend's tracked
+    // state describes the driver", and they read that tracked state instead of
+    // querying the driver. A scene built through GLES.* is a scene the tracking
+    // has never heard of: the indirect paths see "no element buffer bound" and
+    // fall back, and the unroll paths skip every sub-draw and win the ranking
+    // with a time in which nothing was drawn. That is also just the truthful
+    // measurement: the game reaches these entry points through the frontend, so
+    // a frame that pays the frontend's bind path is the frame being predicted.
+    glBindFramebuffer(GL_FRAMEBUFFER, s.fbo);
+    glViewport(0, 0, s.width, s.height);
     GLES.glUseProgram(s.program);
-    GLES.glBindVertexArray(s.vao);
-    GLES.glActiveTexture(GL_TEXTURE0);
-    GLES.glBindTexture(GL_TEXTURE_2D, s.atlas);
-    GLES.glEnable(GL_DEPTH_TEST);
-    GLES.glDepthFunc(GL_LEQUAL);
-    GLES.glEnable(GL_CULL_FACE);
-    GLES.glCullFace(GL_BACK);
+    glBindVertexArray(s.vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s.atlas);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
 
     s.spin += 0.013f;
     const float aspect = static_cast<float>(s.width) / static_cast<float>(s.height);
@@ -603,21 +616,21 @@ void bench_frame_begin(bench_scene_t& s) {
         0.0f,            0.0f, depth_b,       0.0f,
     };
     if (s.u_mvp >= 0) GLES.glUniformMatrix4fv(s.u_mvp, 1, GL_FALSE, mvp);
-    GLES.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void bench_scene_destroy(bench_scene_t& s) {
-    GLES.glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    if (s.fbo) GLES.glDeleteFramebuffers(1, &s.fbo);
-    if (s.depth_rb) GLES.glDeleteRenderbuffers(1, &s.depth_rb);
-    if (s.color_tex) GLES.glDeleteTextures(1, &s.color_tex);
-    if (s.atlas) GLES.glDeleteTextures(1, &s.atlas);
-    if (s.indirect_arrays) GLES.glDeleteBuffers(1, &s.indirect_arrays);
-    if (s.indirect_elements) GLES.glDeleteBuffers(1, &s.indirect_elements);
-    if (s.ibo_shared) GLES.glDeleteBuffers(1, &s.ibo_shared);
-    if (s.ibo_absolute) GLES.glDeleteBuffers(1, &s.ibo_absolute);
-    if (s.vbo) GLES.glDeleteBuffers(1, &s.vbo);
-    if (s.vao) GLES.glDeleteVertexArrays(1, &s.vao);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (s.fbo) glDeleteFramebuffers(1, &s.fbo);
+    if (s.depth_rb) glDeleteRenderbuffers(1, &s.depth_rb);
+    if (s.color_tex) glDeleteTextures(1, &s.color_tex);
+    if (s.atlas) glDeleteTextures(1, &s.atlas);
+    if (s.indirect_arrays) glDeleteBuffers(1, &s.indirect_arrays);
+    if (s.indirect_elements) glDeleteBuffers(1, &s.indirect_elements);
+    if (s.ibo_shared) glDeleteBuffers(1, &s.ibo_shared);
+    if (s.ibo_absolute) glDeleteBuffers(1, &s.ibo_absolute);
+    if (s.vbo) glDeleteBuffers(1, &s.vbo);
+    if (s.vao) glDeleteVertexArrays(1, &s.vao);
     if (s.program) GLES.glDeleteProgram(s.program);
 }
 
@@ -634,7 +647,7 @@ bool bench_issue(bench_scene_t& s, md_entry_t entry, md_backend_t backend) {
     case md_entry_t::Elements:
         // No baseVertex here, so the sections are addressed with absolute
         // indices instead of the shared sequential buffer.
-        GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_absolute);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_absolute);
         switch (backend) {
         case B::Unroll:
             mg_glMultiDrawElements_drawelements(GL_TRIANGLES, s.counts.data(), GL_UNSIGNED_INT,
@@ -662,7 +675,7 @@ bool bench_issue(bench_scene_t& s, md_entry_t entry, md_backend_t backend) {
     case md_entry_t::ElementsBaseVertex:
         // The path the game actually takes: shared index buffer at offset 0,
         // sections separated by baseVertex.
-        GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
         switch (backend) {
         case B::Unroll:
             mg_glMultiDrawElementsBaseVertex_drawelements(GL_TRIANGLES, s.counts.data(), GL_UNSIGNED_INT,
@@ -708,7 +721,7 @@ bool bench_issue(bench_scene_t& s, md_entry_t entry, md_backend_t backend) {
     case md_entry_t::ArraysIndirect:
         // The application supplies the command buffer, so the two variants are
         // reproduced directly: one driver call vs. a walk of the commands.
-        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_arrays);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_arrays);
         if (backend == B::MultiIndirect) {
             if (!GLES.glMultiDrawArraysIndirectEXT) return false;
             GLES.glMultiDrawArraysIndirectEXT(GL_TRIANGLES, nullptr, n, 0);
@@ -724,8 +737,8 @@ bool bench_issue(bench_scene_t& s, md_entry_t entry, md_backend_t backend) {
         }
         return false;
     case md_entry_t::ElementsIndirect:
-        GLES.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
-        GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_elements);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s.ibo_shared);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, s.indirect_elements);
         if (backend == B::MultiIndirect) {
             if (!GLES.glMultiDrawElementsIndirectEXT) return false;
             GLES.glMultiDrawElementsIndirectEXT(GL_TRIANGLES, GL_UNSIGNED_INT, nullptr, n, 0);
@@ -1288,7 +1301,7 @@ extern "C" __attribute__((visibility("default"))) const char* mg_multidraw_bench
     cJSON_AddBoolToObject(root, "noisy", any_noisy);
     cJSON_AddNumberToObject(root, "elapsedMs", (now_us() - started_us) / 1000.0);
 
-    GLES.glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     bench_scene_destroy(scene);
 
     // A lost context makes the whole run a failure, not a partial result. What
