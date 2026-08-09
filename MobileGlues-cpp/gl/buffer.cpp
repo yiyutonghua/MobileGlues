@@ -286,8 +286,38 @@ GLuint find_bound_buffer_by_target(GLenum target) {
 // real object to bind somewhere else.
 GLuint mg_driver_bound_buffer(GLenum target) {
     const GLuint name = find_bound_buffer_by_target(target);
-    if (name == 0 || !has_buffer(name)) return name;
-    return find_real_buffer(name);
+    const GLuint real = (name == 0 || !has_buffer(name)) ? name : find_real_buffer(name);
+#if GLOBAL_DEBUG
+    // The divergence this answer is vulnerable to -- driver state mutated
+    // behind the frontend's back -- is undetectable at runtime: the tracked
+    // state always has an answer and cannot know it is stale. So debug builds
+    // pay the round-trip this function exists to avoid, and scream on a
+    // mismatch instead of letting a wrong binding surface three calls later as
+    // a skipped draw or a corrupted restore. Release builds trust the tracking.
+    if (GLES.glGetIntegerv) {
+        GLenum pname = 0;
+        switch (target) {
+        case GL_ARRAY_BUFFER:          pname = GL_ARRAY_BUFFER_BINDING; break;
+        case GL_ELEMENT_ARRAY_BUFFER:  pname = GL_ELEMENT_ARRAY_BUFFER_BINDING; break;
+        case GL_DRAW_INDIRECT_BUFFER:  pname = GL_DRAW_INDIRECT_BUFFER_BINDING; break;
+        case GL_PIXEL_UNPACK_BUFFER:   pname = GL_PIXEL_UNPACK_BUFFER_BINDING; break;
+        case GL_PIXEL_PACK_BUFFER:     pname = GL_PIXEL_PACK_BUFFER_BINDING; break;
+        case GL_COPY_READ_BUFFER:      pname = GL_COPY_READ_BUFFER_BINDING; break;
+        case GL_COPY_WRITE_BUFFER:     pname = GL_COPY_WRITE_BUFFER_BINDING; break;
+        default: break;
+        }
+        if (pname != 0) {
+            GLint driver = 0;
+            GLES.glGetIntegerv(pname, &driver);
+            if (static_cast<GLuint>(driver) != real) {
+                LOG_E("mg_driver_bound_buffer(0x%X): tracked %u (real %u) but the driver holds %u -- "
+                      "something mutated this binding without going through the frontend",
+                      target, name, real, static_cast<GLuint>(driver))
+            }
+        }
+    }
+#endif
+    return real;
 }
 
 GLuint find_bound_buffer(GLenum key) {

@@ -440,7 +440,34 @@ bool mg_driver_texture_binding_at_unit(int unit, GLenum target, GLuint* out) {
 }
 
 bool mg_driver_texture_binding(GLenum target, GLuint* out) {
-    return mg_driver_texture_binding_at_unit(DriverActiveTextureUnit, target, out);
+    const bool answered = mg_driver_texture_binding_at_unit(DriverActiveTextureUnit, target, out);
+#if GLOBAL_DEBUG
+    // Same debug cross-check as mg_driver_bound_buffer, for the same reason: a
+    // divergence between this shadow and the driver is undetectable in release
+    // and only ever shows up downstream. Checked for the current unit only --
+    // verifying another unit would mean switching the active unit, which is
+    // exactly the disturbance a verification pass must not cause.
+    if (answered && GLES.glGetIntegerv) {
+        GLenum pname = 0;
+        switch (target) {
+        case GL_TEXTURE_2D:        pname = GL_TEXTURE_BINDING_2D; break;
+        case GL_TEXTURE_3D:        pname = GL_TEXTURE_BINDING_3D; break;
+        case GL_TEXTURE_2D_ARRAY:  pname = GL_TEXTURE_BINDING_2D_ARRAY; break;
+        case GL_TEXTURE_CUBE_MAP:  pname = GL_TEXTURE_BINDING_CUBE_MAP; break;
+        default: break;
+        }
+        if (pname != 0) {
+            GLint driver = 0;
+            GLES.glGetIntegerv(pname, &driver);
+            if (static_cast<GLuint>(driver) != *out) {
+                LOG_E("mg_driver_texture_binding(0x%X): shadow says %u but the driver holds %u on unit %d -- "
+                      "something bound a texture without going through the frontend",
+                      target, *out, static_cast<GLuint>(driver), DriverActiveTextureUnit)
+            }
+        }
+    }
+#endif
+    return answered;
 }
 
 TextureObject* mgGetTexObjectByTarget(GLenum target) {
