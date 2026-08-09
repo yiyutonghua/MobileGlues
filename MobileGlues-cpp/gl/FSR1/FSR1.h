@@ -25,10 +25,7 @@
 #include "../glsl/glsl_for_es.h"
 #include "../log.h"
 #include "../mg.h"
-#include "../pixel.h"
 #include <GL/gl.h>
-#include <ankerl/unordered_dense.h>
-#include <glm/glm.hpp>
 
 namespace FSR1_Context {
     extern GLuint g_renderFBO;
@@ -37,6 +34,12 @@ namespace FSR1_Context {
     extern GLuint g_quadVAO;
     extern GLuint g_quadVBO;
     extern GLuint g_fsrProgram;
+    // Uniform locations of g_fsrProgram, resolved when it is linked and valid for
+    // as long as it lives. -1 for a name the linker dropped, which glUniform*
+    // ignores.
+    extern GLint g_inputTexLoc;
+    extern GLint g_const0Loc;
+    extern GLint g_viewportSizeLoc;
 
     extern GLuint g_targetFBO;
     extern GLuint g_targetTexture;
@@ -55,9 +58,18 @@ namespace FSR1_Context {
 } // namespace FSR1_Context
 
 extern bool fsrInitialized;
+
+// Swap the FSR1 objects when the current context changes.
+//
+// Every name above is a GL object owned by the context that created it, and
+// gl/framebuffer.cpp redirects framebuffer 0 to g_renderFBO -- in a second
+// context that name refers to nothing, or to somebody else's object. The values
+// are saved and reloaded rather than reached through a pointer because they are
+// declared extern and read from several translation units.
+void mg_fsr1_bind_context(unsigned long long ctx_id);
 void ApplyFSR();
 void InitFSRResources();
-void CheckResolutionChange();
+void CheckResolutionChange(EGLDisplay display, EGLSurface surface);
 void OnResize(int width, int height);
 
 extern "C"

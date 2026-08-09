@@ -24,8 +24,6 @@
 
 #define DEBUG 0
 
-const char* atomicCounterEmulatedWatermark = "// Non-opaque atomic uniform converted to SSBO";
-
 static TBuiltInResource InitResources() {
     TBuiltInResource Resources{};
 
@@ -131,6 +129,30 @@ static TBuiltInResource InitResources() {
     Resources.limits.generalSamplerIndexing = true;
     Resources.limits.generalVariableIndexing = true;
     Resources.limits.generalConstantMatrixVectorIndexing = true;
+
+    // Ten fields this table never set, left at 0 by the value-initialisation
+    // above. Nine are mesh-shader limits that glslang only reads when a shader
+    // asks for them, so 0 was harmless. maxDualSourceDrawBuffersEXT was not:
+    // glslang emits
+    //     mediump vec4 gl_SecondaryFragDataEXT[gl_MaxDualSourceDrawBuffersEXT];
+    // into the ESSL built-in block, and an array sized 0 fails to parse -- which
+    // fails the whole built-in table, so every shader routed through glslang was
+    // rejected with "unsupported shader version". It only showed on a context
+    // whose ESSL version is below the shader's, since a shader the driver can
+    // take is passed straight through; ANGLE presents ES 3.1, so turning ANGLE on
+    // meant nothing using #version 320 es could compile at all.
+    //
+    // The values are glslang's own defaults (glslang/ResourceLimits.cpp).
+    Resources.maxDualSourceDrawBuffersEXT = 1;
+    Resources.maxMeshOutputVerticesEXT = 256;
+    Resources.maxMeshOutputPrimitivesEXT = 256;
+    Resources.maxMeshWorkGroupSizeX_EXT = 128;
+    Resources.maxMeshWorkGroupSizeY_EXT = 128;
+    Resources.maxMeshWorkGroupSizeZ_EXT = 128;
+    Resources.maxTaskWorkGroupSizeX_EXT = 128;
+    Resources.maxTaskWorkGroupSizeY_EXT = 128;
+    Resources.maxTaskWorkGroupSizeZ_EXT = 128;
+    Resources.maxMeshViewCountEXT = 4;
 
     return Resources;
 }
@@ -324,10 +346,6 @@ std::string processOutColorLocations(const std::string& glslCode) {
     return std::regex_replace(glslCode, pattern, replacement);
 }
 
-bool checkIfAtomicCounterBufferEmulated(const std::string& glslCode) {
-    return glslCode.find(atomicCounterEmulatedWatermark) != std::string::npos;
-}
-
 std::string GLSLtoGLSLES(const char* glsl_code, GLenum glsl_type, uint essl_version, uint glsl_version,
                          int& return_code) {
     std::string sha256_string(glsl_code);
@@ -336,8 +354,7 @@ std::string GLSLtoGLSLES(const char* glsl_code, GLenum glsl_type, uint essl_vers
     const char* cachedESSL = Cache::get_instance().get(sha256_string.c_str());
     if (cachedESSL) {
         LOG_D("GLSL Hit Cache:\n%s\n-->\n%s", glsl_code, cachedESSL)
-        bool atomicCounterEmulated = checkIfAtomicCounterBufferEmulated(std::string(cachedESSL));
-        return_code = atomicCounterEmulated ? 1 : 0;
+        return_code = 0;
         return (char*)cachedESSL;
     }
 
@@ -471,91 +488,6 @@ static size_t find_insertion_point(const std::string& glsl) {
     }
 
     return insertion_point;
-}
-
-bool process_non_opaque_atomic_to_ssbo(std::string& source) {
-    if (source.find("atomicCounter") == std::string::npos) return false;
-
-    std::set<std::string> atomic_vars;
-    std::map<std::string, std::string> binding_map;
-    std::regex decl_rx(
-        R"(layout\s*\(\s*binding\s*=\s*(\d+)\s*(?:,\s*offset\s*=\s*(\d+)\s*)?\)\s*uniform\s+atomic_uint\s+(\w+)\s*;)",
-        std::regex::icase);
-
-    std::smatch m;
-    auto it = source.cbegin();
-    while (std::regex_search(it, source.cend(), m, decl_rx)) {
-        size_t prefix = std::distance(source.cbegin(), it);
-        size_t match_pos = prefix + m.position(0);
-        size_t match_len = m.length(0);
-
-        std::string binding = m[1].str();
-        std::string var = m[3].str();
-        atomic_vars.insert(var);
-        binding_map[var] = binding;
-
-        std::string repl = "layout(std430, binding=" + binding + ") buffer AtomicCounterSSBO_" + binding +
-                           " {\n"
-                           "    uint " +
-                           var +
-                           ";\n"
-                           "};\n";
-        source.replace(match_pos, match_len, repl);
-
-        it = source.cbegin() + match_pos + repl.size();
-    }
-
-    if (atomic_vars.empty()) return true;
-
-    for (auto& var : atomic_vars) {
-        source = std::regex_replace(
-            source, std::regex(R"(\batomicCounterIncrement\s*\(\s*)" + var + R"(\s*\))", std::regex::icase),
-            "atomicAdd(" + var + ", 1u)");
-        source = std::regex_replace(
-            source, std::regex(R"(\batomicCounterDecrement\s*\(\s*)" + var + R"(\s*\))", std::regex::icase),
-            "atomicAdd(" + var + ", uint(-1))");
-        source = std::regex_replace(
-            source, std::regex(R"(\batomicCounterAdd\s*\(\s*)" + var + R"(\s*,\s*([^)]+)\s*\))", std::regex::icase),
-            "atomicAdd(" + var + ", $1)");
-        source = std::regex_replace(
-            source, std::regex(R"(\batomicCounter\s*\(\s*)" + var + R"(\s*\))", std::regex::icase), var);
-    }
-
-    // insert memoryBarrierBuffer
-    {
-        std::regex rx_barrier(R"(([ \t]*\batomicAdd\b[^;]*;))", std::regex::icase);
-
-        std::set<size_t> processed_positions;
-        std::string result;
-        size_t last_pos = 0;
-
-        for (auto it = std::sregex_iterator(source.begin(), source.end(), rx_barrier); it != std::sregex_iterator();
-             ++it) {
-
-            size_t start_pos = it->position();
-            size_t end_pos = start_pos + it->length();
-
-            if (processed_positions.find(start_pos) != processed_positions.end()) {
-                continue;
-            }
-
-            result += source.substr(last_pos, start_pos - last_pos);
-
-            std::string matched_stmt = it->str();
-            result += matched_stmt;
-
-            result += "\n    memoryBarrierBuffer();";
-
-            processed_positions.insert(start_pos);
-            last_pos = end_pos;
-        }
-
-        result += source.substr(last_pos);
-        source = result;
-    }
-
-    source += "\n" + std::string(atomicCounterEmulatedWatermark);
-    return true;
 }
 
 void process_sampler_buffer(std::string& source) { // a simplized version, should be rewritten in the future
@@ -703,7 +635,7 @@ void inject_mg_macro_definition(std::string& glslCode) {
     glslCode.insert(insertionPos, macro_definitions);
 }
 
-std::string preprocess_glsl(const std::string& glsl, GLenum shaderType, bool* atomicCounterEmulated) {
+std::string preprocess_glsl(const std::string& glsl, GLenum shaderType) {
     std::string ret = glsl;
     // Remove lines beginning with `#line`
     ret = replace_line_starting_with(ret, "#line");
@@ -732,7 +664,6 @@ std::string preprocess_glsl(const std::string& glsl, GLenum shaderType, bool* at
         process_sampler_buffer(ret);
     }
 
-    *atomicCounterEmulated = process_non_opaque_atomic_to_ssbo(ret);
     return ret;
 }
 
@@ -816,39 +747,92 @@ std::vector<unsigned int> glsl_to_spirv(GLenum shader_type, int glsl_version, co
     return spirv_code;
 }
 
-std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, int& errc) {
+// The context owns the ParsedIR, the compiler and every string they hand back, and the only
+// destroy used to sit past the early return. A shader the ES backend rejects is a normal
+// outcome and failed translations are not cached, so that leaked the lot again on every
+// resource-pack reload. Scoped so no exit can skip it.
+namespace {
+struct spvc_context_guard_t {
     spvc_context context = nullptr;
+    spvc_context_guard_t() = default;
+    ~spvc_context_guard_t() {
+        if (context) spvc_context_destroy(context);
+    }
+    spvc_context_guard_t(const spvc_context_guard_t&) = delete;
+    spvc_context_guard_t& operator=(const spvc_context_guard_t&) = delete;
+};
+} // namespace
+
+// SPIRV-Cross throws internally and turns that into a result code at its C boundary; on failure
+// it leaves the out-parameter untouched. Dropping the code therefore hands the next call a
+// handle that was never written, which crashes rather than reporting anything.
+static bool spvc_ok(spvc_context context, spvc_result res, const char* what) {
+    if (res == SPVC_SUCCESS) {
+        return true;
+    }
+    LOG_E("Error: %s failed in spirv-cross: %s", what, spvc_context_get_last_error_string(context))
+    return false;
+}
+
+std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, int& errc) {
     spvc_parsed_ir ir = nullptr;
     spvc_compiler compiler_glsl = nullptr;
     spvc_compiler_options options = nullptr;
-    spvc_resources resources = nullptr;
     const char* result = nullptr;
-    size_t count;
 
     const SpvId* p_spirv = spirv.data();
     size_t word_count = spirv.size();
 
     LOG_D("spirv_code.size(): %d", spirv.size())
-    spvc_context_create(&context);
-    spvc_context_parse_spirv(context, p_spirv, word_count, &ir);
-    spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &compiler_glsl);
-    spvc_compiler_create_shader_resources(compiler_glsl, &resources);
-    spvc_compiler_create_compiler_options(compiler_glsl, &options);
-    spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION,
-                                   essl_version >= 300 ? essl_version : 300);
-    spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE);
-    spvc_compiler_install_compiler_options(compiler_glsl, options);
-    spvc_compiler_compile(compiler_glsl, &result);
 
-    if (!result) {
-        LOG_E("Error: unexpected error in spirv-cross.")
+    // Declared before 'essl': the compiled source lives in context-owned memory and is only
+    // copied out when the std::string is constructed, so the guard has to outlive it.
+    spvc_context_guard_t guard;
+    if (spvc_context_create(&guard.context) != SPVC_SUCCESS || !guard.context) {
+        LOG_E("Error: could not create a spirv-cross context.")
+        errc = -1;
+        return "";
+    }
+    spvc_context context = guard.context;
+
+    if (!spvc_ok(context, spvc_context_parse_spirv(context, p_spirv, word_count, &ir), "spvc_context_parse_spirv") ||
+        !ir) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context,
+                 spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP,
+                                              &compiler_glsl),
+                 "spvc_context_create_compiler") ||
+        !compiler_glsl) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context, spvc_compiler_create_compiler_options(compiler_glsl, &options),
+                 "spvc_compiler_create_compiler_options") ||
+        !options) {
+        errc = -1;
+        return "";
+    }
+    // A silently dropped GLSL_ES option would emit desktop GLSL and hand it straight to the
+    // driver, so these are checked too.
+    if (!spvc_ok(context,
+                 spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION,
+                                                essl_version >= 300 ? essl_version : 300),
+                 "spvc_compiler_options_set_uint") ||
+        !spvc_ok(context, spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_TRUE),
+                 "spvc_compiler_options_set_bool") ||
+        !spvc_ok(context, spvc_compiler_install_compiler_options(compiler_glsl, options),
+                 "spvc_compiler_install_compiler_options")) {
+        errc = -1;
+        return "";
+    }
+    if (!spvc_ok(context, spvc_compiler_compile(compiler_glsl, &result), "spvc_compiler_compile") || !result) {
         errc = -1;
         return "";
     }
 
     std::string essl = result;
-
-    spvc_context_destroy(context);
 
     errc = 0;
     return essl;
@@ -856,8 +840,7 @@ std::string spirv_to_essl(std::vector<unsigned int> spirv, uint essl_version, in
 
 static bool glslang_inited = false;
 std::string GLSLtoGLSLES_2(const char* glsl_code, GLenum glsl_type, uint essl_version, int& return_code) {
-    bool atomicCounterEmulated = false;
-    std::string correct_glsl_str = preprocess_glsl(glsl_code, glsl_type, &atomicCounterEmulated);
+    std::string correct_glsl_str = preprocess_glsl(glsl_code, glsl_type);
     LOG_D("Firstly converted GLSL:\n%s", correct_glsl_str.c_str())
     int glsl_version = get_or_add_glsl_version(correct_glsl_str);
 
@@ -889,9 +872,6 @@ std::string GLSLtoGLSLES_2(const char* glsl_code, GLenum glsl_type, uint essl_ve
 
     LOG_D("Originally GLSL to GLSL ES Complete: \n%s", essl.c_str())
     return_code = errc;
-    if (return_code == 0) {
-        return_code = atomicCounterEmulated ? 1 : 0;
-    }
     return essl;
 }
 

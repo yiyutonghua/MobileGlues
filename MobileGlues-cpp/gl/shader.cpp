@@ -22,7 +22,6 @@
 struct shader_t shaderInfo;
 
 UnorderedMap<GLuint, bool> shader_map_is_sampler_buffer_emulated;
-UnorderedMap<GLuint, bool> shader_map_is_atomic_counter_emulated;
 
 bool can_run_essl3(unsigned int esversion, const char* glsl) {
     if (strncmp(glsl, "#version 100", 12) == 0) {
@@ -55,6 +54,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string, c
     LOG()
     shaderInfo.id = 0;
     shaderInfo.converted = "";
+    shaderInfo.frag_data_changed_converted.clear();
     shaderInfo.frag_data_changed = 0;
     size_t l = 0;
     for (int i = 0; i < count; i++)
@@ -88,10 +88,6 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string, c
         GLES.glGetShaderiv(shader, GL_SHADER_TYPE, &shaderType);
         int return_code = 0;
         essl_src = GLSLtoGLSLES(glsl_src.c_str(), shaderType, hardware->es_version, glsl_version, return_code);
-        if (return_code == 1) { // atomicCounterEmulated
-            shader_map_is_atomic_counter_emulated[shader] = true;
-            LOG_D("[INFO] [Shader] Atomic counter emulated in shader %d", shader)
-        }
 
         if (essl_src.empty()) {
             LOG_E("Failed to convert shader %d.", shader)

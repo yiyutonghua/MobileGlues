@@ -6,18 +6,38 @@
 // End of Source File Header
 
 #include "getter.h"
+#include "enable.h"
+#include "../egl/context.h"
 #include "buffer.h"
+#include "texture.h"
 #include <string>
 #include <format>
 #include <vector>
 #include <random>
 #include "FSR1/FSR1.h"
 #include "log.h"
+#include "mg.h"
+#include "pixel.h"
 #include "random_string_gen.h"
+#include "../config/settings.h"
 
 #define DEBUG 0
 
 Version GLVersion;
+
+namespace {
+// See mg_set_gl_error in gl/mg.h for why this exists and why it is per thread.
+thread_local GLenum g_frontend_error = GL_NO_ERROR;
+} // namespace
+
+void mg_set_gl_error(GLenum error) {
+    if (error == GL_NO_ERROR) return;
+    // First error wins. A later, vaguer failure must not paper over the one that
+    // actually explains what the application did wrong.
+    if (g_frontend_error != GL_NO_ERROR) return;
+    g_frontend_error = error;
+    LOG_D("MobileGlues raised %s", glEnumToString(error))
+}
 
 void glGetIntegerv(GLenum pname, GLint* params) {
     LOG()
@@ -50,10 +70,29 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         (*params) = num_extensions;
         break;
     case GL_MAJOR_VERSION:
-        (*params) = GLVersion.Major;
+        // What THIS context was granted, which after the version gate was relaxed
+        // is what the application asked for rather than the configured maximum.
+        //
+        // Only for a desktop context. An ES context has no granted desktop version
+        // to report -- eglCreateContext records the values the bootstrap probe read
+        // off the driver, which describe the driver, not this context -- so it goes
+        // to the driver, which knows the real answer.
+        if (g_current_ctx && g_current_ctx->client_type == EGL_OPENGL_API) {
+            (*params) = g_current_ctx->granted_major;
+        } else if (g_current_ctx) {
+            GLES.glGetIntegerv(GL_MAJOR_VERSION, params);
+        } else {
+            (*params) = GLVersion.Major;
+        }
         break;
     case GL_MINOR_VERSION:
-        (*params) = GLVersion.Minor;
+        if (g_current_ctx && g_current_ctx->client_type == EGL_OPENGL_API) {
+            (*params) = g_current_ctx->granted_minor;
+        } else if (g_current_ctx) {
+            GLES.glGetIntegerv(GL_MINOR_VERSION, params);
+        } else {
+            (*params) = GLVersion.Minor;
+        }
         break;
     case GL_MAX_TEXTURE_IMAGE_UNITS: {
         int es_params = 16;
@@ -62,9 +101,26 @@ void glGetIntegerv(GLenum pname, GLint* params) {
         // Why is the real GL_MAX_TEXTURE_IMAGE_UNITS bigger than what GLES.glGetIntegerv returns?
         break;
     }
+    case GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: {
+        // This is the bound on glActiveTexture, and drivers report generously --
+        // Mali-G77 says 96. Forwarding it unchanged promised more units than the
+        // layer keeps bindings for, and the units past the end were accepted by
+        // the driver but dropped here, so a glBindTexture after one of them went
+        // to the wrong unit with nothing reporting it. Promise only what
+        // gl/texture.cpp can actually track.
+        int es_params = 32;
+        GLES.glGetIntegerv(pname, &es_params);
+        CHECK_GL_ERROR
+        const int tracked = mg_max_texture_units();
+        (*params) = es_params < tracked ? es_params : tracked;
+        break;
+    }
     case GL_CONTEXT_FLAGS: {
-        (*params) =
-            GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT | GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT | GL_CONTEXT_FLAG_NO_ERROR_BIT;
+        // Reported from what the context was actually created with. Claiming
+        // flags the application never asked for -- as this did before it was
+        // reduced to 0 -- makes a loader believe it has a debug or robust context
+        // that does not behave like one.
+        (*params) = g_current_ctx ? g_current_ctx->context_flags : 0;
         break;
     }
     case GL_ARRAY_BUFFER_BINDING:
@@ -85,21 +141,69 @@ void glGetIntegerv(GLenum pname, GLint* params) {
     case GL_VERTEX_ARRAY_BINDING:
         (*params) = (int)find_bound_array();
         break;
-    default:
+    // GL_FRAMEBUFFER_BINDING is the same enum as GL_DRAW_FRAMEBUFFER_BINDING.
+    case GL_DRAW_FRAMEBUFFER_BINDING: {
+        GLES.glGetIntegerv(pname, params);
+        // Hide the FSR1 redirect. While FSR1 is on, the application's framebuffer
+        // 0 really is g_renderFBO (gl/framebuffer.cpp), and handing that name back
+        // let the application save it and bind it again later -- by which point a
+        // resolution change may have deleted and recreated the target, so the
+        // restore named a dead framebuffer and stuck. Answering 0 means a restore
+        // goes back through the redirect and lands wherever it currently points.
+        if (FSR1_Context::g_renderFBO != 0 && *params == (GLint)FSR1_Context::g_renderFBO) *params = 0;
+        LOG_D("  -> %d", *params)
+        break;
+    }
+    default: {
+        // The enable table owns every enable capability and the handful of limits
+        // that describe it, so glGetIntegerv can never disagree with glIsEnabled.
+        GLboolean enabled = GL_FALSE;
+        GLint ival = 0;
+        if (mg_enable_query(pname, &enabled)) {
+            (*params) = enabled ? 1 : 0;
+            break;
+        }
+        if (mg_enable_query_int(pname, &ival)) {
+            (*params) = ival;
+            break;
+        }
+        // The pixel-store parameters GLES has no answer for. Forwarding them
+        // returned GL_INVALID_ENUM and left *params exactly as the caller left it.
+        if (mg_pixel_store_query_int(pname, params)) {
+            LOG_D("  -> %d", *params)
+            break;
+        }
         GLES.glGetIntegerv(pname, params);
         LOG_D("  -> %d", *params)
         CHECK_GL_ERROR
+    }
     }
 }
 
 GLenum glGetError() {
     LOG()
-    GLenum err = GLES.glGetError();
-    // just clear gles error, no reporting
-    if (err != GL_NO_ERROR) {
-        // no logging without DEBUG
-        LOG_W("glGetError\n -> %d", err)
-        LOG_W("Now try to cheat.")
+    // Both are consumed whether or not they get reported: leaving either latched
+    // would hand it to a later, unrelated glGetError.
+    const GLenum backend = GLES.glGetError();
+    const GLenum frontend = g_frontend_error;
+    g_frontend_error = GL_NO_ERROR;
+
+    // GL_NO_ERROR, always, in every configuration and whatever ignoreError says.
+    //
+    // Deliberate, and not the same thing as not knowing. This layer emulates
+    // enough of desktop GL on top of GLES that a faithfully forwarded error is
+    // more often an artefact of how a call had to be translated than something the
+    // application got wrong -- and hosts treat errors as fatal or fall back to
+    // slower paths on them. One example from inside this very library:
+    // gl/buffer.cpp's glMapBuffer asks glGetError and returns nullptr if it is
+    // not clear, a branch that only stays dead because of this.
+    //
+    // What the errors are still for is the log. Every path that raises one names
+    // itself right next to the call, so a quiet failure is diagnosable from a
+    // logcat even though the application will never be told.
+    const GLenum swallowed = frontend != GL_NO_ERROR ? frontend : backend;
+    if (swallowed != GL_NO_ERROR) {
+        LOG_W("glGetError -> %s, reported to the application as GL_NO_ERROR", glEnumToString(swallowed))
     }
     return GL_NO_ERROR;
 }
@@ -284,7 +388,7 @@ const GLubyte* glGetString(GLenum name) {
 #elif VERSION_TYPE == VERSION_BETA
                 versionString += "·Beta";
 #elif VERSION_TYPE == VERSION_DEVELOPMENT
-                versionString += "·Dev";
+                versionString += "·Dev" + std::to_string(VERSION_DEV_NUMBER);
 #elif VERSION_TYPE == VERSION_RC
                 versionString += "·RC" + std::to_string(VERSION_RC_NUMBER);
 #endif
@@ -381,13 +485,15 @@ const GLubyte* glGetString(GLenum name) {
         return reinterpret_cast<const GLubyte*>(shadingLangString.c_str());
     }
     case GL_EXTENSIONS: {
-#if !defined(__APPLE__)
-        static std::string cached;
-        cached = GetExtensionsList();
-        return (const GLubyte*)cached.c_str();
-#else
-        return (const GLubyte*)GetExtensionsList().c_str();
-#endif
+        // GetExtensionsList() returns by value, so assigning it on every call freed the buffer handed
+        // out last time and dangled every pointer already returned. Build it once, like the strings above.
+        static std::string extensionsString;
+
+        if (extensionsString.empty()) {
+            extensionsString = GetExtensionsList();
+        }
+
+        return (const GLubyte*)extensionsString.c_str();
     }
     case GL_SETTINGS_MG: {
         if (global_settings.hide_mg_env_level >= HideMGEnvLevel::Level1) return GLES.glGetString(name);
