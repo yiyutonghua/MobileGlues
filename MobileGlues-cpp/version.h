@@ -18,7 +18,7 @@
 #define REVISION 0
 #define PATCH 0
 
-#define VERSION_TYPE VERSION_ALPHA
+#define VERSION_TYPE VERSION_DEVELOPMENT
 
 #if VERSION_TYPE == VERSION_RC
 #define VERSION_RC_NUMBER 2
@@ -28,7 +28,7 @@
 // of them carry the same MAJOR.MINOR.REVISION, and a bug report has to be able to
 // name which one it came from. Bump this whenever a build leaves this machine.
 #if VERSION_TYPE == VERSION_DEVELOPMENT
-#define VERSION_DEV_NUMBER 3
+#define VERSION_DEV_NUMBER 4
 #endif
 
 #define VERSION_SUFFIX ""
